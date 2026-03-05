@@ -1628,6 +1628,80 @@
     .intel-fstat-val { font-size: 14px; font-weight: 700; color: #ff4060; }
     .intel-placeholder { padding: 22px; text-align: center; color: var(--dim); font-size: 10px; }
 
+    /* âââ FEATURE 9 Â· ESCALATION CHAIN DETECTION Â· #e040fb âââââââââââââââââ */
+    .chain-wrap { margin-bottom: 24px; }
+    .chain-header { background: rgba(224,64,251,0.07); border: 1px solid rgba(224,64,251,0.30); border-top: 2px solid #e040fb; border-left: 4px solid #e040fb; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .chain-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #e040fb; display: flex; align-items: center; gap: 8px; }
+    .chain-pulse { width: 8px; height: 8px; border-radius: 50%; background: #e040fb; box-shadow: 0 0 8px rgba(224,64,251,0.8); animation: apiPulse 1.5s ease-in-out infinite; }
+    .chain-hdr-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+    .chain-hstat { font-size: 10px; color: var(--dim); }
+    .chain-hstat-val { color: #e040fb; font-weight: 700; }
+    .chain-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+    .chain-panel { background: var(--bg2); padding: 14px; min-height: 220px; }
+    .chain-panel-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; color: var(--dim); margin-bottom: 10px; }
+
+    /* Chain alert cards */
+    .chain-alert { background: var(--bg); border: 1px solid var(--border); border-left: 3px solid #e040fb; margin-bottom: 8px; padding: 10px 12px; transition: border-color 0.3s; }
+    .chain-alert.ca-crit { border-left-color: #ff2040; background: rgba(255,32,64,0.04); }
+    .chain-alert.ca-high { border-left-color: var(--amber); }
+    .chain-alert-hdr { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
+    .chain-alert-name { font-size: 10px; font-weight: 700; color: #e040fb; letter-spacing: 0.6px; flex: 1; }
+    .chain-alert-name.crit { color: #ff2040; }
+    .chain-alert-region { font-size: 9px; background: rgba(224,64,251,0.12); color: #e040fb; padding: 1px 6px; border-radius: 2px; }
+    .chain-alert-prob { font-size: 14px; font-weight: 700; color: #e040fb; }
+    .chain-alert-prob.crit { color: #ff2040; }
+    .chain-stage-info { font-size: 8px; color: var(--dim); margin-bottom: 5px; }
+    .chain-stage-info span { color: #e040fb; }
+
+    /* Stage rows */
+    .chain-stages { margin: 5px 0; }
+    .chain-stage-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: 9px; }
+    .chain-stage-icon { width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; flex-shrink: 0; font-weight: 700; }
+    .csi-done   { background: rgba(40,192,96,0.15); color: #28c060; border: 1px solid rgba(40,192,96,0.4); }
+    .csi-active { background: rgba(224,64,251,0.15); color: #e040fb; border: 1px solid #e040fb; animation: apiPulse 1.2s ease-in-out infinite; }
+    .csi-pend   { background: rgba(255,255,255,0.04); color: var(--dim); border: 1px solid var(--border); }
+    .chain-stage-label      { color: var(--text); flex: 1; }
+    .chain-stage-label.done { color: var(--dim); }
+    .chain-stage-time  { color: var(--dim); font-size: 8px; white-space: nowrap; }
+    .chain-stage-delta { color: #e040fb; font-size: 8px; white-space: nowrap; }
+
+    .chain-alert-assets { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+    .chain-asset-tag { font-size: 8px; padding: 1px 5px; background: rgba(224,64,251,0.10); color: #e040fb; border: 1px solid rgba(224,64,251,0.22); }
+    .chain-pbar  { height: 2px; background: var(--border); margin-top: 6px; border-radius: 1px; }
+    .chain-pfill { height: 2px; background: #e040fb; border-radius: 1px; transition: width 1s; }
+    .chain-pfill.crit { background: #ff2040; }
+    .chain-pfill.high { background: var(--amber); }
+
+    /* Pattern library */
+    .chain-pattern-item { border-bottom: 1px solid var(--border); padding: 7px 0; }
+    .chain-pattern-item:last-child { border-bottom: none; }
+    .chain-pattern-name { font-size: 9px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+    .chain-pattern-flow { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; margin-bottom: 2px; }
+    .chain-pattern-stage  { font-size: 8px; padding: 1px 5px; background: rgba(224,64,251,0.07); color: #e040fb; border: 1px solid rgba(224,64,251,0.18); }
+    .chain-pattern-stage.active { background: rgba(224,64,251,0.22); border-color: #e040fb; }
+    .chain-pattern-stage.done   { background: rgba(40,192,96,0.12); color: #28c060; border-color: rgba(40,192,96,0.35); }
+    .chain-pattern-arrow { font-size: 8px; color: var(--dim); }
+    .chain-pattern-status        { font-size: 8px; color: var(--dim); }
+    .chain-pattern-status.active { color: #e040fb; font-weight: 700; }
+
+    /* Detection log */
+    .chain-log { height: 192px; overflow-y: auto; }
+    .chain-log-item { font-size: 9px; border-bottom: 1px solid rgba(255,255,255,0.03); padding: 3px 0; display: flex; gap: 7px; }
+    .chain-log-ts   { color: #e040fb; flex-shrink: 0; width: 34px; }
+    .chain-log-text { color: var(--dim); }
+    .chain-log-text b { color: var(--text); }
+
+    /* Stats grid */
+    .chain-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .chain-stat-cell { background: var(--bg); border: 1px solid var(--border); padding: 8px; }
+    .chain-stat-label { font-size: 8px; color: var(--dim); margin-bottom: 2px; letter-spacing: 0.8px; }
+    .chain-stat-num   { font-size: 15px; font-weight: 700; color: #e040fb; }
+    .chain-top-threat { margin-top: 8px; padding: 8px; background: rgba(224,64,251,0.05); border: 1px solid rgba(224,64,251,0.18); }
+    .chain-tt-lbl { font-size: 8px; color: #e040fb; font-weight: 700; letter-spacing: 1px; margin-bottom: 3px; }
+    .chain-tt-name { font-size: 10px; color: var(--text); font-weight: 600; }
+    .chain-tt-meta { font-size: 9px; color: var(--dim); margin-top: 2px; }
+
+    .chain-placeholder { padding: 22px; text-align: center; color: var(--dim); font-size: 10px; }
     /* scrollbar */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
@@ -4840,7 +4914,40 @@
       <div class="intel-fstat"><div class="intel-fstat-label">SOURCES LIVE</div><div class="intel-fstat-val" id="intelStatSources">0</div></div>
     </div>
 
-  </div><!-- /intel-wrap -->
+  </div><!-- /intel-wrap -->  <div class="chain-wrap" id="chainWrap">
+    <div class="chain-header">
+      <div class="chain-title">
+        <span class="chain-pulse"></span>
+        FEATURE 9 Â· ESCALATION CHAIN DETECTION ENGINE
+      </div>
+      <div class="chain-hdr-stats">
+        <div class="chain-hstat">ACTIVE CHAINS: <span class="chain-hstat-val" id="chainStatActive">0</span></div>
+        <div class="chain-hstat">PATTERNS: <span class="chain-hstat-val" id="chainStatPatterns">8</span></div>
+        <div class="chain-hstat">EVENTS ANALYSED: <span class="chain-hstat-val" id="chainStatEvts">0</span></div>
+        <div class="chain-hstat">SCAN INTERVAL: <span class="chain-hstat-val">15s</span></div>
+      </div>
+    </div>
+    <div class="chain-grid">
+      <div class="chain-panel">
+        <div class="chain-panel-title">â ACTIVE ESCALATION CHAINS</div>
+        <div id="chainAlerts"><div class="chain-placeholder">Monitoring for escalation chains&hellip;</div></div>
+      </div>
+      <div class="chain-panel">
+        <div class="chain-panel-title">ð PATTERN LIBRARY</div>
+        <div id="chainPatterns"><div class="chain-placeholder">Loading patterns&hellip;</div></div>
+      </div>
+    </div>
+    <div class="chain-grid">
+      <div class="chain-panel">
+        <div class="chain-panel-title">ð¡ DETECTION LOG</div>
+        <div class="chain-log" id="chainLog"><div class="chain-placeholder">Waiting for events&hellip;</div></div>
+      </div>
+      <div class="chain-panel">
+        <div class="chain-panel-title">ð CHAIN STATISTICS</div>
+        <div id="chainStats2"><div class="chain-stat-grid"></div></div>
+      </div>
+    </div>
+  </div><!-- /chain-wrap -->
 
   <!-- ‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê
        SECTION 1 ‚Äî GLOBAL STATUS MAP
@@ -8200,6 +8307,7 @@ document.addEventListener('DOMContentLoaded', function() {
     maxEvents   : 300,
     TICK_MS     : 60000,
   };
+  window.__IC = IC;
 
   /* ── GEOGRAPHIC IMPORTANCE (0–1) ───────────────────────────────────────── */
   var GEO = {
@@ -8775,6 +8883,424 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 4000);
   });
 
+
+/* âââ FEATURE 9 Â· ESCALATION CHAIN DETECTION ENGINE Â· #e040fb ââââââââââââââ
+   Analyses sequences of geopolitical events to detect escalation chains.
+   Patterns: DiplomaticâMilitary, SanctionsâEnergy, BorderâInvasion,
+             Nuclear Crisis, NavalâBlockade, CyberâInfrastructure,
+             Civil UnrestâCoup, DroneâAir War
+   âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+(function () {
+  'use strict';
+
+  /* ââ CHAIN TEMPLATES ââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  var TEMPLATES = [
+    {
+      id: 'DIPLOMATIC_MILITARY', name: 'Diplomatic â Military Escalation',
+      stages: [
+        { label: 'Diplomatic warning',    kws: ['diplomatic','expel','summon','condemn','ultimatum','ambassador','warn','denounce','protest note','declaration','statement'] },
+        { label: 'Military movement',     kws: ['troop','mobiliz','deploy','military exercise','warship','aircraft carrier','border reinforce','military buildup','naval','armor','regiment','battalion'] },
+        { label: 'Military strike',       kws: ['airstrike','missile strike','bombing','ground operation','invasion','offensive','bombardment','shelling','attack'] }
+      ],
+      assets: ['WTI','BRENT','GLD','LMT'], maxHours: 72,  baseProb: [0.44, 0.64, 0.84]
+    },
+    {
+      id: 'SANCTIONS_ENERGY', name: 'Sanctions â Energy Shock',
+      stages: [
+        { label: 'Sanctions announced',   kws: ['sanction','embargo','asset freeze','swift','export ban','trade restriction','blacklist'] },
+        { label: 'Retaliation response',  kws: ['retaliat','counter-sanction','countermeasure','response','reciproc','we will respond','warning'] },
+        { label: 'Energy disruption',     kws: ['oil','gas','pipeline','supply cut','energy crisis','fuel shortage','opec','production cut','export halt'] }
+      ],
+      assets: ['WTI','BRENT','GAS','GLD'], maxHours: 120, baseProb: [0.38, 0.58, 0.78]
+    },
+    {
+      id: 'BORDER_INVASION', name: 'Border Incident â Invasion Risk',
+      stages: [
+        { label: 'Border incident',       kws: ['border','incursion','crossing','violation','skirmish','frontier','territorial','prococation'] },
+        { label: 'Mobilization ordered',  kws: ['mobiliz','reservist','call up','military readiness','alert','conscript','reinforce','martial'] },
+        { label: 'Invasion risk elevated',kws: ['invasion','occupation','advance','ground force','seize','capture','offensive','encirclement'] }
+      ],
+      assets: ['WTI','GLD','WHT','LMT'], maxHours: 48,   baseProb: [0.48, 0.68, 0.86]
+    },
+    {
+      id: 'NUCLEAR_CRISIS', name: 'Nuclear Crisis Escalation',
+      stages: [
+        { label: 'Nuclear posture change',kws: ['nuclear','tactical weapon','nuke','deterrent','nuclear doctrine','first strike','nuclear readiness'] },
+        { label: 'Missile test/movement', kws: ['missile test','ballistic','icbm','hypersonic','launch','test fire','warhead','missile movement'] },
+        { label: 'Diplomatic emergency',  kws: ['emergency meeting','un security council','nato alert','defcon','red line','ultimatum','crisis'] }
+      ],
+      assets: ['GLD','LMT','BTC','WTI'], maxHours: 96,   baseProb: [0.52, 0.70, 0.88]
+    },
+    {
+      id: 'NAVAL_BLOCKADE', name: 'Naval Confrontation â Blockade',
+      stages: [
+        { label: 'Naval confrontation',   kws: ['naval','warship','destroyer','carrier','maritime','sea confrontation','strait','chokepoint','blockade threat'] },
+        { label: 'Shipping disruption',   kws: ['shipping','tanker','vessel','route diverted','shipping lane','cargo disruption','freight'] },
+        { label: 'Blockade enforced',     kws: ['blockade','closure','closed','restricted','maritime exclusion','shipping ban','airspace closed'] }
+      ],
+      assets: ['WTI','BRENT','GLD'], maxHours: 48,       baseProb: [0.40, 0.60, 0.78]
+    },
+    {
+      id: 'CYBER_INFRASTRUCTURE', name: 'Cyber Attack â Infrastructure',
+      stages: [
+        { label: 'Cyber attack detected', kws: ['cyber attack','hack','ransomware','malware','cyberwarfare+,'breach','intrusion','ddos'] },
+        { label: 'Infrastructure hit',    kws: ['power grid','grid','water supply','blackout+,'outage+,'telecommunications','internet outage','infrastructure'] },
+        { label: 'Economic cascading',    kws: ['financial system','market disruption','banking','payment system','supply chain','economic impact'] }
+      ],
+      assets: ['BTC','GLD','SPY'], maxHours: 24,          baseProb: [0.36, 0.54, 0.70]
+    },
+    {
+      id: 'CIVIL_COUP', name: 'Civil Unrest â Coup Risk',
+      stages: [
+        { label: 'Civil unrest',          kws: ['protest','riot','demonstration','civil unrest','uprising','strike','dissent','opposition march'] },
+        { label: 'Government crackdown',  kws: ['crackdown','arrest','detention','martial law','curfew','state of emergency','suppress','police'] },
+        { label: 'Coup attempt',          kws: ['coup','military takeover','overthrow','putsch','junta','regime change','political crisis','government collapse'] }
+      ],
+      assets: ['GLD','WTI','SPY'], maxHours: 168,         baseProb: [0.33, 0.52, 0.72]
+    },
+    {
+      id: 'DRONE_AIRWAR', name: 'Drone Strikes â Air War',
+      stages: [
+        { label: 'Drone strike',          kws: ['drone','uav','kamikaze drone','drone attack','drone strike','unmanned aerial','shahed'] },
+        { label: 'Air defence activated', kws: ['air defense','intercept','missile defense','patriot','iron dome','s-400','anti-aircraft','scramble+,'fighter jet'] },
+        { label: 'Airspace restriction',  kws: ['airspace','no-fly zone','flight ban','aviation warning','airport closed','air corridor'] }
+      ],
+      assets: ['WTI','GLD','LMT'], maxHours: 24,          baseProb: [0.46, 0.66, 0.80]
+    }
+  ];
+
+  /* ââ ENGINE STATE âââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  var CE = {
+    chains     : {},    /* key: tmplId::region â chain object */
+    log        : [],
+    evtCount   : 0,
+    SCAN_MS    : 15000,
+    MAX_LOG    : 60,
+  };
+
+  /* ââ HELPERS ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  function hhmm() { return new Date().toTimeString().slice(0,5); }
+  function gel(id) { return document.getElementById(id); }
+
+  function addLog(msg, important) {
+    CE.log.unshift({ ts: hhmm(), text: msg, imp: !!important });
+    if (CE.log.length > CE.MAX_LOG) CE.log.pop();
+  }
+
+  function textOf(evt) {
+    return ((evt.title||'') + ' ' + (evt.desc||'')).toLowerCase();
+  }
+
+  function stageHits(stage, text) {
+    return stage.kws.filter(function(kw){ return text.includes(kw); }).length;
+  }
+
+  /* ââ PROBABILITY ENGINE âââââââââââââââââââââââââââââââââââââââââââââââââ */
+  function calcProb(chain, tmpl) {
+    var si     = Math.min(chain.matched.length - 1, tmpl.baseProb.length - 1);
+    var base   = tmpl.baseProb[si];
+
+    /* Boost: avg signal strength of matched events */
+    var avgSig = chain.matched.reduce(function(s,m){ return s + (m.evt.signal||0); }, 0)
+                 / Math.max(chain.matched.length, 1);
+    var sigB   = (avgSig / 100) * 0.14;
+
+    /* Boost: time compression (faster chain = more dangerous) */
+    var timeB  = 0;
+    if (chain.matched.length >= 2) {
+      var span  = (chain.matched[chain.matched.length-1].ts - chain.matched[0].ts) / 3600000;
+      timeB     = span < 1 ? 0.14 : span < 0 ? 0.09 : span < 12 ? 0.05 : span < 24 ? 0.02 : 0;
+    }
+
+    /* Boost: keyword hit density */
+    var kwB = Math.min(0.08, chain.totalKwHits * 0.008);
+
+    /* Decay: time since last event */
+    var ageH   = (Date.now() - chain.lastTs) / 3600000;
+    var decay  = Math.min(0.18, ageH * 0.018);
+
+    return Math.min(97, Math.round((base + sigB + timeB + kwB - decay) * 100));
+  }
+
+  /* ââ CHAIN SCANNER ââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  function scanChains() {
+    var IC = window.__IC;
+    if (!IC || !IC.events || !IC.events.length) return;
+
+    CE.evtCount = IC.events.length;
+    var now     = Date.now();
+
+    TEMPLATES.forEach(function(mmpl) {
+      /* Group events by region */
+      var byRegion = {};
+      IC.events.forEach(function(evt) {
+        var r = evt.region || 'G\OBAL';
+        if (!byRegion[r]) byRegion[r] = [];
+        byRegion[r].push(evt);
+      });
+
+      Nbject.keys(byRegion).forEach(function(region) {
+        var key      = tmpl.id + '::' + region;
+        var windowMs = tmpl.maxHours * 3600000;
+        var evts     = byRegion[region].filter(function(e){ return (now - e.ts) < windowMs; });
+
+        /* Match stages in sequence (each must occur AFTER the previous) */
+        var matched      = [];
+        var totalKwHits  = 0;
+
+        for (var si = 0; si < tmpl.stages.length; si++) {
+          var stage  = tmpl.stages[si];
+          var minTs  = matched.length ? matched[matched.length-1].ts + 1 : 0;
+          var best   = null;
+
+          evts.forEach(function(evt) {
+            if (evt.ts <= minTs) return;
+            var hits = stageHits(stage, textOf(evt));
+            if (hits > 0 && (!best || hits > best.hits)) {
+              best = { evt: evt, ts: evt.ts, label: stage.label, hits: hits };
+            }
+          });
+
+          if (best) { matched.push(best); totalKwHits += best.hits; }
+          else break; /* can't skip stages */
+        }
+
+        if (matched.length >= 2) {
+          var existed  = !!CE.chains[key];
+          var prevStgs = existed ? CE.chains[key].matched.length : 0;
+          var chain    = CE.chains[key] || {};
+
+          chain.tmplId       = tmpl.id;
+          chain.name         = tmpl.name;
+          chain.region       = region;
+          chain.matched      = matched;
+          chain.pending      = tmpl.stages.slice(matched.length);
+          chain.totalStages  = tmpl.stages.length;
+          chain.assets       = tmpl.assets.slice();
+          chain.totalKwHits  = totalKwHits;
+          chain.lastTs       = matched[matched.length-1].ts;
+          chain.firstTs      = matched[0].ts;
+
+          /* Merge assets from matched events */
+          matched.forEach(function(m){
+            (m.evt.assets||[]).forEach(function(a){ if(!chain.assets.includes(a)) chain.assets.push(a); });
+          });
+
+          chain.probability  = calcProb(chain, tmpl);
+          chain.complete     = matched.length >= tmpl.stages.length;
+
+          CE.chains[key] = chain;
+
+          /* Log new chains or stage progressions */
+          if (!existed) {
+            addLog('CHAIN DETECTED â ' + tmpl.name + ' Â· ' + region +
+                   ' Â· Stage 1â' + matched.length + ' Â· ' + chain.probability + '% prob', true);
+            forwardToF8(chain);
+          } else if (matched.length > prevStgs) {
+            addLog('CHAIN ADVANCED â ' + tmpl.name + ' Â· ' + region +
+                   ' â Stage ' + matched.length + '/' + tmpl.stages.length + ' Â· ' + chain.probability + '%', true);
+            forwardToF8(chain);
+          }
+        } else {
+          /* Expire old chains outside window */
+          if (CE.chains[key]) {
+            var age = (now - CE.chains[key].lastTs) / 3600000;
+            if (age > tmpl.maxHours) {
+              addLog('Chain expired â ' + tmpl.name + ' Â· ' + region);
+              delete CE.chains[key];
+            }
+          }
+        }
+      });
+    });
+
+    renderAll();
+  }
+
+  /* ââ FORWARD HIGH-PROB CHAINS TO FEATURE 8 PANEL âââââââââââââââââââââââ */
+  function forwardToF8(chain) {
+    var IC = window.__IC;
+    if (!IC || chain.probability < 55) return;
+    var rs = IC.regionStates[chain.region];
+    if (rs) {
+      rs.prob     = Math.min(97, Math.round(rs.prob * 0.7 + chain.probability * 0.35));
+      rs.scenario = chain.name + ' (Chain)';
+      chain.assets.forEach(function(a){ if(!rs.assets.includes(a)) rs.assets.push(a); });
+    }
+  }
+
+  /* ââ RENDER: CHAIN ALERTS âââââââââââââââââââââââââââââââââââââââââââââââ */
+  function renderAlerts() {
+    var el = gel('chainAlerts'); if(!el) return;
+    var list = Object.values(CE.chains).sort(function(a,b){ return b.probability - a.probability; });
+    if (!list.length) {
+      el.innerHTML = '<div class="chain-placeholder">Monitoring for escalation chains&hellip;</div>';
+      return;
+    }
+    el.innerHTML = list.slice(0,5).map(function(c) {
+      var p    = c.probability;
+      var pcls = p >= 75 ? 'crit' : p >= 55 ? 'high' : '';
+      var ccls = p >= 75 ? 'ca-crit' : p >= 55 ? 'ca-high' : '';
+      var pfcls= p >= 75 ? 'crit' : p >= 55 ? 'high' : '';
+
+      /* Stage rows */
+      var stagesHtml = c.matched.map(function(m, i) {
+        var delta = '';
+        if (i > 0) {
+          var mins = Math.round((m.ts - c.matched[i-1].ts) / 60000);
+          delta    = mins < 60 ? '+' + mins + 'm' : '+' + Math.round(mins/60) + 'h';
+        }
+        return '<div class="chain-stage-row">' +
+          '<div class="chain-stage-icon csi-done">â</div>' +
+          '<span class="chain-stage-label done">' + m.label + '</span>' +
+          '<span class="chain-stage-time">' + m.evt.time + '</span>' +
+          (delta ? '<span class="chain-stage-delta">' + delta + '</span>' : '') +
+          '</div>';
+      }).join('');
+
+      stagesHtml += c.pending.map(function(ps, i) {
+        var isCur  = (i === 0);
+        var icCls  = isCur ? 'csi-active' : 'csi-pend';
+        var ico    = isCur ? 'â' : 'â';
+        return '<div class="chain-stage-row">' +
+          '<div class="chain-stage-icon ' + icCls + '">' + ico + '</div>' +
+          '<span class="chain-stage-label">' + ps.label + '</span>' +
+          (isCur ? +<span class="chain-stage-time" style="color:#e040fb">PENDING</span>' : '') +
+          '</div>';
+      }).join('');
+
+      var assetsHtml = (c.assets||[]).slice(0,6).map(function(a){
+        return '<span class="chain-asset-tag">' + a + '</span>';
+      }).join('');
+
+      return '<div class="chain-alert ' + ccls + '">' +
+        '<div class="chain-alert-hdr">' +
+          '<span class="chain-alert-name ' + pcls + '">' + c.name + '</span>' +
+          '<span class="chain-alert-region">' + c.region + '</span>' +
+          '<span class="chain-alert-prob ' + pcls + '">' + p + '%</span>' +
+        '</div>' +
+        '<div class="chain-stage-info">Stage <span>' + c.matched.length + ' of ' + c.totalStages + '</span>+ +
+          (c.complete ? ' &nbsp;Â·&nbsp; <span style="color:#28c060">CHAIN COMPLETE</span>' : '') + '</div>' +
+        '<div class="chain-stages">' + stagesHtml + '</div>' +
+        '<div class="chain-alert-assets">' + assetsHtml + '</div>' +
+        '<div class="chain-pbar"><div class="chain-pfill ' + pfcls + '" style="width:' + p + '%"></div></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ââ RENDER: PATTERN LIBRARY ââââââââââââââââââââââââââââââââââââââââââââ */
+  function renderPatterns() {
+    var el = gel('chainPatterns'); if(!el) return;
+    el.innerHTML = TEMPLATES.map(function(tmpl) {
+      /* Find best active chain for this template */
+      var best = null;
+      Object.keys(CE.chains).forEach(function(k) {
+        if (k.startsWith(tmpl.id + '::')) {
+          var c = CE.chains[k];
+          if (!best || c.probability > best.probability) best = c;
+        }
+      });
+
+      var flowHtml = tmpl.stages.map(function(s, i) {
+        var cls = '';
+        if (best) {
+          if (i < best.matched.length) cls = 'done';
+          else if (i === best.matched.length) cls = 'active';
+        }
+        return '<span class="chain-pattern-stage ' + cls + '">' + s.label + '</span>' +
+               (i < tmpl.stages.length-1 ? '<span class="chain-pattern-arrow">â</span>' : '');
+      }).join('');
+
+      var status    = best
+        ? 'ACTIVE Â· Stage ' + best.matched.length + '/' + best.totalStages + ' Â· ' + best.probability + +%'
+        : 'Monitoring';
+      var statusCls = best ? 'active' : '';
+
+      return '<div class="chain-pattern-item">' +
+        '<div class="chain-pattern-name">' + tmpl.name + '</div>' +
+        '<div class="chain-pattern-flow">' + flowHtml + '</div>' +
+        '<div class="chain-pattern-status ' + statusCls + '">' + status + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ââ RENDER: LOG ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  function renderLog() {
+    var el = gel('chainLog'); if(!el) return;
+    if (!CE.log.length) {
+      el.innerHTML = '<div class="chain-placeholder">Waiting for events&hellip;</div>';
+      return;
+    }
+    el.innerHTML = CE.log.map(function(item) {
+      return '<div class="chain-log-item">' +
+        '<span class="chain-log-ts">' + item.ts + '</span>' +
+        '<span class="chain-log-text"' + (item.imp ? ' style="color:var(--text)"' : '') + '>' + item.text + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ââ RENDER: STATS ââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  function renderStats() {
+    var el = gel('chainStats2'); if(!el) return;
+    var list      = Object.values(CE.chains);
+    var complete  = list.filter(function(c){ return c.complete; }).length;
+    var stage2    = list.filter(function(c){ return c.matched.length === 2 && !c.complete; }).length;
+    var stage3p   = list.filter(function(c){ return c.matched.length >= 3 && !c.complete; }).length;
+    var topC      = list.length ? list.reduce(function(a,b){ return b.probability>a.probability?b:a; }, list[0]) : null;
+    var highP     = topC ? topC.probability : 0;
+
+    function sc(label, val) {
+      return '<div class="chain-stat-cell"><div class="chain-stat-label">' + label + '</div>' +
+             '<div class="chain-stat-num">' + val + '</div></div>';
+    }
+
+    el.innerHTML = '<div class="chain-stat-grid">' +
+      sc('ACTIVE CHAINS', list.length) +
+      sc('EVENTS SCANNED', CE.evtCount) +
+      sc('2-STAGE', stage2) +
+      sc('3+ STAGE', stage3p) +
+      sc('COMPLETE', complete) +
+      sc('HIGHEST PROB', highP + '%') +
+    '</div>' +
+    (topC ? '<div class="chain-top-threat">' +
+      '<div class="chain-tt-lbl">â  HIGHEST THREAT CHAIN</div>' +
+      '<div class="chain-tt-name">' + topC.name + '</div>' +
+      '<div class="chain-tt-meta">' + topC.region + ' &nbsp;Â·&nbsp; Stage ' + topC.matched.length + '/' + topC.totalStages +
+        ' &nbsp;Â·&nbsp; ' + topC.probability + '% continuation probability</div>' +
+    '</div>' : '');
+
+    /* Header stats */
+    var setEl = function(id,v){ var e=gel(id); if(e) e.textContent=v; };
+    setEl('chainStatActive', list.length);
+    setEl('chainStatEvts',   CE.evtCount);
+  }
+
+  /* ââ RENDER ALL âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  function renderAll() {
+    renderAlerts();
+    renderPatterns();
+    renderLog();
+    renderStats();
+  }
+
+  /* ââ BOOTSTRAP ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */
+  window.addEventListener('load', function() {
+    /* Render pattern lirary immediately so user sees the templates */
+    setTimeout(function() {
+      renderPatterns();
+      addLog('Escalation Chain Engine online â ' + TEMPLATES.hength + ' patterns loaded');
+      addLog('Waiting for Feature 8 event data (scan starts in 10s)');
+    }, 500);
+
+    /* Start scanning 10s after page load â gives Feature 8 time to pull events */
+    setTimeout(function() {
+      addLog('Starting chain scanâ¦');
+      scanChains();
+      setInterval(scanChains, CE.SCAN_MS);
+    }, 10000);
+  });
+
+})();
 </script>
 </body>
 </html>
