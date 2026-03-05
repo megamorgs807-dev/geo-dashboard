@@ -1491,6 +1491,69 @@
     .ukc-alert-msg { color: var(--fg); line-height: 1.4; }
     .ukc-macro-body { font-size: 10px; color: var(--fg); line-height: 1.5; }
 
+    /* ‚îÄ‚îÄ‚îÄ LIVE API INTEGRATION HUB  ¬∑  purple #a050e0 ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ */
+    .api-wrap { margin-bottom: 24px; }
+    .api-header { background: rgba(160,80,224,0.07); border: 1px solid rgba(160,80,224,0.30); border-top: 2px solid #a050e0; border-left: 4px solid #a050e0; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .api-header-left { display: flex; align-items: center; gap: 12px; }
+    .api-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .api-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #a050e0; animation: apiPulse 1.4s ease-in-out infinite; flex-shrink: 0; }
+    @keyframes apiPulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(160,80,224,0.6);}50%{opacity:0.7;box-shadow:0 0 0 5px rgba(160,80,224,0);} }
+    .api-title-block { display: flex; flex-direction: column; gap: 2px; }
+    .api-title { color: #a050e0; font-size: 13px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; }
+    .api-subtitle { color: var(--dim); font-size: 10px; }
+    .api-badge { font-size: 9px; padding: 2px 8px; background: rgba(160,80,224,0.12); border: 1px solid rgba(160,80,224,0.32); color: #a050e0; font-weight: bold; letter-spacing: 1px; }
+    .api-sources { display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 14px; background: var(--bg2); border: 1px solid var(--border); border-top: none; }
+    .api-source { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--bg3); border: 1px solid var(--border); }
+    .api-src-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); flex-shrink: 0; transition: background 0.3s; }
+    .api-src-dot.api-dot-live { background: #28c060; box-shadow: 0 0 5px rgba(40,192,96,0.7); }
+    .api-src-dot.api-dot-connecting { background: var(--amber); animation: apiPulse 1s ease-in-out infinite; }
+    .api-src-dot.api-dot-warn  { background: var(--amber); }
+    .api-src-dot.api-dot-error { background: var(--red); }
+    .api-src-name   { color: var(--fg); font-size: 10px; font-weight: bold; }
+    .api-src-status { color: var(--dim); font-size: 9px; }
+    .api-src-type   { color: var(--dim); font-size: 8px; padding: 1px 4px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); }
+    .api-key-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 14px; background: rgba(160,80,224,0.04); border: 1px solid rgba(160,80,224,0.20); border-top: none; }
+    .api-key-label { color: var(--dim); font-size: 9px; letter-spacing: 0.5px; white-space: nowrap; }
+    .api-key-input { background: var(--bg3); border: 1px solid var(--border); color: var(--fg); font-size: 10px; font-family: 'Courier New',monospace; padding: 3px 8px; width: 200px; outline: none; }
+    .api-key-input:focus { border-color: rgba(160,80,224,0.5); }
+    .api-key-btn { background: rgba(160,80,224,0.12); border: 1px solid rgba(160,80,224,0.40); color: #a050e0; font-size: 9px; font-family: 'Courier New',monospace; font-weight: bold; padding: 3px 12px; cursor: pointer; letter-spacing: 1px; transition: all 0.15s; }
+    .api-key-btn:hover { background: rgba(160,80,224,0.22); }
+    .api-key-hint { color: var(--dim); font-size: 8px; }
+    .api-prices-strip { display: flex; border: 1px solid var(--border); border-top: none; overflow-x: auto; }
+    .api-price-card { flex: 1; min-width: 88px; padding: 6px 10px; border-right: 1px solid var(--border); background: var(--bg2); }
+    .api-price-card:last-child { border-right: none; }
+    .api-price-sym  { color: var(--dim); font-size: 8px; letter-spacing: 1.5px; margin-bottom: 2px; }
+    .api-price-val  { color: var(--fg); font-size: 13px; font-weight: bold; font-family: 'Courier New',monospace; margin-bottom: 1px; }
+    .api-price-chg  { font-size: 9px; font-family: 'Courier New',monospace; font-weight: bold; min-height: 12px; }
+    .api-price-src-l { color: var(--dim); font-size: 8px; }
+    .api-body { display: flex; background: var(--bg2); border: 1px solid var(--border); border-top: none; min-height: 190px; }
+    .api-log-panel    { width: 50%; border-right: 1px solid var(--border); padding: 8px 10px; display: flex; flex-direction: column; }
+    .api-events-panel { flex: 1; padding: 8px 10px; display: flex; flex-direction: column; }
+    .api-panel-title  { color: var(--dim); font-size: 9px; letter-spacing: 1.5px; margin-bottom: 6px; flex-shrink: 0; }
+    .api-log { max-height: 158px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+    .api-log-item { display: flex; gap: 6px; font-size: 9px; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .api-log-item.api-log-info    { color: var(--dim); }
+    .api-log-item.api-log-success { color: #28c060; }
+    .api-log-item.api-log-warn    { color: var(--amber); }
+    .api-log-item.api-log-error   { color: var(--red); }
+    .api-log-ts  { flex-shrink: 0; width: 58px; font-family: 'Courier New',monospace; opacity: 0.7; }
+    .api-log-msg { flex: 1; line-height: 1.4; }
+    .api-events { max-height: 158px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+    .api-event-item { padding: 5px 8px; border-left: 2px solid var(--border); background: rgba(255,255,255,0.02); font-size: 9px; }
+    .api-event-item.api-event-crit { border-color: var(--red);   background: rgba(224,48,48,0.04); }
+    .api-event-item.api-event-warn { border-color: var(--amber); background: rgba(232,160,32,0.04); }
+    .api-event-item.api-event-info { border-color: var(--blue);  background: rgba(32,144,224,0.04); }
+    .api-event-type { color: var(--fg); font-weight: bold; letter-spacing: 0.5px; margin-bottom: 2px; }
+    .api-event-meta { color: var(--dim); font-family: 'Courier New',monospace; margin-bottom: 2px; }
+    .api-event-hl   { color: var(--dim); line-height: 1.3; }
+    .api-footer { display: flex; border: 1px solid var(--border); border-top: none; }
+    .api-stat { flex: 1; padding: 5px 10px; border-right: 1px solid var(--border); background: var(--bg3); display: flex; flex-direction: column; gap: 2px; }
+    .api-stat:last-child { border-right: none; }
+    .api-stat-label { color: var(--dim); font-size: 8px; letter-spacing: 1px; }
+    .api-stat-val { color: var(--fg); font-size: 12px; font-weight: bold; font-family: 'Courier New',monospace; }
+    .api-stat-val.api-green { color: #28c060; }
+    .api-stat-val.api-amber { color: var(--amber); }
+
     /* scrollbar */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
@@ -4513,6 +4576,129 @@
   </div><!-- /ukc-wrap -->
 
   <!-- ‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê
+       LIVE API INTEGRATION HUB ‚Äî real-time ingestion ¬∑ NLP event parser ¬∑ Features 1‚Äì6
+       ‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê -->
+  <div class="api-wrap" id="apiWrap">
+
+    <div class="api-header">
+      <div class="api-header-left">
+        <span class="api-live-dot"></span>
+        <div class="api-title-block">
+          <span class="api-title">‚ö° LIVE API INTEGRATION HUB</span>
+          <span class="api-subtitle">CoinGecko ¬∑ Reuters RSS ¬∑ BBC RSS ¬∑ AP RSS ¬∑ Alpha Vantage ‚Äî ingestion ‚Üí NLP ‚Üí Features 1‚Äì6 ¬∑ 60s cadence</span>
+        </div>
+      </div>
+      <div class="api-header-right">
+        <span class="api-badge" id="apiCycleCount">CYCLE #000</span>
+        <span class="api-badge" id="apiLastFetch">INIT‚Ä¶</span>
+      </div>
+    </div>
+
+    <div class="api-sources">
+      <div class="api-source" id="apiSrcCoinGecko">
+        <span class="api-src-dot api-dot-connecting"></span>
+        <span class="api-src-name">CoinGecko</span>
+        <span class="api-src-status">CONNECTING‚Ä¶</span>
+        <span class="api-src-type">Crypto ¬∑ Free ¬∑ No key</span>
+      </div>
+      <div class="api-source" id="apiSrcNews">
+        <span class="api-src-dot api-dot-connecting"></span>
+        <span class="api-src-name">RSS Feeds (Reuters ¬∑ BBC ¬∑ AP)</span>
+        <span class="api-src-status">CONNECTING‚Ä¶</span>
+        <span class="api-src-type">Geopolitical news ¬∑ NLP parsed</span>
+      </div>
+      <div class="api-source" id="apiSrcAlphaVantage">
+        <span class="api-src-dot api-dot-warn"></span>
+        <span class="api-src-name">Alpha Vantage</span>
+        <span class="api-src-status">KEY REQUIRED</span>
+        <span class="api-src-type">Stocks ¬∑ FX ¬∑ Commodities</span>
+      </div>
+    </div>
+
+    <div class="api-key-row">
+      <span class="api-key-label">ALPHA VANTAGE FREE KEY (alphavantage.co ‚Äî stocks, FX, WTI, Brent, 25 req/day):</span>
+      <input type="text" class="api-key-input" id="apiKeyInput" placeholder="Paste free API key here‚Ä¶" autocomplete="off" spellcheck="false">
+      <button class="api-key-btn" id="apiKeyBtn">CONNECT</button>
+      <span class="api-key-hint">Free registration at alphavantage.co ¬∑ No card needed ¬∑ Enables real market prices</span>
+    </div>
+
+    <div class="api-prices-strip">
+      <div class="api-price-card">
+        <div class="api-price-sym">BTC</div>
+        <div class="api-price-val" id="apiLivePrice_BTC">SIM</div>
+        <div class="api-price-chg" id="apiLiveChg_BTC"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_BTC">CoinGecko</div>
+      </div>
+      <div class="api-price-card">
+        <div class="api-price-sym">ETH</div>
+        <div class="api-price-val" id="apiLivePrice_ETH">‚Äî</div>
+        <div class="api-price-chg" id="apiLiveChg_ETH"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_ETH">CoinGecko</div>
+      </div>
+      <div class="api-price-card">
+        <div class="api-price-sym">WTI</div>
+        <div class="api-price-val" id="apiLivePrice_WTI">‚Äî</div>
+        <div class="api-price-chg" id="apiLiveChg_WTI"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_WTI">Alpha Vantage</div>
+      </div>
+      <div class="api-price-card">
+        <div class="api-price-sym">BRENT</div>
+        <div class="api-price-val" id="apiLivePrice_BRENT">‚Äî</div>
+        <div class="api-price-chg" id="apiLiveChg_BRENT"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_BRENT">Alpha Vantage</div>
+      </div>
+      <div class="api-price-card">
+        <div class="api-price-sym">EUR/USD</div>
+        <div class="api-price-val" id="apiLivePrice_EURUSD">‚Äî</div>
+        <div class="api-price-chg" id="apiLiveChg_EURUSD"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_EURUSD">Alpha Vantage</div>
+      </div>
+      <div class="api-price-card">
+        <div class="api-price-sym">GBP/USD</div>
+        <div class="api-price-val" id="apiLivePrice_GBPUSD">‚Äî</div>
+        <div class="api-price-chg" id="apiLiveChg_GBPUSD"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_GBPUSD">Alpha Vantage</div>
+      </div>
+      <div class="api-price-card">
+        <div class="api-price-sym">GLD ETF</div>
+        <div class="api-price-val" id="apiLivePrice_GOLD">‚Äî</div>
+        <div class="api-price-chg" id="apiLiveChg_GOLD"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_GOLD">Alpha Vantage</div>
+      </div>
+      <div class="api-price-card">
+        <div class="api-price-sym">LMT</div>
+        <div class="api-price-val" id="apiLivePrice_LMT">‚Äî</div>
+        <div class="api-price-chg" id="apiLiveChg_LMT"></div>
+        <div class="api-price-src-l" id="apiLiveSrc_LMT">Alpha Vantage</div>
+      </div>
+    </div>
+
+    <div class="api-body">
+      <div class="api-log-panel">
+        <div class="api-panel-title">INGESTION LOG <span style="color:var(--dim)">real-time ¬∑ all sources</span></div>
+        <div class="api-log" id="apiLog">
+          <div class="api-log-item api-log-info"><span class="api-log-ts">INIT</span><span class="api-log-msg">API hub starting ‚Äî CoinGecko + RSS auto-connect, Alpha Vantage needs key‚Ä¶</span></div>
+        </div>
+      </div>
+      <div class="api-events-panel">
+        <div class="api-panel-title">GEOPOLITICAL EVENTS <span style="color:var(--dim)">NLP-extracted ¬∑ validated ¬∑ pushed to Features 1‚Äì6</span></div>
+        <div class="api-events" id="apiEvents">
+          <div class="api-event-item" style="color:var(--dim);padding:6px 8px">Awaiting first RSS cycle‚Ä¶</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="api-footer">
+      <div class="api-stat"><span class="api-stat-label">API CALLS</span><span class="api-stat-val" id="apiStatFetched">0</span></div>
+      <div class="api-stat"><span class="api-stat-label">GEO EVENTS</span><span class="api-stat-val api-green" id="apiStatValid">0</span></div>
+      <div class="api-stat"><span class="api-stat-label">CONFLICTS</span><span class="api-stat-val api-amber" id="apiStatConflicts">0</span></div>
+      <div class="api-stat"><span class="api-stat-label">FEATURES UPDATED</span><span class="api-stat-val api-green" id="apiStatUpdated">0</span></div>
+      <div class="api-stat"><span class="api-stat-label">DATA MODE</span><span class="api-stat-val" id="apiStatSource">HYBRID</span></div>
+    </div>
+
+  </div><!-- /api-wrap -->
+
+  <!-- ‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê
        SECTION 1 ‚Äî GLOBAL STATUS MAP
        ‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê -->
   <div class="section">
@@ -7468,6 +7654,383 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(tick, Math.max(0, Math.random() * 4000 - 2000));
     }, 60000);
   }, 5000);
+
+})();
+
+/* ‚îÄ‚îÄ LIVE API INTEGRATION HUB ‚Äî Feature 7 ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ‚îÄ */
+(function() {
+
+  /* ‚îÄ‚îÄ Config ‚îÄ‚îÄ */
+  var CFG = {
+    avKey: localStorage.getItem('geodash_av_key') || '',
+    cycleN: 0,
+    stats: { calls: 0, events: 0, conflicts: 0, updated: 0 },
+    proxy1: 'https://api.allorigins.win/get?url=',
+    proxy2: 'https://corsproxy.io/?'
+  };
+
+  /* ‚îÄ‚îÄ Geopolitical keyword scorer ‚îÄ‚îÄ */
+  var KW = {
+    'nuclear':['ESCALATION CRITICAL',0.95],'missile':['MILITARY ACTION',0.86],
+    'explosion':['MILITARY ACTION',0.84],'attack':['MILITARY ACTION',0.82],
+    'war':['ACTIVE CONFLICT',0.88],'combat':['ACTIVE CONFLICT',0.80],
+    'drone':['MILITARY ACTION',0.80],'airstrike':['MILITARY ACTION',0.85],
+    'blockade':['SHIPPING DISRUPTION',0.85],'coup':['POLITICAL INSTABILITY',0.78],
+    'conflict':['ACTIVE CONFLICT',0.74],'warship':['MILITARY POSTURING',0.74],
+    'carrier':['MILITARY POSTURING',0.72],'troops':['MILITARY POSTURING',0.65],
+    'military':['MILITARY POSTURING',0.68],'strait':['SHIPPING DISRUPTION',0.72],
+    'tanker':['SHIPPING DISRUPTION',0.68],'sanctions':['ECONOMIC PRESSURE',0.62],
+    'crisis':['POLITICAL INSTABILITY',0.65],'protest':['CIVIL UNREST',0.48],
+    'tariff':['TRADE WAR',0.58],'ceasefire':['DE-ESCALATION',0.22],
+    'peace':['DE-ESCALATION',0.18],'talks':['DIPLOMACY',0.25]
+  };
+
+  /* ‚îÄ‚îÄ Location ‚Üí node-id map ‚îÄ‚îÄ */
+  var LOC = {
+    'iran':'iran','hormuz':'iran','tehran':'iran','irgc':'iran','persian gulf':'iran',
+    'ukraine':'ukraine','kyiv':'ukraine','zelenskyy':'ukraine','kharkiv':'ukraine',
+    'russia':'russia','moscow':'russia','kremlin':'russia','putin':'russia',
+    'taiwan':'taiwan','taipei':'taiwan','tsmc':'taiwan',
+    'china':'china','beijing':'china','xi jinping':'china','prc':'china',
+    'saudi':'saudi','riyadh':'saudi','opec':'saudi','aramco':'saudi',
+    'north korea':'n-korea','pyongyang':'n-korea','kim jong':'n-korea',
+    'israel':'israel','gaza':'israel','netanyahu':'israel','hamas':'israel',
+    'nato':'eu','brussels':'eu','europe':'eu','germany':'eu','france':'eu',
+    'pentagon':'usa','white house':'usa','washington dc':'usa'
+  };
+
+  /* ‚îÄ‚îÄ Asset keyword map ‚îÄ‚îÄ */
+  var ASSET_KW = {
+    'oil':['WTI','BRENT'],'crude':['WTI','BRENT'],'petroleum':['WTI','BRENT'],
+    'gold':['GOLD'],'safe haven':['GOLD','JPY'],
+    'bitcoin':['BTC'],'crypto':['BTC'],'cryptocurrency':['BTC'],
+    'airline':['Airlines'],'aviation':['Airlines'],'airport':['Airlines'],
+    'semiconductor':['TSM','SOXX'],'chip':['TSM','SOXX'],'microchip':['TSM','SOXX'],
+    'defense':['LMT','XAR'],'weapon':['LMT','XAR'],'arms':['LMT','XAR'],
+    'natural gas':['NatGas'],
+    'dollar':['DXY'],
+    'vix':['VIX'],'volatility':['VIX'],
+    'ftse':['FTSE'],'gilt':['UK Gilts'],'boe':['UK Gilts'],
+    'shipping':['Shipping'],'tanker':['Shipping']
+  };
+
+  /* ‚îÄ‚îÄ DOM helpers ‚îÄ‚îÄ */
+  function gel(id) { return document.getElementById(id); }
+  function setText(id,v) { var e=gel(id); if(e) e.textContent=v; }
+
+  function logMsg(type, msg) {
+    var feed=gel('apiLog'); if(!feed) return;
+    CFG.stats.calls++;
+    var n=new Date();
+    var ts=n.getHours().toString().padStart(2,'0')+':'+
+           n.getMinutes().toString().padStart(2,'0')+':'+
+           n.getSeconds().toString().padStart(2,'0');
+    var d=document.createElement('div');
+    d.className='api-log-item api-log-'+type;
+    d.innerHTML='<span class="api-log-ts">'+ts+'</span><span class="api-log-msg">'+msg+'</span>';
+    feed.insertBefore(d, feed.firstChild);
+    while(feed.children.length>30) feed.removeChild(feed.lastChild);
+    setText('apiStatFetched', CFG.stats.calls);
+  }
+
+  function addEventCard(evt) {
+    var feed=gel('apiEvents'); if(!feed) return;
+    CFG.stats.events++;
+    var sev=parseFloat(evt.severity||0);
+    var cls=sev>=0.80?'api-event-crit':sev>=0.58?'api-event-warn':'api-event-info';
+    var d=document.createElement('div');
+    d.className='api-event-item '+cls;
+    d.innerHTML=
+      '<div class="api-event-type">'+evt.event_type+' ¬∑ <b>'+evt.location+'</b></div>'+
+      '<div class="api-event-meta">SEV:<b>'+sev.toFixed(2)+'</b> CONF:<b>'+
+        ((evt.conf||0)*100).toFixed(0)+'%</b>'+
+        (evt.assets&&evt.assets.length?' ¬∑ '+evt.assets.slice(0,4).join(', '):'')+
+      '</div>'+
+      '<div class="api-event-hl">'+(evt.headline||'').slice(0,90)+'</div>';
+    feed.insertBefore(d, feed.firstChild);
+    while(feed.children.length>14) feed.removeChild(feed.lastChild);
+    setText('apiStatValid', CFG.stats.events);
+  }
+
+  function setSrc(id, label, dotCls) {
+    var e=gel(id); if(!e) return;
+    var dot=e.querySelector('.api-src-dot');
+    var stat=e.querySelector('.api-src-status');
+    if(dot)  dot.className='api-src-dot '+dotCls;
+    if(stat) stat.textContent=label;
+  }
+
+  function setLivePrice(sym, price, chg) {
+    var pe=gel('apiLivePrice_'+sym), ce=gel('apiLiveChg_'+sym), se=gel('apiLiveSrc_'+sym);
+    if(pe) {
+      pe.textContent = price>=100 ? '$'+price.toLocaleString(undefined,{maximumFractionDigits:2}) :
+                       price>=1   ? price.toFixed(4) : price.toFixed(5);
+      pe.style.color='#e8f0f8';
+    }
+    if(ce && chg!=null){ ce.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%'; ce.style.color=chg>=0?'#28c060':'#e03030'; }
+    if(se){ se.textContent='‚óè LIVE'; se.style.color='#28c060'; }
+  }
+
+  /* ‚îÄ‚îÄ NLP parser: headline ‚Üí geo event ‚îÄ‚îÄ */
+  function parseHeadline(title, desc, sourceName) {
+    var text=(title+' '+(desc||'')).toLowerCase();
+    var severity=0.12, event_type='NEWS', matched=0;
+    Object.keys(KW).forEach(function(kw) {
+      if(text.indexOf(kw)!==-1){
+        matched++;
+        if(KW[kw][1]>severity){ severity=KW[kw][1]; event_type=KW[kw][0]; }
+      }
+    });
+    if(severity<0.42 && matched<2) return null;
+    var location='Global', nodeId='';
+    Object.keys(LOC).forEach(function(l) {
+      if(text.indexOf(l)!==-1){ location=l.charAt(0).toUpperCase()+l.slice(1); nodeId=LOC[l]; }
+    });
+    var assets=[];
+    Object.keys(ASSET_KW).forEach(function(term) {
+      if(text.indexOf(term)!==-1){
+        ASSET_KW[term].forEach(function(a){ if(assets.indexOf(a)===-1) assets.push(a); });
+      }
+    });
+    var conf=Math.min(0.32+matched*0.07+(nodeId?0.12:0), 0.87);
+    return {
+      headline:title, event_type:event_type,
+      location:location, nodeId:nodeId,
+      severity:parseFloat(severity.toFixed(2)),
+      assets:assets, conf:parseFloat(conf.toFixed(2)),
+      source:sourceName
+    };
+  }
+
+  /* ‚îÄ‚îÄ Distribute event to Features 1, 5, 6 ‚îÄ‚îÄ */
+  function distributeEvent(evt) {
+    if(!evt || evt.severity<0.45) return;
+    var updated=0;
+
+    /* Feature 5: pulse contagion map node */
+    if(evt.nodeId) {
+      var nodeEl=document.getElementById('node-'+evt.nodeId);
+      if(nodeEl) {
+        var crs=parseInt(nodeEl.getAttribute('data-crs')||'50');
+        var boost=Math.round(evt.severity*5);
+        nodeEl.setAttribute('data-crs', Math.min(99, crs+boost));
+        nodeEl.querySelectorAll('circle').forEach(function(c) {
+          var r0=c.getAttribute('r')||'8';
+          c.setAttribute('r',(parseFloat(r0)+3)+'');
+          c.style.filter='drop-shadow(0 0 8px rgba(247,147,26,0.9))';
+          setTimeout(function(){ c.setAttribute('r',r0); c.style.filter=''; },1100);
+        });
+        logMsg('success','Map: '+evt.location+' node pulsed (CRS +'+boost+')');
+        updated++;
+      }
+    }
+
+    /* Feature 6: BTC impact feed */
+    if(evt.assets && evt.assets.indexOf('BTC')!==-1) {
+      var af=gel('ukcAlertFeed');
+      if(af) {
+        var n=new Date();
+        var ts=n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
+        var aType=evt.event_type.indexOf('DE-ESC')!==-1?'pos':evt.severity>=0.75?'crit':'warn';
+        var item=document.createElement('div');
+        item.className='ukc-alert-item ukc-alert-'+aType;
+        item.innerHTML='<span class="ukc-alert-time">'+ts+' API</span>'+
+                        '<span class="ukc-alert-msg">'+evt.event_type+': '+evt.headline.slice(0,68)+'‚Ä¶</span>';
+        af.insertBefore(item, af.firstChild);
+        while(af.children.length>14) af.removeChild(af.lastChild);
+        updated++;
+      }
+    }
+
+    /* Feature 1: NIB ticker for high-severity */
+    if(evt.severity>=0.70) {
+      var ticker=document.querySelector('.nib-crit-ticker');
+      if(ticker){
+        var seg=' ‚ö° ['+evt.source.toUpperCase()+'] '+evt.event_type+': '+evt.headline.slice(0,55)+'‚Ä¶ ';
+        ticker.textContent=(seg+(ticker.textContent||'')).slice(0,600);
+        updated++;
+      }
+    }
+
+    CFG.stats.updated+=updated;
+    setText('apiStatUpdated', CFG.stats.updated);
+  }
+
+  /* ‚îÄ‚îÄ CoinGecko: real BTC + ETH ‚îÄ‚îÄ */
+  function fetchCoinGecko() {
+    logMsg('info','CoinGecko ‚Üí BTC / ETH‚Ä¶');
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true&include_1h_change=true&include_7d_change=true&precision=2')
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(d) {
+        setSrc('apiSrcCoinGecko','‚óè LIVE','api-dot-live');
+        var btc=d.bitcoin, eth=d.ethereum||{};
+        logMsg('success','CoinGecko ‚úì  BTC $'+btc.usd.toLocaleString()+
+          '  24h '+(btc.usd_24h_change>=0?'+':'')+btc.usd_24h_change.toFixed(2)+'%'+
+          (eth.usd?'  ETH $'+eth.usd:''));
+        setText('ukcBtcPrice','$'+btc.usd.toLocaleString());
+        function setT(vId,bId,pct) {
+          if(pct==null) return;
+          var ve=gel(vId), be=gel(bId);
+          if(ve){ ve.textContent=(pct>=0?'+':'')+pct.toFixed(2)+'%'; ve.style.color=pct>=0?'#28c060':'#e03030'; }
+          if(be){ be.style.width=Math.min(Math.abs(pct)*10,100)+'%'; be.className='ukc-bar '+(pct>=0?'pos':'neg'); }
+        }
+        setT('ukcBtc1h','ukcBtc1hBar', btc.usd_1h_change);
+        setT('ukcBtc24h','ukcBtc24hBar', btc.usd_24h_change);
+        setT('ukcBtc7d','ukcBtc7dBar', btc.usd_7d_change);
+        setLivePrice('BTC', btc.usd, btc.usd_24h_change);
+        if(eth.usd) setLivePrice('ETH', eth.usd, eth.usd_24h_change||null);
+        var badge=gel('ukcLastUpdate');
+        if(badge){ var nb=new Date(); badge.textContent='BTC LIVE ¬∑ '+nb.getHours().toString().padStart(2,'0')+':'+nb.getMinutes().toString().padStart(2,'0'); }
+        if(Math.abs(btc.usd_24h_change)>=2.0){
+          distributeEvent({
+            headline:'BTC '+(btc.usd_24h_change>=0?'surging':'falling')+' '+(btc.usd_24h_change>=0?'+':'')+btc.usd_24h_change.toFixed(2)+'% (24h) at $'+btc.usd.toLocaleString(),
+            event_type:btc.usd_24h_change>=0?'CRYPTO SURGE':'CRYPTO RISK-OFF',
+            location:'Crypto Markets', nodeId:'',
+            severity:Math.min(0.42+Math.abs(btc.usd_24h_change)*0.05,0.82),
+            assets:['BTC'], conf:0.97, source:'CoinGecko'
+          });
+        }
+        setText('apiStatSource','LIVE');
+      })
+      .catch(function(err){
+        setSrc('apiSrcCoinGecko','‚ö† error','api-dot-error');
+        logMsg('error','CoinGecko: '+err.message+' ‚Äî BTC stays on simulation');
+      });
+  }
+
+  /* ‚îÄ‚îÄ Alpha Vantage market data ‚îÄ‚îÄ */
+  function fetchAlphaVantage(key) {
+    var queue=[
+      {sym:'WTI',    url:'https://www.alphavantage.co/query?function=WTI&interval=monthly&apikey='+key,    parse:'commodity'},
+      {sym:'BRENT',  url:'https://www.alphavantage.co/query?function=BRENT&interval=monthly&apikey='+key,  parse:'commodity'},
+      {sym:'GOLD',   url:'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=GLD&apikey='+key, parse:'quote'},
+      {sym:'LMT',    url:'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=LMT&apikey='+key, parse:'quote'},
+      {sym:'EURUSD', url:'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=EUR&to_currency=USD&apikey='+key, parse:'fx'},
+      {sym:'GBPUSD', url:'https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=GBP&to_currency=USD&apikey='+key, parse:'fx'}
+    ];
+    var idx=0;
+    function next() {
+      if(idx>=queue.length) return;
+      var item=queue[idx++];
+      logMsg('info','AV ‚Üí '+item.sym+'‚Ä¶');
+      fetch(item.url)
+        .then(function(r){ return r.json(); })
+        .then(function(d) {
+          if(d['Note']||d['Information']){ logMsg('warn','AV rate limit: '+item.sym+' (25 req/day free)'); return; }
+          setSrc('apiSrcAlphaVantage','‚óè LIVE','api-dot-live');
+          var price=null, chg=null;
+          if(item.parse==='commodity'&&d['data']&&d['data'][0]){
+            price=parseFloat(d['data'][0]['value']);
+            logMsg('success','AV ‚úì '+item.sym+' $'+price.toFixed(2));
+          } else if(item.parse==='fx'&&d['Realtime Currency Exchange Rate']){
+            price=parseFloat(d['Realtime Currency Exchange Rate']['5. Exchange Rate']);
+            logMsg('success','AV ‚úì '+item.sym+' '+price.toFixed(4));
+            if(item.sym==='GBPUSD'){ var g=gel('ukcGbpVal'); if(g) g.textContent=price.toFixed(4); }
+          } else if(item.parse==='quote'&&d['Global Quote']&&d['Global Quote']['05. price']){
+            price=parseFloat(d['Global Quote']['05. price']);
+            chg=parseFloat((d['Global Quote']['10. change percent']||'0').replace('%',''));
+            logMsg('success','AV ‚úì '+item.sym+' $'+price.toFixed(2)+(chg?' ('+(chg>=0?'+':'')+chg.toFixed(2)+'%)':''));
+          }
+          if(price){ setLivePrice(item.sym, price, chg); CFG.stats.updated++; setText('apiStatUpdated',CFG.stats.updated); }
+          setTimeout(next, 16000);
+        })
+        .catch(function(err){ logMsg('error','AV '+item.sym+': '+err.message); setTimeout(next,5000); });
+    }
+    next();
+  }
+
+  /* ‚îÄ‚îÄ RSS via allorigins proxy + DOMParser NLP ‚îÄ‚îÄ */
+  function fetchRssFeeds() {
+    var feeds=[
+      {name:'Reuters', url:'https://feeds.reuters.com/reuters/worldNews'},
+      {name:'BBC',     url:'https://feeds.bbci.co.uk/news/world/rss.xml'},
+      {name:'AP',      url:'https://rsshub.app/ap/topics/apf-topnews'}
+    ];
+    feeds.forEach(function(feed, i) {
+      setTimeout(function() {
+        logMsg('info','RSS ‚Üí '+feed.name+'‚Ä¶');
+        var u=CFG.proxy1+encodeURIComponent(feed.url);
+        fetch(u)
+          .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+          .then(function(d) {
+            if(!d.contents) throw new Error('empty');
+            setSrc('apiSrcNews','‚óè LIVE','api-dot-live');
+            var doc=(new DOMParser()).parseFromString(d.contents,'text/xml');
+            var items=doc.querySelectorAll('item');
+            logMsg('success','RSS ‚úì '+feed.name+': '+items.length+' articles');
+            var gN=0;
+            items.forEach(function(item) {
+              var t=(item.querySelector('title')||{textContent:''}).textContent.trim();
+              var dc=(item.querySelector('description')||{textContent:''}).textContent.replace(/<[^>]*>/g,'').trim();
+              var evt=parseHeadline(t,dc,feed.name);
+              if(evt){ addEventCard(evt); distributeEvent(evt); gN++; }
+            });
+            logMsg(gN?'success':'info', feed.name+(gN?': '+gN+' geo signals ‚Üí features updated':': no high-severity events'));
+          })
+          .catch(function(err) {
+            logMsg('warn','RSS '+feed.name+' proxy1 failed ('+err.message+') ‚Äî trying fallback‚Ä¶');
+            fetch(CFG.proxy2+encodeURIComponent(feed.url))
+              .then(function(r){ return r.text(); })
+              .then(function(xml) {
+                var doc=(new DOMParser()).parseFromString(xml,'text/xml');
+                var items=doc.querySelectorAll('item');
+                if(!items.length) throw new Error('no items');
+                setSrc('apiSrcNews','‚óè LIVE (fb)','api-dot-live');
+                logMsg('success','RSS '+feed.name+' fallback ‚úì '+items.length+' articles');
+                var gN=0;
+                items.forEach(function(item) {
+                  var t=(item.querySelector('title')||{textContent:''}).textContent.trim();
+                  var dc=(item.querySelector('description')||{textContent:''}).textContent.replace(/<[^>]*>/g,'').trim();
+                  var evt=parseHeadline(t,dc,feed.name);
+                  if(evt){ addEventCard(evt); distributeEvent(evt); gN++; }
+                });
+                if(gN) logMsg('success',feed.name+' fallback: '+gN+' geo signals');
+              })
+              .catch(function(){ logMsg('error','RSS '+feed.name+': both proxies failed this cycle'); });
+          });
+      }, i*4500);
+    });
+  }
+
+  /* ‚îÄ‚îÄ Main cycle ‚îÄ‚îÄ */
+  function tick() {
+    CFG.cycleN++;
+    var n=new Date();
+    var ts=n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0')+':'+n.getSeconds().toString().padStart(2,'0');
+    setText('apiCycleCount','CYCLE #'+String(CFG.cycleN).padStart(3,'0'));
+    setText('apiLastFetch','FETCHING‚Ä¶ '+ts);
+    logMsg('info','‚îÄ‚îÄ Cycle #'+CFG.cycleN+' ¬∑ '+ts+' ‚îÄ‚îÄ');
+    fetchCoinGecko();
+    if(CFG.cycleN===1 || CFG.cycleN%5===0) setTimeout(fetchRssFeeds, 4000);
+    setTimeout(function(){ setText('apiLastFetch','LAST: '+ts); }, 18000);
+  }
+
+  /* ‚îÄ‚îÄ Alpha Vantage key button ‚îÄ‚îÄ */
+  var keyBtn=gel('apiKeyBtn'), keyInp=gel('apiKeyInput');
+  if(keyInp && CFG.avKey) keyInp.value=CFG.avKey;
+  if(keyBtn) {
+    keyBtn.addEventListener('click', function() {
+      var key=keyInp?keyInp.value.trim():'';
+      if(!key){ logMsg('error','No key ‚Äî get one free at alphavantage.co'); return; }
+      CFG.avKey=key;
+      localStorage.setItem('geodash_av_key', key);
+      keyBtn.textContent='CONNECTED ‚úì';
+      keyBtn.style.borderColor='#28c060'; keyBtn.style.color='#28c060';
+      setSrc('apiSrcAlphaVantage','FETCHING‚Ä¶','api-dot-connecting');
+      logMsg('success','AV key saved ‚Üí queuing: WTI, Brent, GLD, LMT, EUR/USD, GBP/USD (16s apart)‚Ä¶');
+      fetchAlphaVantage(key);
+    });
+    if(CFG.avKey){ keyBtn.textContent='RECONNECT'; }
+  }
+
+  /* ‚îÄ‚îÄ Bootstrap ‚îÄ‚îÄ */
+  setTimeout(function() {
+    logMsg('info','Auto-connecting CoinGecko + RSS (no key required)‚Ä¶');
+    if(!CFG.avKey) logMsg('warn','Alpha Vantage: paste free key above for real WTI, gold, FX prices');
+    else logMsg('info','AV key found in storage ‚Äî click RECONNECT to refresh market data');
+    tick();
+    setInterval(tick, 60000);
+  }, 2000);
 
 })();
 </script>
