@@ -1720,10 +1720,9 @@
       <div class="subtitle">INTELLIGENCE BRIEFING // INVESTMENT EDITION // REUSABLE TEMPLATE</div>
     </div>
     <div class="header-meta">
-      <div class="datestamp">03 MARCH 2026 // 09:00 UTC</div>
+      <div class="datestamp" id="liveHeaderDate">03 MARCH 2026 // 09:00 UTC</div>
       <div>CLASSIFICATION: OPEN SOURCE</div>
       <div>POWERED BY: AI FORECAST MODELS + OSINT</div>
-      <div><span class="placeholder">[UPDATE DATE &amp; TIME EACH SESSION]</span></div>
     </div>
   </header>
 
@@ -1764,7 +1763,7 @@
     <div class="intel-hub-hdr">
       <div>
         <div class="hub-title">◈ Situation Intelligence Hub</div>
-        <div class="hub-sub">Log in → See the world → Understand implications → Act. Updated: 03-Mar-2026 09:00 UTC</div>
+        <div class="hub-sub">Log in → See the world → Understand implications → Act. Updated: <span id="liveUpdated1">03-Mar-2026 09:00 UTC</span></div>
       </div>
       <div style="font-size:10px;color:var(--dim);text-align:right">
         Active Themes: <span class="amber">4</span> &nbsp;|&nbsp; Impact Chains: <span class="amber">3</span> &nbsp;|&nbsp; What To Watch: <span class="amber">3</span>
@@ -1961,7 +1960,7 @@
     <div class="nib-header-row">
       <div>
         <div class="nib-board-title"><span class="nib-live-dot"></span>◈ Notification &amp; Intelligence Board</div>
-        <div class="nib-board-sub">Pre-event signals · Confirmed events · Market implications · Updated: 03-Mar-2026 09:00 UTC</div>
+        <div class="nib-board-sub">Pre-event signals · Confirmed events · Market implications · Updated: <span id="liveUpdated2">03-Mar-2026 09:00 UTC</span></div>
       </div>
       <div class="nib-board-stats">
         <span>CRITICAL <span>2</span></span>
@@ -2326,7 +2325,7 @@
     <!-- Intelligence Digest -->
     <div class="nib-digest">
       <div class="nib-digest-hdr">
-        <span class="nib-digest-title">◈ Intelligence Digest — 03-Mar-2026 · 09:00 UTC</span>
+        <span class="nib-digest-title">◈ Intelligence Digest — <span id="liveUpdated3">03-Mar-2026 · 09:00 UTC</span></span>
         <span style="font-size:10px;color:var(--dim)">Daily summary · Auto-generated from live feed</span>
       </div>
       <div class="nib-digest-body">
@@ -2374,7 +2373,7 @@
     <div class="gee-summary">
       <div class="gee-sum-hdr">
         <span>Master Output — All 12 Modules Integrated</span>
-        <span style="color:var(--dim)">Confidence: MODERATE · Data Quality: 78% · Updated: 03-Mar-2026 09:00 UTC</span>
+        <span style="color:var(--dim)">Confidence: MODERATE · Data Quality: 78% · Updated: <span id="liveUpdated4">03-Mar-2026 09:00 UTC</span></span>
       </div>
       <!-- 6 key metrics -->
       <div class="gee-sum-grid">
@@ -9415,9 +9414,35 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(function () {});
   }
 
+  /* ── Live clock ──────────────────────────────────────────────────── */
+  function updateClock() {
+    var now  = new Date();
+    var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    var smonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var dd   = String(now.getUTCDate()).padStart(2,'0');
+    var mon  = months[now.getUTCMonth()];
+    var smon = smonths[now.getUTCMonth()];
+    var yyyy = now.getUTCFullYear();
+    var hh   = String(now.getUTCHours()).padStart(2,'0');
+    var mm   = String(now.getUTCMinutes()).padStart(2,'0');
+
+    var header  = dd + ' ' + mon + ' ' + yyyy + ' // ' + hh + ':' + mm + ' UTC';
+    var compact = dd + '-' + smon + '-' + yyyy + ' ' + hh + ':' + mm + ' UTC';
+    var digest  = dd + '-' + smon + '-' + yyyy + ' · ' + hh + ':' + mm + ' UTC';
+
+    var el;
+    if ((el = document.getElementById('liveHeaderDate'))) el.textContent = header;
+    if ((el = document.getElementById('liveUpdated1')))   el.textContent = compact;
+    if ((el = document.getElementById('liveUpdated2')))   el.textContent = compact;
+    if ((el = document.getElementById('liveUpdated3')))   el.textContent = digest;
+    if ((el = document.getElementById('liveUpdated4')))   el.textContent = compact;
+  }
+  updateClock();
+  setInterval(updateClock, 60000); // refresh every minute
+
   // Kick off once DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { probe(); loadHistory(); });
+    document.addEventListener('DOMContentLoaded', function () { updateClock(); probe(); loadHistory(); });
   } else {
     probe();
     loadHistory();
