@@ -1554,6 +1554,80 @@
     .api-stat-val.api-green { color: #28c060; }
     .api-stat-val.api-amber { color: var(--amber); }
 
+    /* ─── FEATURE 8 · INTELLIGENCE COMMAND CENTRE · #ff4060 ────────────────── */
+    .intel-wrap { margin-bottom: 24px; }
+    .intel-header { background: rgba(255,64,96,0.07); border: 1px solid rgba(255,64,96,0.30); border-top: 2px solid #ff4060; border-left: 4px solid #ff4060; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .intel-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #ff4060; display: flex; align-items: center; gap: 8px; }
+    .intel-pulse { width: 8px; height: 8px; border-radius: 50%; background: #ff4060; box-shadow: 0 0 8px rgba(255,64,96,0.8); animation: apiPulse 1.5s ease-in-out infinite; }
+    .intel-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .intel-key-input { background: var(--bg2); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 10px; padding: 4px 8px; border-radius: 3px; width: 200px; }
+    .intel-key-input:focus { border-color: #ff4060; outline: none; }
+    .intel-key-btn { background: transparent; border: 1px solid #ff4060; color: #ff4060; font-family: inherit; font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+    .intel-key-btn:hover { background: rgba(255,64,96,0.15); }
+    .intel-badge { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--dim); border: 1px solid var(--border); padding: 3px 8px; border-radius: 3px; }
+    .intel-row { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid rgba(255,64,96,0.20); border-top: none; }
+    .intel-row + .intel-row { border-top: 1px solid rgba(255,64,96,0.20); }
+    .intel-panel { overflow: hidden; }
+    .intel-panel + .intel-panel { border-left: 1px solid rgba(255,64,96,0.20); }
+    .intel-panel-title { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: #ff4060; padding: 6px 10px; background: rgba(255,64,96,0.05); border-bottom: 1px solid rgba(255,64,96,0.15); }
+    /* signal feed */
+    .intel-signal-feed { max-height: 210px; overflow-y: auto; }
+    .intel-sig-item { display: flex; align-items: center; gap: 7px; padding: 4px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 10px; }
+    .intel-sig-item:hover { background: rgba(255,64,96,0.04); }
+    .intel-sig-bar-wrap { width: 34px; height: 5px; background: var(--bg3); border-radius: 3px; flex-shrink: 0; }
+    .intel-sig-fill { height: 100%; border-radius: 3px; }
+    .intel-sig-score { font-size: 9px; font-weight: 700; width: 24px; flex-shrink: 0; text-align: right; }
+    .intel-sig-src { font-size: 8px; color: var(--dim); width: 46px; flex-shrink: 0; overflow: hidden; }
+    .intel-sig-text { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .intel-sig-time { font-size: 8px; color: var(--dim); flex-shrink: 0; }
+    .s-crit { color: #ff2040; } .s-high { color: var(--amber); } .s-med { color: #20d0a0; } .s-low { color: var(--dim); }
+    .f-crit { background: #ff2040; } .f-high { background: var(--amber); } .f-med { background: #20d0a0; } .f-low { background: var(--border); }
+    /* early warning cards */
+    .intel-warnings { max-height: 210px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+    .intel-warn-card { border: 1px solid rgba(255,64,96,0.25); border-left: 3px solid #ff4060; background: rgba(255,64,96,0.05); padding: 8px 10px; border-radius: 2px; }
+    .intel-warn-card.wc-amber { border-color: rgba(232,160,32,0.35); border-left-color: var(--amber); background: rgba(232,160,32,0.05); }
+    .intel-warn-card.wc-green { border-color: rgba(40,192,96,0.25); border-left-color: var(--green); background: rgba(40,192,96,0.05); }
+    .intel-warn-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+    .intel-warn-scenario { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; }
+    .intel-warn-prob { font-size: 14px; font-weight: 700; }
+    .intel-warn-meta { font-size: 9px; color: var(--dim); margin-bottom: 4px; }
+    .intel-warn-assets { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
+    .intel-warn-asset { font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 2px; background: rgba(255,255,255,0.06); color: var(--text); letter-spacing: 0.5px; }
+    .intel-warn-pbar { height: 3px; background: var(--bg3); border-radius: 2px; margin-top: 5px; }
+    .intel-warn-pfill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+    /* event timeline */
+    .intel-timeline { max-height: 210px; overflow-y: auto; padding: 6px; }
+    .intel-tl-group { margin-bottom: 10px; }
+    .intel-tl-region { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #ff4060; margin-bottom: 4px; padding: 2px 6px; background: rgba(255,64,96,0.08); border-radius: 2px; display: inline-block; }
+    .intel-tl-chain { padding-left: 12px; border-left: 1px solid rgba(255,64,96,0.25); }
+    .intel-tl-evt { display: flex; align-items: flex-start; gap: 6px; padding: 3px 0; font-size: 10px; position: relative; }
+    .intel-tl-evt::before { content: ''; position: absolute; left: -15px; top: 6px; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,64,96,0.4); }
+    .intel-tl-evt.tle-hot::before { background: #ff4060; box-shadow: 0 0 5px rgba(255,64,96,0.7); }
+    .intel-tl-ts { font-size: 8px; color: var(--dim); width: 36px; flex-shrink: 0; }
+    .intel-tl-delta { font-size: 8px; color: var(--amber); width: 30px; flex-shrink: 0; }
+    .intel-tl-text { flex: 1; color: var(--text); }
+    /* trade signals */
+    .intel-trades { max-height: 210px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 5px; }
+    .intel-trade { border: 1px solid rgba(255,255,255,0.07); background: var(--bg2); padding: 7px 10px; border-radius: 2px; display: flex; align-items: center; gap: 8px; }
+    .intel-trade-rank { font-size: 15px; font-weight: 700; color: rgba(255,255,255,0.12); width: 18px; flex-shrink: 0; }
+    .intel-trade-dir { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 2px; flex-shrink: 0; letter-spacing: 0.5px; }
+    .td-long { background: rgba(40,192,96,0.18); color: var(--green); }
+    .td-short { background: rgba(224,48,48,0.18); color: var(--red); }
+    .td-watch { background: rgba(232,160,32,0.18); color: var(--amber); }
+    .intel-trade-asset { font-size: 12px; font-weight: 700; width: 58px; flex-shrink: 0; }
+    .intel-trade-body { flex: 1; }
+    .intel-trade-reason { font-size: 8px; color: var(--dim); margin-bottom: 2px; }
+    .intel-trade-cbar { height: 4px; background: var(--bg3); border-radius: 2px; }
+    .intel-trade-cfill { height: 100%; border-radius: 2px; transition: width 1s ease; }
+    .intel-trade-pct { font-size: 12px; font-weight: 700; width: 34px; text-align: right; flex-shrink: 0; }
+    /* footer */
+    .intel-footer { display: flex; border: 1px solid rgba(255,64,96,0.20); border-top: none; }
+    .intel-fstat { flex: 1; padding: 6px 10px; border-right: 1px solid rgba(255,64,96,0.12); }
+    .intel-fstat:last-child { border-right: none; }
+    .intel-fstat-label { font-size: 8px; color: var(--dim); letter-spacing: 0.5px; margin-bottom: 2px; }
+    .intel-fstat-val { font-size: 14px; font-weight: 700; color: #ff4060; }
+    .intel-placeholder { padding: 22px; text-align: center; color: var(--dim); font-size: 10px; }
+
     /* scrollbar */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
@@ -4697,6 +4771,76 @@
     </div>
 
   </div><!-- /api-wrap -->
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════════
+       FEATURE 8 — INTELLIGENCE COMMAND CENTRE
+       Real-time scored signals · escalation detection · trade recommendations
+       ══════════════════════════════════════════════════════════════════════════════ -->
+  <div class="intel-wrap" id="intelWrap">
+
+    <div class="intel-header">
+      <div class="intel-title">
+        <span class="intel-pulse"></span>
+        FEATURE 8 &nbsp;&middot;&nbsp; INTELLIGENCE COMMAND CENTRE
+      </div>
+      <div class="intel-controls">
+        <input class="intel-key-input" id="fredKeyInput" type="text" placeholder="FRED API key — free at fred.stlouisfed.org" autocomplete="off" spellcheck="false">
+        <button class="intel-key-btn" id="fredKeyBtn">CONNECT FRED</button>
+        <span class="intel-badge" id="intelSrcBadge">0 SOURCES</span>
+        <span class="intel-badge" id="intelEvtBadge">0 EVENTS</span>
+      </div>
+    </div>
+
+    <div class="intel-row">
+
+      <!-- ── SIGNAL MONITOR ── -->
+      <div class="intel-panel">
+        <div class="intel-panel-title">&#11043; SIGNAL MONITOR &mdash; events scored 0&ndash;100</div>
+        <div class="intel-signal-feed" id="intelSignalFeed">
+          <div class="intel-placeholder">Initialising ingestion engines&hellip;</div>
+        </div>
+      </div>
+
+      <!-- ── EARLY WARNING ── -->
+      <div class="intel-panel">
+        <div class="intel-panel-title">&#9888; EARLY WARNING &mdash; escalation probability</div>
+        <div class="intel-warnings" id="intelWarnings">
+          <div class="intel-placeholder">Scanning for escalation patterns&hellip;</div>
+        </div>
+      </div>
+
+    </div><!-- /intel-row -->
+
+    <div class="intel-row">
+
+      <!-- ── EVENT TIMELINE ── -->
+      <div class="intel-panel">
+        <div class="intel-panel-title">&#9203; EVENT TIMELINE &mdash; chronological chains by region</div>
+        <div class="intel-timeline" id="intelTimeline">
+          <div class="intel-placeholder">Building event chains&hellip;</div>
+        </div>
+      </div>
+
+      <!-- ── TRADE SIGNALS ── -->
+      <div class="intel-panel">
+        <div class="intel-panel-title">&#9670; TRADE SIGNALS &mdash; ranked by confidence</div>
+        <div class="intel-trades" id="intelTrades">
+          <div class="intel-placeholder">Awaiting signal threshold&hellip;</div>
+        </div>
+      </div>
+
+    </div><!-- /intel-row -->
+
+    <div class="intel-footer">
+      <div class="intel-fstat"><div class="intel-fstat-label">EVENTS PROCESSED</div><div class="intel-fstat-val" id="intelStatEvents">0</div></div>
+      <div class="intel-fstat"><div class="intel-fstat-label">HIGH SIGNAL (&ge;70)</div><div class="intel-fstat-val" id="intelStatHigh">0</div></div>
+      <div class="intel-fstat"><div class="intel-fstat-label">WARNINGS ACTIVE</div><div class="intel-fstat-val" id="intelStatWarnings">0</div></div>
+      <div class="intel-fstat"><div class="intel-fstat-label">TRADE SIGNALS</div><div class="intel-fstat-val" id="intelStatTrades">0</div></div>
+      <div class="intel-fstat"><div class="intel-fstat-label">SOURCES LIVE</div><div class="intel-fstat-val" id="intelStatSources">0</div></div>
+    </div>
+
+  </div><!-- /intel-wrap -->
 
   <!-- ‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê‚ïê
        SECTION 1 ‚Äî GLOBAL STATUS MAP
@@ -8033,6 +8177,604 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 2000);
 
 })();
+
+/* ══ FEATURE 8 — INTELLIGENCE COMMAND CENTRE ════════════════════════════════
+   DataBus · Signal Scoring · Escalation Detection · Timeline · Trade Signals
+   Sources: GDELT · Google News · UN · NATO · BBC · Reuters · Reddit · Binance
+            · FRED (optional key) · OSINT feeds
+   ══════════════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── CONFIG ────────────────────────────────────────────────────────────── */
+  var IC = {
+    fredKey     : localStorage.getItem('geodash_fred_key') || '',
+    cycleN      : 0,
+    events      : [],
+    eventIds    : new Set(),
+    regionStates: {},
+    liveSources : new Set(),
+    stats       : { events:0, high:0, warnings:0, trades:0 },
+    proxy1      : 'https://api.allorigins.win/get?url=',
+    proxy2      : 'https://corsproxy.io/?',
+    maxEvents   : 300,
+    TICK_MS     : 60000,
+  };
+
+  /* ── GEOGRAPHIC IMPORTANCE (0–1) ───────────────────────────────────────── */
+  var GEO = {
+    'iran':0.95,'hormuz':0.92,'tehran':0.88,'revolutionary guard':0.90,
+    'israel':0.95,'tel aviv':0.88,'jerusalem':0.88,'gaza':0.92,'west bank':0.85,
+    'ukraine':0.95,'kyiv':0.90,'kharkiv':0.85,'zaporizhzhia':0.88,'donbas':0.85,'crimea':0.87,
+    'russia':0.95,'moscow':0.90,'kremlin':0.90,'putin':0.92,
+    'taiwan':0.95,'taipei':0.90,'taiwan strait':0.97,'tsmc':0.88,
+    'china':0.90,'beijing':0.88,'xi jinping':0.90,'south china sea':0.92,
+    'korea':0.88,'pyongyang':0.88,'north korea':0.90,'kim jong':0.85,
+    'pakistan':0.82,'india':0.82,'kashmir':0.85,'line of control':0.88,
+    'nato':0.88,'pentagon':0.85,'white house':0.80,'state department':0.80,
+    'saudi':0.85,'riyadh':0.82,'yemen':0.78,'houthi':0.80,'aramco':0.85,
+    'syria':0.80,'iraq':0.80,'baghdad':0.78,'hezbollah':0.83,'hamas':0.85,
+    'afghanistan':0.72,'taliban':0.74,'pakistan':0.80,
+    'balkans':0.72,'serbia':0.68,'kosovo':0.70,'moldova':0.72,'transnistria':0.75,
+    'caucasus':0.75,'armenia':0.72,'azerbaijan':0.72,'nagorno':0.78,
+    'arctic':0.65,'svalbard':0.68,
+    'persian gulf':0.90,'strait of hormuz':0.95,'red sea':0.85,'bab el-mandeb':0.88,
+    'black sea':0.82,'baltic sea':0.78,'bosphorus':0.80,
+  };
+
+  /* ── SEVERITY KEYWORDS (0–1) ───────────────────────────────────────────── */
+  var SEV = {
+    'nuclear war':0.99,'nuclear strike':0.98,'world war':0.98,'nuclear weapon':0.95,
+    'nuclear test':0.90,'hypersonic missile':0.90,'ballistic missile':0.88,
+    'invasion':0.90,'full-scale':0.90,'all-out war':0.92,'ground invasion':0.88,
+    'airstrike':0.85,'bombing':0.83,'missile strike':0.85,'rocket attack':0.80,
+    'coup':0.88,'assassination':0.90,'terrorist attack':0.83,'suicide bomb':0.80,
+    'mobilization':0.85,'troop movement':0.82,'military buildup':0.80,
+    'blockade':0.78,'naval confrontation':0.80,'aircraft carrier':0.72,
+    'sanction':0.65,'embargo':0.68,'asset freeze':0.65,'swift':0.68,
+    'chemical weapon':0.92,'biological weapon':0.92,'dirty bomb':0.90,
+    'cyber attack':0.65,'infrastructure attack':0.68,'grid attack':0.72,
+    'war':0.82,'battle':0.80,'combat':0.78,'fighting':0.75,'clash':0.70,
+    'offensive':0.78,'counter-offensive':0.78,'siege':0.80,'encirclement':0.75,
+    'killed':0.78,'casualties':0.75,'civilian deaths':0.80,'massacre':0.85,
+    'escalation':0.72,'crisis':0.68,'confrontation':0.70,'standoff':0.65,
+    'protest':0.42,'unrest':0.52,'riot':0.60,'coup attempt':0.85,
+    'ceasefire':0.28,'peace talks':0.22,'diplomatic':0.35,'withdrawal':0.32,
+    'agreement':0.25,'negotiation':0.30,'deescalation':0.18,'deal':0.22,
+    'drone':0.68,'uav attack':0.75,'kamikaze drone':0.78,
+    'refugee':0.48,'displacement':0.45,'humanitarian crisis':0.50,
+    'famine':0.55,'food security':0.45,'water crisis':0.42,
+    'unprecedented':0.62,'emergency':0.65,'alert':0.58,'warning':0.55,
+  };
+
+  /* ── MARKET SENSITIVITY (keyword → assets) ─────────────────────────────── */
+  var MKTMAP = {
+    'oil':['WTI','BRENT'],'petroleum':['WTI','BRENT'],'crude':['WTI','BRENT'],
+    'opec':['WTI','BRENT'],'aramco':['WTI','BRENT'],'pipeline':['WTI','BRENT'],
+    'hormuz':['WTI','BRENT','GLD'],'strait':['WTI','BRENT'],
+    'gold':['GLD'],'safe haven':['GLD','BTC'],'inflation':['GLD','BTC','WTI'],
+    'sanction':['BTC','GLD'],'swift':['BTC','GLD'],'dollar':['GLD','BTC'],
+    'nuclear':['GLD','LMT'],'missile':['GLD','LMT','WTI'],
+    'military':['LMT','GLD'],'defense':['LMT'],'arms':['LMT'],
+    'crypto':['BTC','ETH'],'bitcoin':['BTC'],'ethereum':['ETH'],
+    'taiwan':['TSM','GLD','LMT'],'chip':['TSM'],'semiconductor':['TSM'],
+    'china':['GLD','SPY','TSM'],'trade war':['GLD','SPY'],'tariff':['GLD','SPY'],
+    'ukraine':['WTI','BRENT','GLD','WHT'],'wheat':['WHT'],'grain':['WHT'],
+    'russia':['WTI','BRENT','GLD','WHT','GAS'],'gas':['GAS','WTI'],
+    'iran':['WTI','BRENT','GLD','LMT'],'middle east':['WTI','GLD'],
+    'fed':['GLD','SPY'],'interest rate':['GLD','SPY'],'recession':['GLD','BTC'],
+    'bank':['GLD','BTC'],'financial':['GLD','SPY'],'market crash':['GLD','BTC'],
+    'korea':['GLD','LMT'],'india':['GLD'],'pakistan':['GLD','WTI'],
+  };
+
+  /* ── REGION EXTRACTION MAP ─────────────────────────────────────────────── */
+  var REGIONS = [
+    ['hormuz','IRAN'],['iran','IRAN'],['tehran','IRAN'],['revolutionary guard','IRAN'],
+    ['israel','ISRAEL'],['tel aviv','ISRAEL'],['jerusalem','ISRAEL'],['gaza','ISRAEL'],['hamas','ISRAEL'],['hezbollah','ISRAEL'],
+    ['ukraine','UKRAINE'],['kyiv','UKRAINE'],['kharkiv','UKRAINE'],['zaporizhzhia','UKRAINE'],['donbas','UKRAINE'],
+    ['russia','RUSSIA'],['moscow','RUSSIA'],['kremlin','RUSSIA'],['putin','RUSSIA'],
+    ['taiwan','TAIWAN'],['taipei','TAIWAN'],['tsmc','TAIWAN'],
+    ['china','CHINA'],['beijing','CHINA'],['xi jinping','CHINA'],['south china sea','CHINA'],
+    ['north korea','KOREA'],['pyongyang','KOREA'],['kim jong','KOREA'],
+    ['pakistan','PAKISTAN'],['islamabad','PAKISTAN'],
+    ['india','INDIA'],['new delhi','INDIA'],['kashmir','INDIA'],
+    ['saudi','SAUDI'],['riyadh','SAUDI'],['aramco','SAUDI'],
+    ['yemen','YEMEN'],['houthi','YEMEN'],
+    ['syria','SYRIA'],['damascus','SYRIA'],
+    ['iraq','IRAQ'],['baghdad','IRAQ'],
+    ['afghanistan','AFGHAN'],['taliban','AFGHAN'],['kabul','AFGHAN'],
+    ['balkans','BALKANS'],['serbia','BALKANS'],['kosovo','BALKANS'],
+    ['moldova','MOLDOVA'],['transnistria','MOLDOVA'],
+    ['armenia','CAUCASUS'],['azerbaijan','CAUCASUS'],['nagorno','CAUCASUS'],
+    ['red sea','RED SEA'],['bab el-mandeb','RED SEA'],
+    ['nato','NATO'],['pentagon','NATO'],['state department','NATO'],
+  ];
+
+  /* ── ESCALATION PATTERNS ───────────────────────────────────────────────── */
+  var ESC = {
+    'IRAN'    : { kws:['missile','military','sanction','nuclear','oil','hormuz','guard','attack','strike'], assets:['WTI','BRENT','GLD','LMT'], scenario:'Iran Military Escalation' },
+    'UKRAINE' : { kws:['missile','offensive','troop','nato','mobiliz','shell','drone','weapon','occupied'], assets:['WTI','BRENT','GLD','WHT'], scenario:'Russia–Ukraine Escalation' },
+    'TAIWAN'  : { kws:['military','exercise','strait','navy','missile','chip','sanction','invasion','blockade'], assets:['TSM','GLD','LMT','SPY'], scenario:'Taiwan Strait Escalation' },
+    'ISRAEL'  : { kws:['attack','rocket','airstrike','ground','hamas','hezbollah','ceasefire','rafah','hostage'], assets:['WTI','GLD','LMT'], scenario:'Middle East Escalation' },
+    'KOREA'   : { kws:['missile','nuclear','provocation','military','test','launch','icbm'], assets:['GLD','LMT','SPY'], scenario:'Korean Peninsula Escalation' },
+    'RUSSIA'  : { kws:['nuclear','nato','mobiliz','offensive','sanction','energy','gas','weapon'], assets:['WTI','BRENT','GLD','WHT','GAS'], scenario:'Russia Geopolitical Escalation' },
+    'CHINA'   : { kws:['taiwan','military','sanction','trade','chip','semiconductor','exercise','blockade'], assets:['TSM','GLD','SPY','LMT'], scenario:'China Strategic Escalation' },
+    'SAUDI'   : { kws:['oil','opec','aramco','drone','missile','houthi','yemen','cut'], assets:['WTI','BRENT','GLD'], scenario:'Gulf Energy Escalation' },
+  };
+
+  /* ── HELPERS ───────────────────────────────────────────────────────────── */
+  function gel(id) { return document.getElementById(id); }
+  function hhmm() { return new Date().toTimeString().slice(0,5); }
+  function dedupeKey(t) { return t.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,48); }
+
+  function scoreEvent(evt) {
+    var text = (evt.title + ' ' + (evt.desc||'')).toLowerCase();
+    // 1. Severity 0-25
+    var sev = 0;
+    Object.keys(SEV).forEach(function(k){ if(text.includes(k)) sev = Math.max(sev, SEV[k]); });
+    var s1 = Math.round(sev * 25);
+    // 2. Keyword density 0-20
+    var kd = Object.keys(SEV).filter(function(k){ return text.includes(k); }).length;
+    var s2 = Math.min(20, kd * 3);
+    // 3. Source corroboration 0-15
+    var s3 = Math.min(15, (evt.srcCount||1) * 4);
+    // 4. Social velocity 0-15
+    var s4 = Math.min(15, Math.round((evt.socialV||0) * 15));
+    // 5. Geographic importance 0-15
+    var geo = 0;
+    Object.keys(GEO).forEach(function(k){ if(text.includes(k)) geo = Math.max(geo, GEO[k]); });
+    var s5 = Math.round(geo * 15);
+    // 6. Market sensitivity 0-10
+    var assets = [];
+    Object.keys(MKTMAP).forEach(function(k){ if(text.includes(k)) MKTMAP[k].forEach(function(a){ if(!assets.includes(a)) assets.push(a); }); });
+    var s6 = Math.min(10, assets.length * 2);
+    evt.signal   = Math.min(100, s1+s2+s3+s4+s5+s6);
+    evt.assets   = assets;
+    evt.geoScore = geo;
+    return evt.signal;
+  }
+
+  function extractRegion(text) {
+    var low = text.toLowerCase();
+    for (var i=0; i<REGIONS.length; i++) { if(low.includes(REGIONS[i][0])) return REGIONS[i][1]; }
+    return 'GLOBAL';
+  }
+
+  /* ── INGESTION BUS ─────────────────────────────────────────────────────── */
+  function ingest(title, desc, source, extras) {
+    if (!title || title.length < 8) return;
+    var id = dedupeKey(title);
+    if (IC.eventIds.has(id)) return;
+    IC.eventIds.add(id);
+
+    var evt = {
+      title   : title.slice(0, 90),
+      desc    : (desc||'').replace(/<[^>]+>/g,'').slice(0, 200),
+      source  : source || '?',
+      srcCount: 1,
+      socialV : 0,
+      ts      : Date.now(),
+      time    : hhmm(),
+      region  : extractRegion(title + ' ' + (desc||'')),
+    };
+    if (extras) Object.keys(extras).forEach(function(k){ evt[k]=extras[k]; });
+
+    scoreEvent(evt);
+
+    // Push to front
+    IC.events.unshift(evt);
+    if (IC.events.length > IC.maxEvents) IC.events.pop();
+
+    // Update escalation model
+    updateEscalation(evt);
+
+    // Forward high-signal events to other features
+    if (evt.signal >= 55) forwardEvent(evt);
+
+    redrawAll();
+  }
+
+  function forwardEvent(evt) {
+    // → Feature 1 NIB ticker
+    var ticker = document.querySelector('.nib-crit-ticker');
+    if (ticker && evt.signal >= 70) {
+      var span = document.createElement('span');
+      span.className = 'nib-crit-item';
+      span.style.color = evt.signal >= 85 ? 'var(--red)' : 'var(--amber)';
+      span.textContent = '⬡ [IC·' + evt.signal + '] ' + evt.title + '  ';
+      ticker.prepend(span);
+    }
+    // → Feature 6 UK/Crypto alert feed
+    var ukcFeed = gel('ukcAlertFeed');
+    if (ukcFeed && evt.signal >= 60) {
+      var div = document.createElement('div');
+      div.className = 'ukc-alert-item';
+      div.innerHTML = '<span style="color:#ff4060;font-weight:700">[IC·' + evt.signal + ']</span> ' + evt.title;
+      ukcFeed.prepend(div);
+    }
+  }
+
+  /* ── ESCALATION ENGINE ─────────────────────────────────────────────────── */
+  function updateEscalation(evt) {
+    var r = evt.region;
+    if (!r || r === 'GLOBAL') return;
+
+    // Find matching ESC pattern key
+    var pKey = null;
+    Object.keys(ESC).forEach(function(k){ if(r.includes(k)||k.includes(r.split(' ')[0])) pKey=k; });
+
+    var state = IC.regionStates[r];
+    if (!state) {
+      var pat = pKey ? ESC[pKey] : null;
+      IC.regionStates[r] = state = {
+        prob: 0, confidence: 0, signalCount: 0,
+        assets: pat ? pat.assets.slice() : (evt.assets||[]),
+        scenario: pat ? pat.scenario : (r + ' SITUATION'),
+        lastEvt: Date.now(),
+      };
+    }
+
+    var text = (evt.title + ' ' + evt.desc).toLowerCase();
+    var kwHits = 0;
+    if (pKey && ESC[pKey]) {
+      kwHits = ESC[pKey].kws.filter(function(k){ return text.includes(k); }).length;
+      // Merge assets
+      ESC[pKey].assets.forEach(function(a){ if(!state.assets.includes(a)) state.assets.push(a); });
+    }
+    (evt.assets||[]).forEach(function(a){ if(!state.assets.includes(a)) state.assets.push(a); });
+
+    var sigNorm = evt.signal / 100;
+    var kwBoost = kwHits * 0.04;
+    state.prob = Math.min(97, Math.round(state.prob * 0.82 + (sigNorm * 0.28 + kwBoost) * 100));
+    state.confidence = Math.min(92, Math.round(30 + state.signalCount * 4 + kwHits * 3));
+    state.signalCount++;
+    state.lastEvt = Date.now();
+  }
+
+  function decayStates() {
+    var now = Date.now();
+    Object.keys(IC.regionStates).forEach(function(r){
+      var s = IC.regionStates[r];
+      var ageMins = (now - s.lastEvt) / 60000;
+      if (ageMins > 10) s.prob = Math.max(0, s.prob - 2);
+    });
+  }
+
+  /* ── RENDER: SIGNAL FEED ───────────────────────────────────────────────── */
+  function renderSignals() {
+    var el = gel('intelSignalFeed'); if (!el) return;
+    var top = IC.events.slice(0,30);
+    if (!top.length) { el.innerHTML = '<div class="intel-placeholder">No events yet&hellip;</div>'; return; }
+    el.innerHTML = top.map(function(e){
+      var s = e.signal||0;
+      var cls = s>=75?'crit':s>=55?'high':s>=35?'med':'low';
+      return '<div class="intel-sig-item">' +
+        '<div class="intel-sig-bar-wrap"><div class="intel-sig-fill f-'+cls+'" style="width:'+s+'%"></div></div>' +
+        '<span class="intel-sig-score s-'+cls+'">'+s+'</span>' +
+        '<span class="intel-sig-src">'+e.source.slice(0,7).toUpperCase()+'</span>' +
+        '<span class="intel-sig-text" title="'+e.title+'">'+e.title+'</span>' +
+        '<span class="intel-sig-time">'+e.time+'</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ── RENDER: EARLY WARNING ─────────────────────────────────────────────── */
+  function renderWarnings() {
+    var el = gel('intelWarnings'); if (!el) return;
+    var regions = Object.keys(IC.regionStates).filter(function(r){ return IC.regionStates[r].prob >= 20; });
+    if (!regions.length) { el.innerHTML = '<div class="intel-placeholder">No active warnings</div>'; return; }
+    regions.sort(function(a,b){ return IC.regionStates[b].prob - IC.regionStates[a].prob; });
+    el.innerHTML = regions.slice(0,6).map(function(r){
+      var s = IC.regionStates[r];
+      var p = s.prob;
+      var cc = p>=65?'':'wc-'+(p>=42?'amber':'green');
+      var pc = p>=65?'#ff4060':p>=42?'var(--amber)':'var(--green)';
+      return '<div class="intel-warn-card '+cc+'">' +
+        '<div class="intel-warn-hdr">' +
+          '<span class="intel-warn-scenario">'+s.scenario+'</span>' +
+          '<span class="intel-warn-prob" style="color:'+pc+'">'+p+'%</span>' +
+        '</div>' +
+        '<div class="intel-warn-meta">Confidence: '+s.confidence+'% &nbsp;&middot;&nbsp; Signals: '+s.signalCount+'</div>' +
+        '<div class="intel-warn-assets">'+(s.assets||[]).slice(0,6).map(function(a){ return '<span class="intel-warn-asset">'+a+'</span>'; }).join('')+'</div>' +
+        '<div class="intel-warn-pbar"><div class="intel-warn-pfill" style="width:'+p+'%;background:'+pc+'"></div></div>' +
+      '</div>';
+    }).join('');
+    IC.stats.warnings = regions.filter(function(r){ return IC.regionStates[r].prob>=50; }).length;
+  }
+
+  /* ── RENDER: EVENT TIMELINE ────────────────────────────────────────────── */
+  function renderTimeline() {
+    var el = gel('intelTimeline'); if (!el) return;
+    var groups = {};
+    IC.events.forEach(function(e){ var r=e.region||'GLOBAL'; if(!groups[r])groups[r]=[]; groups[r].push(e); });
+    var sorted = Object.keys(groups).sort(function(a,b){ return groups[b].length-groups[a].length; });
+    if (!sorted.length) { el.innerHTML = '<div class="intel-placeholder">Building chains&hellip;</div>'; return; }
+    el.innerHTML = sorted.slice(0,5).map(function(r){
+      var evts = groups[r].slice(0,6);
+      var chain = evts.map(function(e,i){
+        var delta = i>0 ? '+'+Math.round((e.ts-evts[i-1].ts)/60000)+'m' : '';
+        var hot = e.signal>=60 ? 'tle-hot' : '';
+        return '<div class="intel-tl-evt '+hot+'">' +
+          '<span class="intel-tl-ts">'+e.time+'</span>' +
+          '<span class="intel-tl-delta">'+delta+'</span>' +
+          '<span class="intel-tl-text">'+e.title.slice(0,52)+'</span>' +
+        '</div>';
+      }).join('');
+      return '<div class="intel-tl-group">' +
+        '<span class="intel-tl-region">'+r+'</span>' +
+        '<div class="intel-tl-chain">'+chain+'</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ── RENDER: TRADE SIGNALS ─────────────────────────────────────────────── */
+  function renderTrades() {
+    var el = gel('intelTrades'); if (!el) return;
+    var sigs = [];
+    Object.keys(IC.regionStates).forEach(function(r){
+      var st = IC.regionStates[r]; if (st.prob < 30) return;
+      (st.assets||[]).forEach(function(asset){
+        var conf = Math.min(95, Math.round(st.prob * 0.88 + st.signalCount * 1.5));
+        var dir = ['SPY'].includes(asset) ? (st.prob>60?'SHORT':'WATCH') : 'LONG';
+        var found = sigs.find(function(s){ return s.asset===asset; });
+        if (found) { found.conf = Math.max(found.conf, conf); found.reason += ' + '+r; }
+        else sigs.push({ asset:asset, dir:dir, conf:conf, reason:st.scenario.slice(0,36), region:r });
+      });
+    });
+    sigs.sort(function(a,b){ return b.conf-a.conf; });
+    IC.stats.trades = sigs.length;
+    if (!sigs.length) { el.innerHTML = '<div class="intel-placeholder">Signal threshold not yet reached&hellip;</div>'; return; }
+    el.innerHTML = sigs.slice(0,7).map(function(s,i){
+      var bc = s.dir==='LONG'?'var(--green)':s.dir==='SHORT'?'var(--red)':'var(--amber)';
+      return '<div class="intel-trade">' +
+        '<div class="intel-trade-rank">'+(i+1)+'</div>' +
+        '<div class="intel-trade-dir td-'+s.dir.toLowerCase()+'">'+s.dir+'</div>' +
+        '<div class="intel-trade-asset">'+s.asset+'</div>' +
+        '<div class="intel-trade-body">' +
+          '<div class="intel-trade-reason">'+s.reason+'</div>' +
+          '<div class="intel-trade-cbar"><div class="intel-trade-cfill" style="width:'+s.conf+'%;background:'+bc+'"></div></div>' +
+        '</div>' +
+        '<div class="intel-trade-pct" style="color:'+bc+'">'+s.conf+'%</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ── RENDER: STATS ─────────────────────────────────────────────────────── */
+  function updateStats() {
+    IC.stats.events = IC.events.length;
+    IC.stats.high   = IC.events.filter(function(e){ return (e.signal||0)>=70; }).length;
+    var setEl = function(id,v){ var e=gel(id); if(e) e.textContent=v; };
+    setEl('intelStatEvents',  IC.stats.events);
+    setEl('intelStatHigh',    IC.stats.high);
+    setEl('intelStatWarnings',IC.stats.warnings);
+    setEl('intelStatTrades',  IC.stats.trades);
+    setEl('intelStatSources', IC.liveSources.size);
+    setEl('intelSrcBadge',    IC.liveSources.size + ' SOURCES');
+    setEl('intelEvtBadge',    IC.stats.events    + ' EVENTS');
+  }
+
+  function redrawAll() {
+    renderSignals();
+    renderWarnings();
+    renderTimeline();
+    renderTrades();
+    updateStats();
+  }
+
+  /* ── DATA SOURCES ──────────────────────────────────────────────────────── */
+
+  // Generic RSS fetcher
+  function rss(url, src, cb) {
+    var enc = encodeURIComponent(url);
+    fetch(IC.proxy1 + enc).then(function(r){return r.json();})
+    .then(function(d){
+      var doc = new DOMParser().parseFromString(d.contents||'','text/xml');
+      doc.querySelectorAll('item').forEach(function(item){
+        var t = (item.querySelector('title')||{}).textContent||'';
+        var d2= (item.querySelector('description')||{}).textContent||'';
+        cb(t,d2);
+      });
+      IC.liveSources.add(src);
+    }).catch(function(){
+      // fallback
+      fetch(IC.proxy2 + enc).then(function(r){return r.text();})
+      .then(function(xml){
+        var doc = new DOMParser().parseFromString(xml,'text/xml');
+        doc.querySelectorAll('item').forEach(function(item){
+          var t=(item.querySelector('title')||{}).textContent||'';
+          var d2=(item.querySelector('description')||{}).textContent||'';
+          cb(t,d2);
+        });
+        IC.liveSources.add(src);
+      }).catch(function(){});
+    });
+  }
+
+  // GDELT project (free, no key)
+  function fetchGDELT() {
+    var url = 'https://api.gdeltproject.org/api/v2/doc/doc?query=war+military+conflict+missile+nuclear&mode=artlist&format=json&maxrecords=15&sort=DateDesc&timespan=1h';
+    fetch(IC.proxy1 + encodeURIComponent(url))
+    .then(function(r){return r.json();})
+    .then(function(raw){
+      var parsed; try { parsed = JSON.parse(raw.contents||'{}'); } catch(e){ parsed = raw; }
+      var arts = parsed.articles || [];
+      arts.forEach(function(a){ if(a.title) ingest(a.title, a.url||'', 'GDELT'); });
+      if (arts.length) IC.liveSources.add('GDELT');
+      updateStats();
+    }).catch(function(){});
+  }
+
+  // Google News RSS (query-based)
+  function fetchGoogleNews() {
+    var queries = ['military+conflict+war','missile+attack+nuclear+sanction','geopolitical+crisis+escalation'];
+    queries.forEach(function(q){
+      rss('https://news.google.com/rss/search?q='+q+'&hl=en&gl=US&ceid=US:en','G.NEWS', function(t,d){ ingest(t,d,'G.NEWS'); });
+    });
+  }
+
+  // UN News
+  function fetchUN() {
+    rss('https://news.un.org/feed/subscribe/en/news/all/rss.xml','UN', function(t,d){ ingest(t,d,'UN'); });
+  }
+
+  // NATO press releases
+  function fetchNATO() {
+    rss('https://www.nato.int/cps/en/natohq/news.rss','NATO', function(t,d){ ingest(t,d,'NATO'); });
+  }
+
+  // BBC World
+  function fetchBBC() {
+    rss('https://feeds.bbci.co.uk/news/world/rss.xml','BBC', function(t,d){ ingest(t,d,'BBC'); });
+  }
+
+  // Reuters World
+  function fetchReuters() {
+    rss('https://feeds.reuters.com/reuters/worldNews','REUTERS', function(t,d){ ingest(t,d,'REUTERS'); });
+  }
+
+  // Al Jazeera (bonus geo coverage)
+  function fetchAlJazeera() {
+    rss('https://www.aljazeera.com/xml/rss/all.xml','ALJAZ', function(t,d){ ingest(t,d,'ALJAZ'); });
+  }
+
+  // OSINT / crisis feeds
+  function fetchOSINT() {
+    var feeds = [
+      ['https://www.bellingcat.com/feed/','BELLING'],
+      ['https://rsshub.app/crisisgroup/publications','ICG'],
+      ['https://www.globalsecurity.org/rss/newslinks.rss','GLOBSEC'],
+    ];
+    feeds.forEach(function(f){ rss(f[0],f[1],function(t,d){ ingest(t,d,f[1]); }); });
+  }
+
+  // Reddit geopolitics (no key needed)
+  function fetchReddit() {
+    var subs = ['geopolitics','worldnews','UkraineWarVideoReport'];
+    subs.forEach(function(sub){
+      fetch('https://www.reddit.com/r/'+sub+'/new.json?limit=20')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        var posts = ((data.data||{}).children||[]);
+        posts.forEach(function(p){
+          var d = p.data||{};
+          var vel = Math.min(1,(d.score||0)/800);
+          ingest(d.title||'', d.selftext||'', 'REDDIT/'+sub.slice(0,6).toUpperCase(), {socialV:vel});
+        });
+        IC.liveSources.add('REDDIT');
+        updateStats();
+      }).catch(function(){});
+    });
+  }
+
+  // Binance (crypto market moves as events)
+  function fetchBinance() {
+    var syms = JSON.stringify(['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XAUUSDT']);
+    fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+encodeURIComponent(syms))
+    .then(function(r){return r.json();})
+    .then(function(data){
+      data.forEach(function(t){
+        var sym = t.symbol.replace('USDT','');
+        var chg = parseFloat(t.priceChangePercent||0);
+        if (Math.abs(chg) >= 4) {
+          var dir = chg>0?'surges':'drops';
+          ingest(sym+' '+dir+' '+Math.abs(chg).toFixed(1)+'% — significant crypto move',
+            'Price: $'+parseFloat(t.lastPrice).toLocaleString(undefined,{maximumFractionDigits:+})+
+            ' | Vol: $'+parseFloat(t.quoteVolume||0).toLocaleString(undefined,{maximumFractionDigits:0}),
+            'BINANCE', {signal: Math.min(68, Math.abs(chg)*3.5), assets:[sym]});
+        }
+      });
+      IC.liveSources.add('BINANCE');
+      updateStats();
+    }).catch(function(){});
+  }
+
+  // FRED macroeconomic (optional key)
+  function fetchFRED(key) {
+    if (!key) return;
+    var series = [
+      {id:'VIXCLS',label:'VIX Volatility'},{id:'T10YIE',label:'10yr Breakeven Inflation'},
+      {id:'DGS10',label:'10yr Treasury Yield'},{id:'DTWEXBGS',label:'USD Index'},
+    ];
+    series.forEach(function(s){
+      fetch('https://api.stlouisfed.org/fred/series/observations?series_id='+s.id+'&api_key='+key+'&sort_order=desc&limit=2&file_type=json')
+      .then(function(r){return r.json();})
+      .then(function(data){
+        var obs = data.observations||[];
+        if (obs.length>=2) {
+          var cur = parseFloat(obs[0].value), prev = parseFloat(obs[1].value);
+          var chg = cur - prev;
+          if (Math.abs(chg) > 0.08) {
+            ingest(s.label+' '+(chg>0?'rises':'falls')+' to '+cur.toFixed(2),
+              'FRED: '+s.id+' moved from '+prev.toFixed(2)+' to '+cur.toFixed(2),
+              'FRED', {signal: Math.min(60, Math.abs(chg)*12)});
+          }
+        }
+        IC.liveSources.add('FRED');
+        updateStats();
+      }).catch(function(){});
+    });
+  }
+
+  /* ── TICK / SCHEDULER ──────────────────────────────────────────────────── */
+  function tick() {
+    IC.cycleN++;
+    decayStates();
+
+    // Every tick (60s)
+    fetchBBC();
+    fetchReuters();
+    fetchReddit();
+    fetchBinance();
+
+    // Every 2 ticks (~2 min)
+    if (IC.cycleN % 2 === 0 || IC.cycleN === 1) {
+      fetchGoogleNews();
+      fetchUN();
+    }
+
+    // Every 3 ticks (~3 min)
+    if (IC.cycleN % 3 === 0 || IC.cycleN === 1) {
+      fetchNATO();
+      fetchAlJazeera();
+    }
+
+    // Every 5 ticks (~5 min)
+    if (IC.cycleN % 5 === 0 || IC.cycleN === 1) {
+      fetchGDELT();
+      fetchOSINT();
+    }
+
+    // FRED if key set
+    if (IC.fredKey) fetchFRED(IC.fredKey);
+
+    redrawAll();
+  }
+
+  /* ── BOOTSTRAP ─────────────────────────────────────────────────────────── */
+  window.addEventListener('load', function(){
+    var inp = gel('fredKeyInput');
+    var btn = gel('fredKeyBtn');
+
+    if (inp && IC.fredKey) inp.value = IC.fredKey;
+
+    if (btn) btn.addEventListener('click', function(){
+      var key = inp ? inp.value.trim() : '';
+      if (!key) return;
+      IC.fredKey = key;
+      localStorage.setItem('geodash_fred_key', key);
+      btn.textContent = 'CONNECTED ✓';
+      btn.style.borderColor = '#28c060';
+      btn.style.color = '#28c060';
+      fetchFRED(key);
+    });
+
+    // Start 4s after Feature 7, stagger to avoid API pile-up
+    setTimeout(function(){
+      tick();
+      setInterval(tick, IC.TICK_MS);
+    }, 4000);
+  });
+
 </script>
 </body>
 </html>
