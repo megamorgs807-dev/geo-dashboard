@@ -1708,6 +1708,70 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── LRN LIVE BROWSER (V8) ──────────────────────────────────────────── */
+    .lrn-browser { border: 1px solid var(--border); border-top: none; }
+    .lrn-browser-header { padding: 10px 14px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .lrn-browser-title { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; }
+    .lrn-filter-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .lrn-filter-sel { font-size: 9px; padding: 3px 7px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-family: inherit; border-radius: 2px; cursor: pointer; }
+    .lrn-filter-sel:focus { outline: none; border-color: #d040b8; }
+    .lrn-search { font-size: 9px; padding: 3px 8px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-family: inherit; border-radius: 2px; width: 140px; }
+    .lrn-search:focus { outline: none; border-color: #d040b8; }
+    .lrn-search::placeholder { color: var(--dim); }
+    .lrn-count-pill { font-size: 8px; color: #d040b8; border: 1px solid rgba(208,64,184,0.35); padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+    .lrn-evt-table { max-height: 420px; overflow-y: auto; }
+    .lrn-evt-table::-webkit-scrollbar { width: 4px; }
+    .lrn-evt-table::-webkit-scrollbar-track { background: var(--bg2); }
+    .lrn-evt-table::-webkit-scrollbar-thumb { background: #d040b8; border-radius: 2px; }
+    .lrn-evt-row { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
+    .lrn-evt-row:hover { background: rgba(208,64,184,0.04); }
+    .lrn-evt-row.expanded { background: rgba(208,64,184,0.06); }
+    .lrn-evt-hdr { display: grid; grid-template-columns: 52px 72px 1fr 44px 110px 14px; gap: 0; align-items: center; padding: 6px 10px; }
+    .lrn-evt-time { font-size: 9px; color: var(--dim); font-family: 'Courier New',monospace; }
+    .lrn-evt-region { font-size: 8px; font-weight: bold; letter-spacing: 0.5px; }
+    .lrn-evt-title { font-size: 10px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; }
+    .lrn-evt-sig { font-size: 10px; font-weight: bold; text-align: center; }
+    .lrn-evt-sig.crit { color: var(--red); }
+    .lrn-evt-sig.high { color: var(--amber); }
+    .lrn-evt-sig.med  { color: var(--blue); }
+    .lrn-evt-sig.low  { color: var(--dim); }
+    .lrn-evt-assets { font-size: 8px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lrn-evt-arr { font-size: 9px; color: var(--dim); text-align: right; transition: transform 0.2s; }
+    .lrn-evt-row.expanded .lrn-evt-arr { transform: rotate(90deg); }
+    .lrn-evt-detail { display: none; padding: 8px 12px 10px; border-top: 1px solid rgba(208,64,184,0.15); }
+    .lrn-evt-row.expanded .lrn-evt-detail { display: block; }
+    .lrn-evt-desc { font-size: 10px; color: var(--dim); margin-bottom: 8px; line-height: 1.5; }
+    .lrn-reasoning { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; margin-bottom: 6px; }
+    .lrn-r-cell { background: var(--bg3); border: 1px solid var(--border); padding: 5px 7px; border-radius: 2px; }
+    .lrn-r-lbl { font-size: 7px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.6px; }
+    .lrn-r-val { font-size: 11px; font-weight: bold; color: #d040b8; margin: 1px 0; }
+    .lrn-r-note { font-size: 7px; color: var(--dim); }
+    .lrn-kw-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+    .lrn-kw-tag { font-size: 8px; padding: 1px 5px; border: 1px solid rgba(208,64,184,0.35); color: #d040b8; border-radius: 2px; }
+    .lrn-no-events { padding: 30px; text-align: center; color: var(--dim); font-size: 11px; }
+    .lrn-pg-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg2); border-top: 1px solid var(--border); }
+    .lrn-pg-btn { font-size: 9px; padding: 2px 8px; border: 1px solid var(--border); background: var(--bg3); color: var(--dim); cursor: pointer; font-family: inherit; border-radius: 2px; }
+    .lrn-pg-btn:hover:not(:disabled) { border-color: #d040b8; color: #d040b8; }
+    .lrn-pg-btn:disabled { opacity: 0.3; cursor: default; }
+    .lrn-pg-info { font-size: 8px; color: var(--dim); }
+    /* ── LRN TREND CHART ─────────────────────────────────────────────────── */
+    .lrn-trend-section { border: 1px solid var(--border); border-top: none; padding: 12px 14px; background: var(--bg2); }
+    .lrn-trend-title { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .lrn-trend-legend { display: flex; gap: 12px; }
+    .lrn-trend-legend-item { display: flex; align-items: center; gap: 4px; font-size: 8px; color: var(--dim); }
+    .lrn-trend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .lrn-trend-svg { width: 100%; overflow: visible; display: block; }
+    /* ── LRN SOURCE BAR ─────────────────────────────────────────────────── */
+    .lrn-src-bar { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 14px; border: 1px solid var(--border); border-top: none; background: var(--bg2); }
+    .lrn-src-chip { font-size: 8px; padding: 2px 6px; border-radius: 2px; border: 1px solid rgba(208,64,184,0.30); color: #d040b8; background: rgba(208,64,184,0.06); }
+    /* ── SIGNAL BADGE ────────────────────────────────────────────────────── */
+    .sig-badge { display: inline-block; font-size: 8px; font-weight: bold; padding: 1px 5px; border-radius: 2px; min-width: 26px; text-align: center; }
+    .sig-badge.crit { background: rgba(224,48,48,0.15); color: var(--red); border: 1px solid rgba(224,48,48,0.4); }
+    .sig-badge.high { background: rgba(232,160,32,0.12); color: var(--amber); border: 1px solid rgba(232,160,32,0.35); }
+    .sig-badge.med  { background: rgba(32,144,224,0.10); color: var(--blue); border: 1px solid rgba(32,144,224,0.30); }
+    .sig-badge.low  { background: rgba(96,112,128,0.12); color: var(--dim); border: 1px solid var(--border); }
+
   </style>
 </head>
 <body>
@@ -3966,31 +4030,31 @@
       </div>
     </div>
 
-    <!-- Accuracy metrics row -->
+    <!-- Accuracy metrics row — live values injected by lrnPanel.js -->
     <div class="lrn-metrics-bar">
       <div class="lrn-met">
-        <div class="lrn-met-lbl">GEE Calibration Score</div>
-        <div class="lrn-met-val">76%</div>
-        <div class="lrn-met-sub">Avg predicted vs actual</div>
-        <div class="lrn-met-trend up">↑ +3pp vs last 30d</div>
+        <div class="lrn-met-lbl">Events Ingested</div>
+        <div class="lrn-met-val" id="lrnMetTotal">—</div>
+        <div class="lrn-met-sub">Total from all sources</div>
+        <div class="lrn-met-trend up" id="lrnMetTotalSub">Live counting</div>
       </div>
       <div class="lrn-met">
-        <div class="lrn-met-lbl">Trade Win Rate</div>
-        <div class="lrn-met-val">61%</div>
-        <div class="lrn-met-sub">Correct + partial / total</div>
-        <div class="lrn-met-trend flat">→ Stable (22 trades)</div>
+        <div class="lrn-met-lbl">High Signal (≥60)</div>
+        <div class="lrn-met-val" id="lrnMetHigh">—</div>
+        <div class="lrn-met-sub">Actionable intelligence</div>
+        <div class="lrn-met-trend" id="lrnMetHighSub">—</div>
       </div>
       <div class="lrn-met">
-        <div class="lrn-met-lbl">Scanner Hit Rate</div>
-        <div class="lrn-met-val">68%</div>
-        <div class="lrn-met-sub">Flagged → resolved correctly</div>
-        <div class="lrn-met-trend up">↑ New feature (14 hits)</div>
+        <div class="lrn-met-lbl">Critical Events (≥80)</div>
+        <div class="lrn-met-val" id="lrnMetCrit">—</div>
+        <div class="lrn-met-sub">Requires immediate attention</div>
+        <div class="lrn-met-trend" id="lrnMetCritSub">—</div>
       </div>
       <div class="lrn-met">
-        <div class="lrn-met-lbl">Brier Score</div>
-        <div class="lrn-met-val">0.18</div>
-        <div class="lrn-met-sub">Lower = better calibration</div>
-        <div class="lrn-met-trend up">↓ Improved from 0.23</div>
+        <div class="lrn-met-lbl">Active Hotspots</div>
+        <div class="lrn-met-val" id="lrnMetRegions">—</div>
+        <div class="lrn-met-sub">Regions with live events</div>
+        <div class="lrn-met-trend" id="lrnMetRegionsSub">—</div>
       </div>
     </div>
 
@@ -4276,6 +4340,68 @@
       </div><!-- /lrn-col right -->
 
     </div><!-- /lrn-body -->
+
+    <!-- ── LIVE EVENT BROWSER ── -->
+    <div class="lrn-browser">
+      <div class="lrn-browser-header">
+        <div class="lrn-browser-title">◈ Live Event Intelligence Log — Real-Time Feed</div>
+        <div class="lrn-filter-bar">
+          <select class="lrn-filter-sel" id="lrnFilterRegion">
+            <option value="all">All Regions</option>
+          </select>
+          <select class="lrn-filter-sel" id="lrnFilterLevel">
+            <option value="all">All Signals</option>
+            <option value="critical">Critical (80+)</option>
+            <option value="high">High (60+)</option>
+            <option value="medium">Medium (40+)</option>
+            <option value="low">Low (&lt;40)</option>
+          </select>
+          <select class="lrn-filter-sel" id="lrnFilterAsset">
+            <option value="all">All Assets</option>
+          </select>
+          <select class="lrn-filter-sel" id="lrnSortBy">
+            <option value="signal">Sort: Signal ↓</option>
+            <option value="time">Sort: Time ↓</option>
+            <option value="region">Sort: Region</option>
+          </select>
+          <input class="lrn-search" id="lrnSearch" type="text" placeholder="Search events…">
+          <span class="lrn-count-pill" id="lrnEvtCount">0 events</span>
+        </div>
+      </div>
+      <!-- Column headers -->
+      <div style="display:grid;grid-template-columns:52px 72px 1fr 44px 110px 14px;gap:0;padding:4px 10px;background:var(--bg3);border-bottom:1px solid var(--border);">
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;">Time</div>
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;">Region</div>
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;padding-left:8px;">Event Title</div>
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;text-align:center;">Sig</div>
+        <div style="font-size:7px;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;">Assets</div>
+        <div></div>
+      </div>
+      <div class="lrn-evt-table" id="lrnEvtTable">
+        <div class="lrn-no-events" id="lrnEvtEmpty">Waiting for live events from backend…</div>
+      </div>
+      <div class="lrn-pg-bar">
+        <button class="lrn-pg-btn" id="lrnPgPrev" onclick="lrnPrevPage()" disabled>◀ Prev</button>
+        <span class="lrn-pg-info" id="lrnPgInfo">Page 1</span>
+        <button class="lrn-pg-btn" id="lrnPgNext" onclick="lrnNextPage()">Next ▶</button>
+      </div>
+    </div>
+
+    <!-- ── SOURCE BREAKDOWN BAR ── -->
+    <div class="lrn-src-bar" id="lrnSrcBar">
+      <span style="font-size:8px;color:var(--dim);margin-right:4px;">Sources:</span>
+    </div>
+
+    <!-- ── CONFIDENCE TREND CHART ── -->
+    <div class="lrn-trend-section">
+      <div class="lrn-trend-title">
+        <span>Regional Signal Confidence — Rolling 50 Events</span>
+        <div class="lrn-trend-legend" id="lrnTrendLegend"></div>
+      </div>
+      <svg class="lrn-trend-svg" id="lrnTrendSvg" viewBox="0 0 800 110" preserveAspectRatio="none">
+        <text x="400" y="58" text-anchor="middle" fill="rgba(96,112,128,0.5)" font-size="11" font-family="'Courier New',monospace">Trend chart builds as events are ingested…</text>
+      </svg>
+    </div>
 
     <!-- Learning adjustments timeline -->
     <div class="lrn-timeline">
@@ -8379,6 +8505,11 @@ document.addEventListener('DOMContentLoaded', function() {
     'korea':['GLD','LMT'],'india':['GLD'],'pakistan':['GLD','WTI'],
   };
 
+  /* Expose scoring tables for the LRN reasoning module */
+  window._lrnSEV  = SEV;
+  window._lrnGEO  = GEO;
+  window._lrnMKTM = MKTMAP;
+
   /* ── REGION EXTRACTION MAP ─────────────────────────────────────────────── */
   var REGIONS = [
     ['hormuz','IRAN'],['iran','IRAN'],['tehran','IRAN'],['revolutionary guard','IRAN'],
@@ -9306,6 +9437,505 @@ document.addEventListener('DOMContentLoaded', function() {
 
 })();
 
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Self-Learning Analytics Panel — V8
+     Live event browser, signal reasoning, confidence trend chart.
+     Reads from window.__IC.events + /api/learning endpoint.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  /* ── State ────────────────────────────────────────────────────────────── */
+  var _state = {
+    allEvents : [],          // full event list (IC + backend)
+    filtered  : [],          // after filters applied
+    page      : 0,
+    pageSize  : 25,
+    filterRegion : 'all',
+    filterLevel  : 'all',
+    filterAsset  : 'all',
+    sortBy       : 'signal',
+    search       : '',
+    regionColours: {},
+    trendData    : {},       // region → [signal values]
+  };
+
+  var REGION_COLOURS = [
+    '#e03030','#e8a020','#2090e0','#28c060','#a050e0',
+    '#d040b8','#00d4c8','#ff6040','#80c0ff','#ffd040',
+  ];
+
+  /* ── Helpers ──────────────────────────────────────────────────────────── */
+  function gel(id) { return document.getElementById(id); }
+
+  function sigClass(s) {
+    if (s >= 80) return 'crit';
+    if (s >= 60) return 'high';
+    if (s >= 40) return 'med';
+    return 'low';
+  }
+
+  function sigLabel(s) {
+    if (s >= 80) return 'CRITICAL';
+    if (s >= 60) return 'HIGH';
+    if (s >= 40) return 'MEDIUM';
+    return 'LOW';
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return '--:--';
+    var d = new Date(ts);
+    return d.getUTCHours().toString().padStart(2,'0') + ':' +
+           d.getUTCMinutes().toString().padStart(2,'0');
+  }
+
+  function getRegionColour(region) {
+    if (!_state.regionColours[region]) {
+      var keys = Object.keys(_state.regionColours);
+      _state.regionColours[region] = REGION_COLOURS[keys.length % REGION_COLOURS.length];
+    }
+    return _state.regionColours[region];
+  }
+
+  /* ── Signal reasoning breakdown ─────────────────────────────────────────
+     Re-computes s1-s6 from the event text using the same SEV/GEO/MKTMAP
+     tables that are defined in the main IIFE. We access them via window.
+  ──────────────────────────────────────────────────────────────────────── */
+  function computeReasoning(evt) {
+    var IC   = window.__IC || {};
+    var SEV  = window._lrnSEV  || {};
+    var GEO  = window._lrnGEO  || {};
+    var MKTM = window._lrnMKTM || {};
+
+    var text = ((evt.title || '') + ' ' + (evt.desc || '')).toLowerCase();
+
+    // s1: severity
+    var topSevKw = '', topSevVal = 0;
+    Object.keys(SEV).forEach(function(k) {
+      if (text.includes(k) && SEV[k] > topSevVal) { topSevVal = SEV[k]; topSevKw = k; }
+    });
+    var s1 = Math.round(topSevVal * 25);
+
+    // s2: keyword density
+    var hits = Object.keys(SEV).filter(function(k) { return text.includes(k); });
+    var s2 = Math.min(20, hits.length * 3);
+
+    // s3: source corroboration
+    var s3 = Math.min(15, (evt.srcCount || 1) * 4);
+
+    // s4: social velocity
+    var s4 = Math.min(15, Math.round((evt.socialV || 0) * 15));
+
+    // s5: geographic importance
+    var topGeoKw = '', topGeoVal = 0;
+    Object.keys(GEO).forEach(function(k) {
+      if (text.includes(k) && GEO[k] > topGeoVal) { topGeoVal = GEO[k]; topGeoKw = k; }
+    });
+    var s5 = Math.round(topGeoVal * 15);
+
+    // s6: market sensitivity
+    var assets = [];
+    Object.keys(MKTM).forEach(function(k) {
+      if (text.includes(k)) MKTM[k].forEach(function(a) { if (assets.indexOf(a) < 0) assets.push(a); });
+    });
+    var s6 = Math.min(10, assets.length * 2);
+
+    return {
+      s1: s1, s2: s2, s3: s3, s4: s4, s5: s5, s6: s6,
+      total: Math.min(100, s1+s2+s3+s4+s5+s6),
+      topSevKw: topSevKw, topSevVal: topSevVal,
+      topGeoKw: topGeoKw, topGeoVal: topGeoVal,
+      kwHits: hits.slice(0, 6),
+    };
+  }
+
+  /* ── Collect events from IC + backend ────────────────────────────────── */
+  function collectEvents() {
+    var IC = window.__IC;
+    var evts = IC && IC.events ? IC.events.slice() : [];
+    // Deduplicate against what's already in _state.allEvents from backend fetch
+    var existingKeys = {};
+    _state.allEvents.forEach(function(e) {
+      var k = (e.title || '').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,48);
+      existingKeys[k] = true;
+    });
+    evts.forEach(function(e) {
+      var k = (e.title || '').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,48);
+      if (!existingKeys[k]) { _state.allEvents.push(e); existingKeys[k] = true; }
+    });
+    // Sort by signal desc
+    _state.allEvents.sort(function(a,b) { return (b.signal||0) - (a.signal||0); });
+  }
+
+  /* ── Apply filters + sort ────────────────────────────────────────────── */
+  function applyFilters() {
+    var evts = _state.allEvents;
+    var srch = _state.search.toLowerCase();
+
+    evts = evts.filter(function(e) {
+      // Region
+      if (_state.filterRegion !== 'all' && (e.region || 'GLOBAL') !== _state.filterRegion) return false;
+      // Level
+      var s = e.signal || 0;
+      if (_state.filterLevel === 'critical' && s < 80) return false;
+      if (_state.filterLevel === 'high'     && s < 60) return false;
+      if (_state.filterLevel === 'medium'   && (s < 40 || s >= 60)) return false;
+      if (_state.filterLevel === 'low'      && s >= 40) return false;
+      // Asset
+      if (_state.filterAsset !== 'all') {
+        var assets = e.assets || [];
+        if (assets.indexOf(_state.filterAsset) < 0) return false;
+      }
+      // Search
+      if (srch && (e.title || '').toLowerCase().indexOf(srch) < 0) return false;
+      return true;
+    });
+
+    // Sort
+    if (_state.sortBy === 'signal') evts.sort(function(a,b) { return (b.signal||0)-(a.signal||0); });
+    if (_state.sortBy === 'time')   evts.sort(function(a,b) { return (b.ts||0)-(a.ts||0); });
+    if (_state.sortBy === 'region') evts.sort(function(a,b) { return (a.region||'').localeCompare(b.region||''); });
+
+    _state.filtered = evts;
+    _state.page = 0;
+  }
+
+  /* ── Populate region + asset filter dropdowns ─────────────────────────── */
+  function populateDropdowns() {
+    var regionSel = gel('lrnFilterRegion');
+    var assetSel  = gel('lrnFilterAsset');
+    if (!regionSel || !assetSel) return;
+
+    var regions = {}, assets = {};
+    _state.allEvents.forEach(function(e) {
+      if (e.region && e.region !== 'GLOBAL') regions[e.region] = true;
+      (e.assets || []).forEach(function(a) { assets[a] = true; });
+    });
+
+    // Rebuild region options
+    var curR = regionSel.value;
+    regionSel.innerHTML = '<option value="all">All Regions</option>';
+    Object.keys(regions).sort().forEach(function(r) {
+      var opt = document.createElement('option');
+      opt.value = r; opt.textContent = r;
+      if (r === curR) opt.selected = true;
+      regionSel.appendChild(opt);
+    });
+
+    // Rebuild asset options
+    var curA = assetSel.value;
+    assetSel.innerHTML = '<option value="all">All Assets</option>';
+    Object.keys(assets).sort().forEach(function(a) {
+      var opt = document.createElement('option');
+      opt.value = a; opt.textContent = a;
+      if (a === curA) opt.selected = true;
+      assetSel.appendChild(opt);
+    });
+  }
+
+  /* ── Render event table ──────────────────────────────────────────────── */
+  function renderTable() {
+    var tbody = gel('lrnEvtTable');
+    var empty = gel('lrnEvtEmpty');
+    var countPill = gel('lrnEvtCount');
+    var pgInfo = gel('lrnPgInfo');
+    var pgPrev = gel('lrnPgPrev');
+    var pgNext = gel('lrnPgNext');
+    if (!tbody) return;
+
+    var total  = _state.filtered.length;
+    var pages  = Math.max(1, Math.ceil(total / _state.pageSize));
+    _state.page = Math.min(_state.page, pages - 1);
+    var start  = _state.page * _state.pageSize;
+    var slice  = _state.filtered.slice(start, start + _state.pageSize);
+
+    if (countPill) countPill.textContent = total + ' event' + (total === 1 ? '' : 's');
+    if (pgInfo)    pgInfo.textContent = 'Page ' + (_state.page + 1) + ' / ' + pages;
+    if (pgPrev)    pgPrev.disabled = (_state.page === 0);
+    if (pgNext)    pgNext.disabled = (_state.page >= pages - 1);
+
+    if (total === 0) {
+      if (empty) { empty.style.display = 'block'; empty.textContent = _state.allEvents.length === 0 ? 'Waiting for live events from backend…' : 'No events match the current filters.'; }
+      // Clear rows
+      Array.from(tbody.children).forEach(function(c) { if (c !== empty) tbody.removeChild(c); });
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    // Build HTML
+    var html = '';
+    slice.forEach(function(evt, i) {
+      var sc  = sigClass(evt.signal || 0);
+      var col = getRegionColour(evt.region || 'GLOBAL');
+      var assets = (evt.assets || []).slice(0,4).join(' · ') || '—';
+      var kws = (evt.keywords || []).slice(0,5);
+
+      // Reasoning breakdown
+      var r = computeReasoning(evt);
+      var reasonHtml =
+        '<div class="lrn-reasoning">' +
+          '<div class="lrn-r-cell"><div class="lrn-r-lbl">S1 Severity</div><div class="lrn-r-val">' + r.s1 + '/25</div><div class="lrn-r-note">' + esc(r.topSevKw || 'none') + '</div></div>' +
+          '<div class="lrn-r-cell"><div class="lrn-r-lbl">S2 Keyword Density</div><div class="lrn-r-val">' + r.s2 + '/20</div><div class="lrn-r-note">' + r.kwHits.length + ' keywords</div></div>' +
+          '<div class="lrn-r-cell"><div class="lrn-r-lbl">S3 Source Count</div><div class="lrn-r-val">' + r.s3 + '/15</div><div class="lrn-r-note">' + (evt.srcCount||1) + ' source(s)</div></div>' +
+          '<div class="lrn-r-cell"><div class="lrn-r-lbl">S4 Social Velocity</div><div class="lrn-r-val">' + r.s4 + '/15</div><div class="lrn-r-note">socialV ' + ((evt.socialV||0)*100).toFixed(0) + '%</div></div>' +
+          '<div class="lrn-r-cell"><div class="lrn-r-lbl">S5 Geographic</div><div class="lrn-r-val">' + r.s5 + '/15</div><div class="lrn-r-note">' + esc(r.topGeoKw || 'global') + '</div></div>' +
+          '<div class="lrn-r-cell"><div class="lrn-r-lbl">S6 Market Sens.</div><div class="lrn-r-val">' + r.s6 + '/10</div><div class="lrn-r-note">' + (evt.assets||[]).length + ' assets</div></div>' +
+        '</div>';
+
+      var kwHtml = kws.length ? '<div class="lrn-kw-tags">' + kws.map(function(k){ return '<span class="lrn-kw-tag">' + esc(k) + '</span>'; }).join('') + '</div>' : '';
+
+      html +=
+        '<div class="lrn-evt-row" data-idx="' + (start+i) + '" onclick="lrnToggleRow(this)">' +
+          '<div class="lrn-evt-hdr">' +
+            '<div class="lrn-evt-time">' + esc(evt.time || fmtTime(evt.ts)) + '</div>' +
+            '<div class="lrn-evt-region" style="color:' + col + '">' + esc((evt.region||'GLOBAL').slice(0,10)) + '</div>' +
+            '<div class="lrn-evt-title">' + esc(evt.title || '') + '</div>' +
+            '<div class="lrn-evt-sig ' + sc + '">' + (evt.signal||0) + '</div>' +
+            '<div class="lrn-evt-assets">' + esc(assets) + '</div>' +
+            '<div class="lrn-evt-arr">▶</div>' +
+          '</div>' +
+          '<div class="lrn-evt-detail">' +
+            (evt.desc ? '<div class="lrn-evt-desc">' + esc(evt.desc) + '</div>' : '') +
+            '<div style="font-size:8px;color:var(--dim);margin-bottom:5px;">Signal reasoning — why this scored <strong style="color:#d040b8">' + (evt.signal||0) + '/100</strong> (' + sigLabel(evt.signal||0) + ')</div>' +
+            reasonHtml +
+            kwHtml +
+            '<div style="font-size:8px;color:var(--dim);margin-top:6px;">Source: <strong>' + esc(evt.source||'?') + '</strong> · ' + esc(evt.region||'GLOBAL') + ' · ts ' + new Date(evt.ts||Date.now()).toUTCString() + '</div>' +
+          '</div>' +
+        '</div>';
+    });
+
+    // Replace existing rows (keep empty placeholder but hide it)
+    var existingRows = Array.from(tbody.querySelectorAll('.lrn-evt-row'));
+    existingRows.forEach(function(r) { tbody.removeChild(r); });
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    while (tmp.firstChild) tbody.appendChild(tmp.firstChild);
+  }
+
+  /* ── Update live metrics bar ─────────────────────────────────────────── */
+  function updateMetrics() {
+    var evts = _state.allEvents;
+    var total    = evts.length;
+    var high     = evts.filter(function(e){ return (e.signal||0) >= 60; }).length;
+    var critical = evts.filter(function(e){ return (e.signal||0) >= 80; }).length;
+
+    var regions = {};
+    evts.forEach(function(e) {
+      if (e.region && e.region !== 'GLOBAL') regions[e.region] = true;
+    });
+    var regionCount = Object.keys(regions).length;
+
+    var highPct  = total ? Math.round(high/total*100) : 0;
+    var critPct  = total ? Math.round(critical/total*100) : 0;
+
+    function set(id, val) { var el=gel(id); if(el) el.textContent=val; }
+    function setClass(id, cls) { var el=gel(id); if(el){ el.className='lrn-met-trend '+cls; } }
+
+    set('lrnMetTotal', total);
+    set('lrnMetTotalSub', 'Backend + live stream');
+    set('lrnMetHigh', high);
+    set('lrnMetHighSub', highPct + '% of total events');
+    setClass('lrnMetHighSub', high > 0 ? 'up' : 'flat');
+    set('lrnMetCrit', critical);
+    set('lrnMetCritSub', critPct + '% are critical level');
+    setClass('lrnMetCritSub', critical > 0 ? 'down' : 'flat');
+    set('lrnMetRegions', regionCount);
+    set('lrnMetRegionsSub', Object.keys(regions).slice(0,3).join(' · ') || 'None yet');
+  }
+
+  /* ── Update source breakdown bar ────────────────────────────────────── */
+  function updateSourceBar() {
+    var srcBar = gel('lrnSrcBar');
+    if (!srcBar) return;
+    var counts = {};
+    _state.allEvents.forEach(function(e) { counts[e.source||'?'] = (counts[e.source||'?']||0)+1; });
+    var sorted = Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; }).slice(0,10);
+    srcBar.innerHTML = '<span style="font-size:8px;color:var(--dim);margin-right:4px;">Sources:</span>' +
+      sorted.map(function(s){ return '<span class="lrn-src-chip">' + esc(s) + ' ×' + counts[s] + '</span>'; }).join('');
+  }
+
+  /* ── Draw confidence trend chart ─────────────────────────────────────── */
+  function drawTrend() {
+    var svg = gel('lrnTrendSvg');
+    var legend = gel('lrnTrendLegend');
+    if (!svg) return;
+
+    var evts = _state.allEvents.slice().sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+    if (evts.length < 3) return;
+
+    // Group by region, take last 50 events per region
+    var regionEvts = {};
+    evts.forEach(function(e) {
+      var r = e.region || 'GLOBAL';
+      if (!regionEvts[r]) regionEvts[r] = [];
+      regionEvts[r].push(e.signal || 0);
+    });
+
+    // Top 5 regions by event count
+    var topRegions = Object.keys(regionEvts)
+      .filter(function(r){ return r !== 'GLOBAL' && regionEvts[r].length >= 2; })
+      .sort(function(a,b){ return regionEvts[b].length - regionEvts[a].length; })
+      .slice(0, 5);
+
+    if (topRegions.length === 0) return;
+
+    var W = 800, H = 110, PAD = 20;
+    var chartW = W - PAD*2, chartH = H - PAD*2;
+
+    var svgContent = '';
+
+    // Grid lines
+    [0,25,50,75,100].forEach(function(v) {
+      var y = PAD + chartH - (v/100)*chartH;
+      svgContent += '<line x1="' + PAD + '" y1="' + y + '" x2="' + (W-PAD) + '" y2="' + y +
+        '" stroke="rgba(96,112,128,0.15)" stroke-width="0.5"/>' +
+        '<text x="' + (PAD-3) + '" y="' + (y+3) + '" text-anchor="end" fill="rgba(96,112,128,0.5)" font-size="6" font-family="\'Courier New\',monospace">' + v + '</text>';
+    });
+
+    var legendHTML = '';
+
+    topRegions.forEach(function(region) {
+      var col = getRegionColour(region);
+      var vals = regionEvts[region].slice(-50);
+      var n = vals.length;
+      if (n < 2) return;
+
+      var points = vals.map(function(v, i) {
+        var x = PAD + (i / (n-1)) * chartW;
+        var y = PAD + chartH - (Math.min(100,v) / 100) * chartH;
+        return x.toFixed(1) + ',' + y.toFixed(1);
+      }).join(' ');
+
+      // Area fill
+      var areaPoints = 'M' + PAD + ',' + (PAD+chartH) + ' L' + points.replace(/(\S+),(\S+)/g, function(m,x,y){ return 'L'+x+','+y; }).slice(1) + ' L' + (PAD+chartW) + ',' + (PAD+chartH) + 'Z';
+      svgContent += '<path d="' + areaPoints + '" fill="' + col + '" opacity="0.06"/>';
+
+      // Line
+      svgContent += '<polyline points="' + points + '" fill="none" stroke="' + col + '" stroke-width="1.5" opacity="0.8"/>';
+
+      // Last point dot
+      var lastX = PAD + chartW, lastY = PAD + chartH - (Math.min(100,vals[n-1])/100)*chartH;
+      svgContent += '<circle cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="3" fill="' + col + '"/>';
+      svgContent += '<text x="' + (lastX-2).toFixed(1) + '" y="' + (lastY-5).toFixed(1) + '" fill="' + col + '" font-size="7" font-family="\'Courier New\',monospace">' + esc(region.slice(0,6)) + '</text>';
+
+      legendHTML += '<div class="lrn-trend-legend-item"><span class="lrn-trend-dot" style="background:' + col + '"></span>' + esc(region) + '</div>';
+    });
+
+    svg.innerHTML = svgContent;
+    if (legend) legend.innerHTML = legendHTML;
+  }
+
+  /* ── Full render cycle ───────────────────────────────────────────────── */
+  function render() {
+    collectEvents();
+    applyFilters();
+    populateDropdowns();
+    updateMetrics();
+    updateSourceBar();
+    renderTable();
+    drawTrend();
+  }
+
+  /* ── Wire up filter controls ─────────────────────────────────────────── */
+  function wireControls() {
+    function onChange(id, key) {
+      var el = gel(id);
+      if (!el) return;
+      el.addEventListener('change', function() {
+        _state[key] = el.value;
+        _state.page = 0;
+        applyFilters();
+        renderTable();
+      });
+    }
+    onChange('lrnFilterRegion', 'filterRegion');
+    onChange('lrnFilterLevel',  'filterLevel');
+    onChange('lrnFilterAsset',  'filterAsset');
+    onChange('lrnSortBy',       'sortBy');
+
+    var searchEl = gel('lrnSearch');
+    if (searchEl) {
+      searchEl.addEventListener('input', function() {
+        _state.search = searchEl.value;
+        _state.page = 0;
+        applyFilters();
+        renderTable();
+      });
+    }
+  }
+
+  /* ── Public page controls ────────────────────────────────────────────── */
+  window.lrnToggleRow = function(row) {
+    row.classList.toggle('expanded');
+  };
+  window.lrnPrevPage = function() {
+    if (_state.page > 0) { _state.page--; renderTable(); }
+  };
+  window.lrnNextPage = function() {
+    var pages = Math.ceil(_state.filtered.length / _state.pageSize);
+    if (_state.page < pages - 1) { _state.page++; renderTable(); }
+  };
+
+  /* ── Expose SEV/GEO/MKTMAP for reasoning ────────────────────────────── */
+  /* These are copied from the main IIFE via a one-time hook after load.    */
+  function hookInternalTables() {
+    // The main IIFE exposes window.__IC but not SEV/GEO/MKTMAP.
+    // We parse them out of the ingest function via a dummy call if needed.
+    // Fallback: use empty objects (reasoning cells show 0 but don't crash).
+    if (!window._lrnSEV) window._lrnSEV = {};
+    if (!window._lrnGEO) window._lrnGEO = {};
+    if (!window._lrnMKTM) window._lrnMKTM = {};
+  }
+
+  /* ── Fetch backend learning data ─────────────────────────────────────── */
+  function fetchBackend() {
+    fetch('http://localhost:8765/api/learning?limit=200')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var evts = data.events || [];
+        // Merge into allEvents
+        var existing = {};
+        _state.allEvents.forEach(function(e) {
+          existing[(e.title||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,48)] = true;
+        });
+        evts.forEach(function(e) {
+          var k = (e.title||'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,48);
+          if (!existing[k]) { _state.allEvents.push(e); existing[k] = true; }
+        });
+        applyFilters();
+        populateDropdowns();
+        updateMetrics();
+        updateSourceBar();
+        renderTable();
+        drawTrend();
+      })
+      .catch(function() { /* backend offline — use IC.events only */ });
+  }
+
+  /* ── Init ────────────────────────────────────────────────────────────── */
+  function init() {
+    hookInternalTables();
+    wireControls();
+    render();
+    fetchBackend();
+    // Refresh every 60s in sync with pipeline cycle
+    setInterval(function() { render(); fetchBackend(); }, 60000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    setTimeout(init, 500); // small delay so main IIFE finishes first
+  }
+
+})();
 </script>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════

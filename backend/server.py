@@ -113,6 +113,80 @@ async def api_market():
     return JSONResponse(content=_market_cache)
 
 
+@app.get('/api/learning')
+async def api_learning(limit: int = 200):
+    """
+    Return events enriched with learning metadata for the LRN panel.
+    Includes computed metrics: signal distribution, region breakdown, top keywords.
+    """
+    store = get_store()
+    events = await asyncio.get_event_loop().run_in_executor(
+        None, store.get_recent, limit
+    )
+
+    # Compute learning metrics server-side
+    total   = len(events)
+    high    = sum(1 for e in events if e.get('signal', 0) >= 60)
+    critical = sum(1 for e in events if e.get('signal', 0) >= 80)
+
+    # Region breakdown
+    regions: dict = {}
+    for e in events:
+        r = e.get('region', 'GLOBAL')
+        if r and r != 'GLOBAL':
+            regions[r] = regions.get(r, 0) + 1
+
+    # Top regions by event count
+    top_regions = sorted(regions.items(), key=lambda x: x[1], reverse=True)[:8]
+
+    # Signal distribution buckets
+    buckets = {'0-19': 0, '20-39': 0, '40-59': 0, '60-79': 0, '80-100': 0}
+    for e in events:
+        s = e.get('signal', 0)
+        if   s < 20:  buckets['0-19']   += 1
+        elif s < 40:  buckets['20-39']  += 1
+        elif s < 60:  buckets['40-59']  += 1
+        elif s < 80:  buckets['60-79']  += 1
+        else:         buckets['80-100'] += 1
+
+    # Keyword frequency across all events
+    from collections import Counter
+    kw_counter: Counter = Counter()
+    for e in events:
+        for kw in (e.get('keywords') or []):
+            kw_counter[kw] += 1
+    top_keywords = kw_counter.most_common(15)
+
+    # Asset frequency
+    asset_counter: Counter = Counter()
+    for e in events:
+        for a in (e.get('assets') or []):
+            asset_counter[a] += 1
+    top_assets = asset_counter.most_common(10)
+
+    # Source breakdown
+    src_counter: Counter = Counter()
+    for e in events:
+        src_counter[e.get('source', '?')] += 1
+    top_sources = src_counter.most_common(8)
+
+    return JSONResponse(content={
+        'metrics': {
+            'total':     total,
+            'high':      high,
+            'critical':  critical,
+            'low_noise': total - high,
+        },
+        'regions':      dict(top_regions),
+        'signal_dist':  buckets,
+        'top_keywords': dict(top_keywords),
+        'top_assets':   dict(top_assets),
+        'top_sources':  dict(top_sources),
+        'events':       events,
+        'ts':           int(time.time() * 1000),
+    })
+
+
 @app.get('/api/status')
 async def api_status():
     """Health check — frontend pings this before opening SSE."""
