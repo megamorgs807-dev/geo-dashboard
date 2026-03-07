@@ -2,9 +2,55 @@
 GeoIntel Backend — Keyword Detector
 Mirrors the frontend's SEV, GEO, MKTMAP, and REGIONS tables exactly
 so backend-scored events rank consistently with frontend-ingested events.
+
+V9: Added negation filter.
+  Problem: "Iran DENIES nuclear weapon" scored identically to "Iran LAUNCHES
+  nuclear strike" because keyword matching is context-blind.
+  Fix: Before matching a severity keyword, check if a negation word appears
+  within a short window before it in the text. If so, halve that keyword's
+  effective weight.
 """
 import re
 from typing import List, Dict, Tuple
+
+# ── Negation window ──────────────────────────────────────────────────────────
+# Words that negate or heavily qualify a following keyword.
+# We check within _NEGATION_WINDOW characters before each keyword match.
+_NEGATION_WORDS = (
+    'no ', 'not ', "n't ", 'deny ', 'denies ', 'denied ', 'denying ',
+    'reject ', 'rejects ', 'rejected ', 'rejecting ',
+    'avoid ', 'avoids ', 'avoided ', 'preventing ', 'prevent ',
+    'halt ', 'halts ', 'halted ', 'pause ', 'paused ',
+    'false ', 'fake ', 'hoax ', 'rumor ', 'rumour ', 'unconfirmed ',
+    'alleged ', 'reportedly ', 'claims to ', 'claim of ',
+    'warns against ', 'warns of ', 'warning against ',
+    'threat of ', 'fear of ', 'risk of ',   # risk-framing (not actual event)
+    'rule out ', 'rules out ', 'ruled out ',
+    'ceasefire in ', 'end to ', 'end the ',
+    'condemn ', 'condemns ', 'condemned ',
+)
+_NEGATION_WINDOW = 60  # characters to look back before the keyword
+
+
+def _is_negated(text: str, keyword: str, match_pos: int) -> bool:
+    """
+    Return True if the keyword at match_pos appears to be negated.
+    Looks back _NEGATION_WINDOW characters for any negation word.
+    """
+    window_start = max(0, match_pos - _NEGATION_WINDOW)
+    window = text[window_start:match_pos]
+    return any(neg in window for neg in _NEGATION_WORDS)
+
+
+def _negation_multiplier(text: str, keyword: str) -> float:
+    """
+    Return 1.0 if the keyword is used assertively, 0.4 if negated.
+    Only applies the penalty on the first occurrence found.
+    """
+    pos = text.find(keyword)
+    if pos == -1:
+        return 1.0  # keyword not found — won't be used in scoring anyway
+    return 0.4 if _is_negated(text, keyword, pos) else 1.0
 
 # ── Severity keywords (mirrors frontend SEV table) ──────────────────────────
 SEV: Dict[str, float] = {
@@ -261,23 +307,35 @@ def score_event(
 ) -> int:
     """
     Compute 0-100 signal score.
-    Mirrors frontend scoreEvent() exactly:
-      s1 = max severity weight × 25         (0-25)
-      s2 = keyword count × 3, cap 20        (0-20)
-      s3 = srcCount × 4, cap 15             (0-15)
-      s4 = socialV × 15, cap 15             (0-15)
-      s5 = max geo weight × 15              (0-15)
-      s6 = asset count × 2, cap 10          (0-10)
+      s1 = max severity weight × 25 × negation_mult  (0-25)
+      s2 = effective keyword count × 3, cap 20        (0-20)
+      s3 = srcCount × 4, cap 15                       (0-15)
+      s4 = socialV × 15, cap 15                       (0-15)
+      s5 = max geo weight × 15                        (0-15)
+      s6 = asset count × 2, cap 10                    (0-10)
     Total capped at 100.
+
+    V9: s1 and s2 are now negation-aware.
+    Keywords preceded by negation words within _NEGATION_WINDOW chars
+    are multiplied by 0.4 (heavy but not zero — negation framing still
+    indicates the topic is relevant, just not confirmed).
     """
     text = (title + ' ' + desc).lower()
 
-    # s1 — severity
-    max_sev = max((SEV[k] for k in SEV if k in text), default=0.0)
+    # s1 — severity (negation-aware)
+    max_sev = 0.0
+    for k in SEV:
+        if k in text:
+            effective = SEV[k] * _negation_multiplier(text, k)
+            if effective > max_sev:
+                max_sev = effective
     s1 = max_sev * 25
 
-    # s2 — keyword density
-    kw_count = sum(1 for k in SEV if k in text)
+    # s2 — keyword density (negation-aware: negated keywords count as 0.4)
+    kw_count = sum(
+        _negation_multiplier(text, k)
+        for k in SEV if k in text
+    )
     s2 = min(20.0, kw_count * 3)
 
     # s3 — source corroboration

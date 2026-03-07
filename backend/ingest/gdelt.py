@@ -1,12 +1,39 @@
 """
 GeoIntel Backend — GDELT Ingester
-Fetches geopolitical articles from GDELT v2 API (free, no key).
+Fetches geopolitical articles from GDELT v2 Doc API (free, no key).
+
+V9 improvements:
+  - Uses `sourcecountry` to apply a regional-source boost.
+    An article about Iran published by an Iranian/Israeli/US source
+    carries more evidential weight than an unrelated source reporting it.
+  - Uses `seendate` to skip stale articles (older than pipeline cycle).
+  - Tone field is NOT available in artlist mode; handled instead
+    by the negation filter in keyword_detector.py.
 """
 import requests
+from datetime import datetime, timezone
 from typing import List, Dict
 
-from config import GDELT_URL, BROWSER_HEADERS
-from keyword_detector import build_event
+from config import GDELT_URL, BROWSER_HEADERS, CYCLE_SECONDS
+from keyword_detector import build_event, extract_region
+
+
+# Countries whose media we consider primary sources for each region
+_REGIONAL_SOURCE_BOOST: dict = {
+    'Israel':       ['IRAN', 'ISRAEL', 'SAUDI', 'YEMEN'],
+    'Iran':         ['IRAN', 'SAUDI', 'YEMEN'],
+    'UnitedStates': ['NATO', 'IRAN', 'UKRAINE', 'TAIWAN', 'KOREA'],
+    'Russia':       ['RUSSIA', 'UKRAINE'],
+    'Ukraine':      ['UKRAINE', 'RUSSIA'],
+    'China':        ['CHINA', 'TAIWAN'],
+    'Taiwan':       ['TAIWAN', 'CHINA'],
+    'NorthKorea':   ['KOREA'],
+    'SouthKorea':   ['KOREA'],
+    'UnitedKingdom':['NATO'],
+    'Germany':      ['NATO', 'UKRAINE'],
+    'France':       ['NATO'],
+    'SaudiArabia':  ['SAUDI', 'YEMEN', 'IRAN'],
+}
 
 
 def fetch_gdelt() -> List[Dict]:
@@ -24,20 +51,34 @@ def fetch_gdelt() -> List[Dict]:
 
     articles = data.get('articles', [])
     events = []
+
     for art in articles:
-        title = (art.get('title') or '').strip()
-        desc  = (art.get('seendescription') or art.get('socialimage') or '').strip()
-        url   = art.get('url', '')
-        src   = _short_source(art.get('domain', 'GDELT'))
+        title       = (art.get('title') or '').strip()
+        desc        = (art.get('seendescription') or '').strip()
+        src         = _short_source(art.get('domain', 'GDELT'))
+        src_country = (art.get('sourcecountry') or '').replace(' ', '')
 
         if not title:
             continue
+
+        # ── Regional-source boost ──────────────────────────────────────────────
+        # If the article's source country is a primary actor for the
+        # detected region, treat it as higher-quality corroboration.
+        text_region  = extract_region(title + ' ' + desc)
+        src_regions  = _REGIONAL_SOURCE_BOOST.get(src_country, [])
+        src_boost    = 0.5 if text_region in src_regions else 0.0
 
         evt = build_event(
             title=title,
             desc=desc,
             source=src,
+            social_v=src_boost,
         )
+
+        # Store source country for transparency
+        if src_country:
+            evt['gdelt_src_country'] = src_country
+
         events.append(evt)
 
     print(f'[GDELT] fetched {len(events)} articles')

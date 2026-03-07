@@ -71,6 +71,10 @@ YAHOO_SYMBOLS = {
     'LMT':   'LMT',     # Lockheed Martin
     'TSM':   'TSM',     # Taiwan Semiconductor
     'SPY':   'SPY',     # S&P 500 ETF
+    # ── Macro fear / regime indicators ───────────────────────────────────────
+    'VIX':   '^VIX',     # CBOE Volatility Index — fear gauge
+    'DXY':   'DX-Y.NYB', # US Dollar Index — safe-haven flows
+    'US10Y': '^TNX',     # 10-Year Treasury Yield — risk-off signal
 }
 
 # HTTP headers for requests that require a browser-like UA

@@ -82,18 +82,31 @@ async def _pipeline_cycle():
     market = await market_task
 
     # Process and broadcast new events
-    new_count = 0
+    new_count   = 0
+    corroborated = 0
     for evt in events:
         # Score filter — skip noise below signal 20
         if evt.get('signal', 0) < 20:
             continue
 
-        inserted = await asyncio.get_event_loop().run_in_executor(
+        result = await asyncio.get_event_loop().run_in_executor(
             _executor, store.insert, evt
         )
-        if inserted and _broadcast_event:
-            _broadcast_event(evt)
+
+        if result is True:
+            # Brand-new event — broadcast as-is
+            if _broadcast_event:
+                _broadcast_event(evt)
             new_count += 1
+
+        elif isinstance(result, dict):
+            # Existing event corroborated by a new source — re-broadcast
+            # the enriched version so the dashboard updates src_count + signal
+            if _broadcast_event:
+                _broadcast_event(result)
+            corroborated += 1
+
+        # result is False → exact duplicate, discard silently
 
     # Prune database
     await asyncio.get_event_loop().run_in_executor(_executor, store.prune)
@@ -106,6 +119,7 @@ async def _pipeline_cycle():
     print(
         f'[PIPELINE] cycle done in {elapsed:.1f}s — '
         f'{len(events)} fetched, {new_count} new, '
+        f'{corroborated} corroborated, '
         f'market tickers: {list(market.keys())}'
     )
 

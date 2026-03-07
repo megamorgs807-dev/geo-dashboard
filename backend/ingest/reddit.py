@@ -73,8 +73,11 @@ def _fetch_sub(sub: str) -> List[Dict]:
         if not _is_relevant(combined):
             continue
 
-        # Normalise upvote score → socialV (0-1 range, cap at 5000 upvotes)
-        social_v = min(1.0, ups / 5000.0) if ups > 0 else 0.0
+        # Normalise upvote score → socialV using log scale.
+        # Linear cap at 5000 meant anything significant was always maxed at 1.0.
+        # log10 scale: 10 ups→0.25, 100→0.50, 1000→0.75, 10000→1.0
+        import math
+        social_v = min(1.0, math.log10(ups + 1) / 4.0) if ups > 0 else 0.0
 
         evt = build_event(
             title=title,
