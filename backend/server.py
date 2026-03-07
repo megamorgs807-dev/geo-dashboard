@@ -200,6 +200,152 @@ async def api_status():
     })
 
 
+@app.get('/api/regime')
+async def api_regime():
+    """
+    Classify the current macro market regime from live VIX, DXY, US10Y data.
+
+    Regime labels:
+      CRISIS        — VIX ≥ 30.  Market is pricing in extreme risk.
+                      Existing safe-haven trades are crowded. New LONGs on
+                      GLD/BTC are late entries; look for relief rallies.
+      RISK_OFF      — VIX 20-30. Elevated fear, active flight to safety.
+                      GLD, DXY, US10Y (lower yield) likely bid.
+      TRANSITIONING — VIX 15-20. Uncertainty, trend unclear.
+      RISK_ON       — VIX < 15.  Low fear, complacency. Equities and
+                      risk assets favoured; GLD/BTC longs harder to sustain.
+
+    Also computes per-asset directional bias based on regime + DXY + yield:
+      bias = LONG | SHORT | NEUTRAL | CROWDED
+
+    Returns the regime + asset biases so the frontend can gate trade signals.
+    Missing data (market cache empty or tickers not yet loaded) returns
+    regime=UNKNOWN so the frontend can display a waiting state gracefully.
+    """
+    m = _market_cache  # snapshot — avoid race with pipeline writes
+
+    vix   = (m.get('VIX')   or {}).get('price')
+    dxy   = (m.get('DXY')   or {}).get('price')
+    us10y = (m.get('US10Y') or {}).get('price')
+
+    # ── Regime classification ─────────────────────────────────────────────────
+    if vix is None:
+        regime      = 'UNKNOWN'
+        regime_desc = 'VIX not yet loaded — waiting for market data cycle'
+        regime_score = 0
+    elif vix >= 30:
+        regime       = 'CRISIS'
+        regime_desc  = 'Extreme fear. Safe-haven trades are crowded. Fading longs on GLD/BTC.'
+        regime_score = 100
+    elif vix >= 20:
+        regime       = 'RISK_OFF'
+        regime_desc  = 'Elevated fear. Flight to safety active. GLD, DXY, Treasuries bid.'
+        regime_score = 65
+    elif vix >= 15:
+        regime       = 'TRANSITIONING'
+        regime_desc  = 'Mixed signals. Trend unclear — reduce position sizing.'
+        regime_score = 35
+    else:
+        regime       = 'RISK_ON'
+        regime_desc  = 'Low fear. Risk assets favoured. GLD/BTC safe-haven bids weaker.'
+        regime_score = 10
+
+    # ── Per-asset directional bias ────────────────────────────────────────────
+    # Logic:
+    #  GLD  — LONG in RISK_OFF/CRISIS unless price already spiked (crowded)
+    #  BTC  — LONG in CRISIS (sanctions hedge) but SHORT in RISK_ON (risk-off outflows)
+    #  WTI  — depends on regime; in CRISIS can go either way (demand destroy vs supply)
+    #  LMT  — defence spending rises in RISK_OFF; CROWDED in prolonged CRISIS
+    #  TSM  — SHORT in CRISIS/RISK_OFF (Taiwan risk, demand collapse)
+    #  SPY  — SHORT in CRISIS/RISK_OFF, LONG in RISK_ON
+    #  DXY  — LONG in RISK_OFF/CRISIS (safe-haven demand)
+
+    def gld_bias():
+        if regime == 'CRISIS':   return 'CROWDED'   # move already happened
+        if regime == 'RISK_OFF': return 'LONG'
+        return 'NEUTRAL'
+
+    def btc_bias():
+        if regime in ('CRISIS', 'RISK_OFF'): return 'LONG'   # sanctions hedge
+        if regime == 'RISK_ON':              return 'NEUTRAL'
+        return 'NEUTRAL'
+
+    def wti_bias():
+        if regime == 'CRISIS':   return 'NEUTRAL'   # supply vs demand unclear
+        if regime == 'RISK_OFF': return 'LONG'       # supply-disruption premium
+        return 'NEUTRAL'
+
+    def lmt_bias():
+        if regime in ('CRISIS', 'RISK_OFF'): return 'LONG'
+        return 'NEUTRAL'
+
+    def tsm_bias():
+        if regime in ('CRISIS', 'RISK_OFF'): return 'SHORT'  # Taiwan risk + demand
+        if regime == 'RISK_ON':              return 'LONG'
+        return 'NEUTRAL'
+
+    def spy_bias():
+        if regime == 'CRISIS':        return 'SHORT'
+        if regime == 'RISK_OFF':      return 'SHORT'
+        if regime == 'TRANSITIONING': return 'NEUTRAL'
+        return 'LONG'   # RISK_ON
+
+    def dxy_bias():
+        if regime in ('CRISIS', 'RISK_OFF'): return 'LONG'
+        return 'NEUTRAL'
+
+    asset_biases = {
+        'GLD':   {'bias': gld_bias(),  'reason': 'Safe-haven demand vs crowded trade'},
+        'BTC':   {'bias': btc_bias(),  'reason': 'Sanctions hedge / risk correlation'},
+        'ETH':   {'bias': btc_bias(),  'reason': 'Follows BTC in macro events'},
+        'WTI':   {'bias': wti_bias(),  'reason': 'Supply disruption vs demand destruction'},
+        'BRENT': {'bias': wti_bias(),  'reason': 'Supply disruption vs demand destruction'},
+        'GAS':   {'bias': wti_bias(),  'reason': 'Energy supply chain risk'},
+        'LMT':   {'bias': lmt_bias(),  'reason': 'Defence spending rises in risk-off'},
+        'TSM':   {'bias': tsm_bias(),  'reason': 'Taiwan risk + semi demand cycle'},
+        'SPY':   {'bias': spy_bias(),  'reason': 'Broad equity risk appetite'},
+        'WHT':   {'bias': 'NEUTRAL',   'reason': 'Commodity-specific supply factors'},
+        'DXY':   {'bias': dxy_bias(),  'reason': 'Safe-haven currency demand'},
+    }
+
+    # ── DXY confirmation ──────────────────────────────────────────────────────
+    # Rising DXY alongside RISK_OFF confirms the regime; contradicts RISK_ON
+    dxy_chg = (m.get('DXY') or {}).get('chg24h')
+    dxy_confirming = None
+    if dxy_chg is not None:
+        if regime in ('RISK_OFF', 'CRISIS') and dxy_chg > 0.3:
+            dxy_confirming = True   # DXY rising confirms risk-off
+        elif regime == 'RISK_ON' and dxy_chg < -0.3:
+            dxy_confirming = True   # DXY falling confirms risk-on
+        else:
+            dxy_confirming = False  # regime and DXY diverging — caution
+
+    # ── Yield signal ──────────────────────────────────────────────────────────
+    # Falling 10yr yield = flight to quality, confirms risk-off
+    yield_chg  = (m.get('US10Y') or {}).get('chg24h')
+    yield_note = None
+    if yield_chg is not None:
+        if yield_chg < -0.05:
+            yield_note = 'Yields falling — flight to quality confirmed'
+        elif yield_chg > 0.05:
+            yield_note = 'Yields rising — risk appetite or inflation concern'
+
+    return JSONResponse(content={
+        'regime':        regime,
+        'regime_score':  regime_score,
+        'regime_desc':   regime_desc,
+        'vix':           vix,
+        'dxy':           dxy,
+        'us10y':         us10y,
+        'dxy_chg24h':    dxy_chg,
+        'yield_chg24h':  yield_chg,
+        'dxy_confirming': dxy_confirming,
+        'yield_note':    yield_note,
+        'asset_biases':  asset_biases,
+        'ts':            int(time.time() * 1000),
+    })
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 @app.on_event('startup')

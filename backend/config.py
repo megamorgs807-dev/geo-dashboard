@@ -28,14 +28,31 @@ GDELT_URL = (
 )
 
 # ── RSS Feeds ────────────────────────────────────────────────────────────────
+# Organised by tier so intent is clear when adding/removing feeds.
+# Tier 1 — major wire services / global outlets (highest corroboration value)
+# Tier 2 — specialist defence / geopolitics outlets
+# Tier 3 — regional outlets (add corroboration for specific theatres)
 RSS_FEEDS = [
-    ('https://feeds.bbci.co.uk/news/world/rss.xml',           'BBC'),
-    ('https://feeds.reuters.com/reuters/worldNews',            'REUTERS'),
-    ('https://www.aljazeera.com/xml/rss/all.xml',              'ALJAZ'),
-    ('https://www.theguardian.com/world/rss',                  'GUARDIAN'),
-    ('https://rss.dw.com/xml/rss-en-world',                    'DW'),
-    ('https://feeds.npr.org/1004/rss.xml',                     'NPR'),
-    ('https://www.globalsecurity.org/rss/newslinks.rss',       'GLOBSEC'),
+    # ── Tier 1: Wire services & global broadcasters ───────────────────────
+    ('https://feeds.bbci.co.uk/news/world/rss.xml',                'BBC'),
+    ('https://www.reuters.com/arc/outboundfeeds/rss/?outputType=xml','REUTERS'),
+    ('https://rsshub.app/apnews/topics/ap-top-news',               'AP'),
+    ('https://www.aljazeera.com/xml/rss/all.xml',                   'ALJAZ'),
+    ('https://www.theguardian.com/world/rss',                       'GUARDIAN'),
+    ('https://rss.dw.com/xml/rss-en-world',                        'DW'),
+    ('https://feeds.npr.org/1004/rss.xml',                         'NPR'),
+    # ── Tier 2: Defence & geopolitics specialists ─────────────────────────
+    ('https://breakingdefense.com/feed',                            'BRKDEF'),
+    ('https://www.defensenews.com/arc/outboundfeeds/rss/',          'DEFNEWS'),
+    ('https://warontherocks.com/feed/',                             'WOTR'),
+    ('https://foreignpolicy.com/feed/',                             'FP'),
+    ('https://www.globalsecurity.org/rss/newslinks.rss',           'GLOBSEC'),
+    # ── Tier 3: Regional specialists (Ukraine / ME / Asia) ────────────────
+    ('https://kyivindependent.com/national/feed/',                  'KYIV'),
+    ('https://www.jpost.com/rss/rssfeedsheadlines.aspx',           'JPOST'),
+    ('https://www.middleeasteye.net/rss',                           'MEE'),
+    ('https://thediplomat.com/feed/',                               'DIPLOMAT'),
+    ('https://www.scmp.com/rss/91/feed',                           'SCMP'),
 ]
 
 # ── Reddit ───────────────────────────────────────────────────────────────────
