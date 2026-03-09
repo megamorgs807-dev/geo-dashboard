@@ -35,16 +35,40 @@ from keyword_detector import dedupe_key, score_event, SEV
 _HIGH_SEV_THRESHOLD       = 0.83
 _HIGH_SEV_KEYWORDS        = frozenset(k for k, v in SEV.items() if v >= _HIGH_SEV_THRESHOLD)
 
-# Max age of an event to be eligible for corroboration (ms)
-_CORROBORATION_WINDOW_MS  = 90 * 60 * 1000   # 90 minutes
+# Tier-2 threshold: medium-severity keywords.  Two of these from the same
+# region = same story (handles RSS vs GDELT vocabulary divergence).
+_MED_SEV_THRESHOLD        = 0.70
+_MED_SEV_KEYWORDS         = frozenset(k for k, v in SEV.items() if v >= _MED_SEV_THRESHOLD)
+
+# Max age of an event to be eligible for corroboration (ms).
+# Extended from 90 min → 2 h so GDELT (throttled to every 5 cycles) still
+# catches the same story that RSS already ingested.
+_CORROBORATION_WINDOW_MS  = 120 * 60 * 1000   # 2 hours
 
 # Maximum sources an event can accumulate — prevents common-keyword runaway
 _MAX_SRC_COUNT            = 8
 
 
-def _shared_high_keywords(kws_a: list, kws_b: list) -> set:
-    """Return the set of high-severity keywords shared between two events."""
-    return (set(kws_a) & set(kws_b)) & _HIGH_SEV_KEYWORDS
+def _should_corroborate(kws_a: list, kws_b: list) -> set:
+    """
+    Two-tier corroboration check.
+
+    Tier 1 (precise): 1+ shared keyword at SEV ≥ 0.83 — unambiguous
+                      action words (airstrike, invasion, coup …).
+    Tier 2 (broader): 2+ shared keywords at SEV ≥ 0.70 — handles
+                      RSS vs GDELT vocabulary divergence where headlines
+                      share mid-severity words (missile, troops, blockade).
+
+    Returns the matched keyword set (non-empty = corroborate), or empty set.
+    """
+    a, b = set(kws_a), set(kws_b)
+    high_shared = (a & b) & _HIGH_SEV_KEYWORDS
+    if len(high_shared) >= 1:
+        return high_shared
+    med_shared = (a & b) & _MED_SEV_KEYWORDS
+    if len(med_shared) >= 2:
+        return med_shared
+    return set()
 
 
 class EventStore:
@@ -124,7 +148,7 @@ class EventStore:
                     if row['src_count'] >= _MAX_SRC_COUNT:
                         continue
                     existing_kws = json.loads(row['keywords'] or '[]')
-                    shared = _shared_high_keywords(new_kws, existing_kws)
+                    shared = _should_corroborate(new_kws, existing_kws)
                     if len(shared) >= 1 and len(shared) > len(best_shared):
                         best_shared = shared
                         best_row    = row

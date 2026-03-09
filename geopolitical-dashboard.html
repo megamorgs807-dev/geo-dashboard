@@ -10018,6 +10018,43 @@ document.addEventListener('DOMContentLoaded', function() {
             '<table class="gee-mtbl"><thead><tr><th>Asset</th><th>Bias</th><th>Driver</th></tr></thead>' +
             '<tbody>' + rows + '</tbody></table>';
         }
+
+        // ── Update trade card regime badges ──────────────────────────────
+        var biasColors = { LONG:'#28c060', SHORT:'#e03030', CROWDED:'#e08020', NEUTRAL:'#888' };
+        var nameToAsset = {
+          'wti': 'WTI', 'crude': 'WTI',
+          'gold': 'GLD', 'gdx': 'GLD',
+          'bitcoin': 'BTC', 'btc': 'BTC',
+          'tsm': 'TSM', 'tsmc': 'TSM', 'semiconductor': 'TSM', 'soxx': 'TSM',
+          'defense contractor': 'LMT', 'lmt': 'LMT', 'lockheed': 'LMT',
+          'natural gas': 'GAS', 'ttf': 'GAS',
+          'spy': 'SPY',
+        };
+        document.querySelectorAll('.toe-card').forEach(function(card) {
+          var nameEl = card.querySelector('.toe-asset-name');
+          if (!nameEl) return;
+          var nameLow = nameEl.textContent.toLowerCase();
+          var asset = null;
+          Object.keys(nameToAsset).forEach(function(kw) {
+            if (!asset && nameLow.indexOf(kw) !== -1) asset = nameToAsset[kw];
+          });
+          if (!asset || !biases[asset]) return;
+          var b = biases[asset];
+          var color = biasColors[b.bias] || '#888';
+          var badge = card.querySelector('.toe-regime-badge');
+          if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'toe-regime-badge';
+            badge.style.cssText = 'font-size:9px;padding:1px 6px;border-radius:2px;' +
+              'border:1px solid;margin-left:4px;flex-shrink:0;letter-spacing:0.5px;';
+            var arrow = card.querySelector('.toe-expand-arrow');
+            if (arrow) arrow.insertAdjacentElement('beforebegin', badge);
+          }
+          badge.style.color          = color;
+          badge.style.borderColor    = color;
+          badge.style.background     = color + '22';
+          badge.textContent          = 'REGIME: ' + b.bias;
+        });
       })
       .catch(function() { /* backend offline — regime section keeps last known values */ });
   }
