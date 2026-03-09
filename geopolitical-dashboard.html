@@ -8557,9 +8557,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var sev = 0;
     Object.keys(SEV).forEach(function(k){ if(text.includes(k)) sev = Math.max(sev, SEV[k]); });
     var s1 = Math.round(sev * 25);
-    // 2. Keyword density 0-20
-    var kd = Object.keys(SEV).filter(function(k){ return text.includes(k); }).length;
-    var s2 = Math.min(20, kd * 3);
+    // 2. Keyword quality 0-20 — severity-weighted sum, not raw count
+    // High-sev keywords (nuclear=1.0 → +5) outweigh low-sev (tension=0.3 → +1.5)
+    var kwHits = Object.keys(SEV).filter(function(k){ return text.includes(k); });
+    var kwSevSum = kwHits.reduce(function(acc, k){ return acc + SEV[k]; }, 0);
+    var s2 = Math.min(20, Math.round(kwSevSum * 5));
     // 3. Source corroboration 0-15
     var s3 = Math.min(15, (evt.srcCount||1) * 4);
     // 4. Social velocity 0-15
@@ -8574,6 +8576,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var s6 = Math.min(10, assets.length * 2);
     evt.signal   = Math.min(100, s1+s2+s3+s4+s5+s6);
     evt.assets   = assets;
+    evt.keywords = kwHits;
     evt.geoScore = geo;
     return evt.signal;
   }
@@ -8619,22 +8622,24 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function forwardEvent(evt) {
-    // → Feature 1 NIB ticker
-    var ticker = document.querySelector('.nib-crit-ticker');
-    if (ticker && evt.signal >= 70) {
+    // → Feature 1 NIB ticker (target .nib-crit-items, cap at 8)
+    var tickerItems = document.querySelector('.nib-crit-items');
+    if (tickerItems && evt.signal >= 70) {
       var span = document.createElement('span');
       span.className = 'nib-crit-item';
       span.style.color = evt.signal >= 85 ? 'var(--red)' : 'var(--amber)';
       span.textContent = '⬡ [IC·' + evt.signal + '] ' + evt.title + '  ';
-      ticker.prepend(span);
+      tickerItems.prepend(span);
+      while (tickerItems.children.length > 8) tickerItems.removeChild(tickerItems.lastChild);
     }
-    // → Feature 6 UK/Crypto alert feed
+    // → Feature 6 UK/Crypto alert feed (cap at 20)
     var ukcFeed = gel('ukcAlertFeed');
     if (ukcFeed && evt.signal >= 60) {
       var div = document.createElement('div');
       div.className = 'ukc-alert-item';
       div.innerHTML = '<span style="color:#ff4060;font-weight:700">[IC·' + evt.signal + ']</span> ' + evt.title;
       ukcFeed.prepend(div);
+      while (ukcFeed.children.length > 20) ukcFeed.removeChild(ukcFeed.lastChild);
     }
   }
 
@@ -9525,9 +9530,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     var s1 = Math.round(topSevVal * 25);
 
-    // s2: keyword density
+    // s2: keyword quality — severity-weighted sum (mirrors scoreEvent)
     var hits = Object.keys(SEV).filter(function(k) { return text.includes(k); });
-    var s2 = Math.min(20, hits.length * 3);
+    var s2 = Math.min(20, Math.round(hits.reduce(function(acc, k){ return acc + SEV[k]; }, 0) * 5));
 
     // s3: source corroboration
     var s3 = Math.min(15, (evt.srcCount || 1) * 4);

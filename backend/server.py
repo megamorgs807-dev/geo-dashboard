@@ -5,6 +5,7 @@ Exposes SSE stream, REST endpoints, and static health check.
 import asyncio
 import json
 import time
+from contextlib import asynccontextmanager
 from typing import AsyncIterator, Set
 
 from fastapi import FastAPI, Request
@@ -15,7 +16,16 @@ from sse_starlette.sse import EventSourceResponse
 from config import HOST, PORT, SSE_KEEPALIVE
 from event_store import get_store
 
-app = FastAPI(title='GeoIntel Backend', version='1.0')
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from pipeline import start_pipeline, set_broadcast_fns
+    set_broadcast_fns(broadcast_event, broadcast_market)
+    asyncio.create_task(start_pipeline())
+    yield
+
+
+app = FastAPI(title='GeoIntel Backend', version='1.0', lifespan=lifespan)
 
 # CORS — allow any origin because the dashboard opens as a local file://
 app.add_middleware(
@@ -347,13 +357,6 @@ async def api_regime():
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
-
-@app.on_event('startup')
-async def startup():
-    from pipeline import start_pipeline, set_broadcast_fns
-    set_broadcast_fns(broadcast_event, broadcast_market)
-    asyncio.create_task(start_pipeline())
-
 
 if __name__ == '__main__':
     import uvicorn
