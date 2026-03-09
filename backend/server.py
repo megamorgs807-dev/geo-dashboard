@@ -4,14 +4,19 @@ Exposes SSE stream, REST endpoints, and static health check.
 """
 import asyncio
 import json
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Set
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from sse_starlette.sse import EventSourceResponse
+
+# Dashboard HTML lives one directory above the backend package
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_DASHBOARD_HTML = os.path.join(_PROJECT_ROOT, 'geopolitical-dashboard.html')
 
 from config import HOST, PORT, SSE_KEEPALIVE
 from event_store import get_store
@@ -111,6 +116,17 @@ async def stream(request: Request):
             _clients.discard(queue)
 
     return EventSourceResponse(event_generator())
+
+
+# ── Dashboard static serve ────────────────────────────────────────────────────
+
+@app.get('/')
+async def serve_dashboard():
+    """
+    Serve the dashboard HTML directly from the backend so it runs on
+    http://localhost:8765/ instead of file://  — no more CORS null-origin issues.
+    """
+    return FileResponse(_DASHBOARD_HTML, media_type='text/html')
 
 
 # ── REST endpoints ────────────────────────────────────────────────────────────

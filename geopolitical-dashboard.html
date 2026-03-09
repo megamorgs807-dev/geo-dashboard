@@ -1772,6 +1772,42 @@
     .sig-badge.med  { background: rgba(32,144,224,0.10); color: var(--blue); border: 1px solid rgba(32,144,224,0.30); }
     .sig-badge.low  { background: rgba(96,112,128,0.12); color: var(--dim); border: 1px solid var(--border); }
 
+    /* ── Event detail modal ───────────────────────────────────────────── */
+    #evtModal { display:none; position:fixed; inset:0; z-index:9000; align-items:center; justify-content:center; }
+    #evtModal.open { display:flex; }
+    .evt-modal-bg  { position:absolute; inset:0; background:rgba(0,0,0,0.72); }
+    .evt-modal-box { position:relative; z-index:1; background:var(--bg2); border:1px solid var(--border); border-top:3px solid var(--critical); border-radius:4px; width:min(700px,94vw); max-height:88vh; overflow-y:auto; padding:24px 28px 28px; font-size:12px; }
+    .evt-modal-close { position:absolute; top:14px; right:16px; background:none; border:none; color:var(--dim); font-size:18px; cursor:pointer; line-height:1; }
+    .evt-modal-close:hover { color:var(--fg); }
+    .evt-modal-sig  { display:inline-block; font-size:28px; font-weight:bold; line-height:1; margin-bottom:6px; }
+    .evt-modal-sig.crit { color:var(--red); }
+    .evt-modal-sig.high { color:var(--amber); }
+    .evt-modal-sig.med  { color:var(--blue); }
+    .evt-modal-sig.low  { color:var(--dim); }
+    .evt-modal-title { font-size:15px; font-weight:bold; color:var(--fg); margin:6px 0 14px; line-height:1.4; }
+    .evt-modal-meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+    .evt-modal-chip { font-size:9px; padding:2px 8px; border-radius:3px; border:1px solid var(--border); background:var(--bg3); color:var(--dim); text-transform:uppercase; letter-spacing:0.7px; }
+    .evt-modal-section { margin-top:14px; }
+    .evt-modal-sec-lbl { font-size:9px; color:var(--dim); text-transform:uppercase; letter-spacing:0.9px; margin-bottom:5px; }
+    .evt-modal-desc { color:var(--fg); line-height:1.6; font-size:12px; }
+    .evt-modal-kwtags { display:flex; flex-wrap:wrap; gap:5px; }
+    .evt-modal-kwtag { font-size:9px; padding:2px 7px; border-radius:2px; border:1px solid rgba(208,64,184,0.35); background:rgba(208,64,184,0.08); color:#d040b8; }
+    .evt-modal-assets { display:flex; flex-wrap:wrap; gap:5px; }
+    .evt-modal-asset { font-size:9px; padding:2px 7px; border-radius:2px; border:1px solid rgba(32,144,224,0.35); background:rgba(32,144,224,0.07); color:var(--blue); font-weight:bold; }
+    .evt-modal-src-link { color:var(--blue); text-decoration:none; word-break:break-all; }
+    .evt-modal-src-link:hover { text-decoration:underline; }
+    .evt-modal-reasoning { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:6px; }
+    .evt-modal-r-cell { background:var(--bg3); border:1px solid var(--border); border-radius:3px; padding:8px 10px; }
+    .evt-modal-r-lbl { font-size:8px; color:var(--dim); text-transform:uppercase; letter-spacing:0.6px; }
+    .evt-modal-r-val { font-size:18px; font-weight:bold; color:#d040b8; margin:2px 0; line-height:1; }
+    .evt-modal-r-note { font-size:8px; color:var(--dim); }
+    /* NIB ticker items become clickable */
+    .nib-crit-item { cursor:pointer; }
+    .nib-crit-item:hover { opacity:0.75; }
+    /* LRN table detail button */
+    .lrn-detail-btn { background:none; border:1px solid var(--border); border-radius:2px; color:var(--dim); font-size:9px; padding:1px 4px; cursor:pointer; margin-left:4px; flex-shrink:0; }
+    .lrn-detail-btn:hover { color:var(--fg); border-color:var(--blue); }
+
   </style>
 </head>
 <body>
@@ -4064,99 +4100,9 @@
 
       <!-- Left: Signal weights + Calibration -->
       <div class="lrn-col lrn-col-left">
-        <div class="lrn-col-title">Signal Weights — GEE Modules (Bayesian-Updated)</div>
-        <div class="lrn-weights-table">
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M1: Bayesian Core</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:94%"></div></div>
-            <div class="lrn-weight-score">0.94</div>
-            <div class="lrn-weight-acc">88%</div>
-            <div class="lrn-weight-trend up">↑</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M4: Markov Phase</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:89%"></div></div>
-            <div class="lrn-weight-score">0.89</div>
-            <div class="lrn-weight-acc">84%</div>
-            <div class="lrn-weight-trend up">↑</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M7: Macro Regime</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:85%"></div></div>
-            <div class="lrn-weight-score">0.85</div>
-            <div class="lrn-weight-acc">80%</div>
-            <div class="lrn-weight-trend flat">→</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M8: Horizon Forecast</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:83%"></div></div>
-            <div class="lrn-weight-score">0.83</div>
-            <div class="lrn-weight-acc">78%</div>
-            <div class="lrn-weight-trend flat">→</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M2: Game Theory</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:81%"></div></div>
-            <div class="lrn-weight-score">0.81</div>
-            <div class="lrn-weight-acc">74%</div>
-            <div class="lrn-weight-trend flat">→</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M12: Energy Shock</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:80%"></div></div>
-            <div class="lrn-weight-score">0.80</div>
-            <div class="lrn-weight-acc">76%</div>
-            <div class="lrn-weight-trend up">↑</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M3: Political Survival</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:76%"></div></div>
-            <div class="lrn-weight-score">0.76</div>
-            <div class="lrn-weight-acc">71%</div>
-            <div class="lrn-weight-trend up">↑</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M6: Cascade Engine</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:78%"></div></div>
-            <div class="lrn-weight-score">0.78</div>
-            <div class="lrn-weight-acc">73%</div>
-            <div class="lrn-weight-trend flat">→</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M11: Sanctions</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:74%"></div></div>
-            <div class="lrn-weight-score">0.74</div>
-            <div class="lrn-weight-acc">70%</div>
-            <div class="lrn-weight-trend flat">→</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M5: Signal Quality</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:72%"></div></div>
-            <div class="lrn-weight-score">0.72</div>
-            <div class="lrn-weight-acc">68%</div>
-            <div class="lrn-weight-trend down">↓</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M9: Market Impact</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:71%"></div></div>
-            <div class="lrn-weight-score">0.71</div>
-            <div class="lrn-weight-acc">66%</div>
-            <div class="lrn-weight-trend down">↓</div>
-          </div>
-          <div class="lrn-weight-row">
-            <div class="lrn-weight-mod">M10: Trade Maturity</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:68%"></div></div>
-            <div class="lrn-weight-score">0.68</div>
-            <div class="lrn-weight-acc">63%</div>
-            <div class="lrn-weight-trend up">↑</div>
-          </div>
-          <div class="lrn-weight-row" style="border-top:1px solid var(--border);padding-top:5px;margin-top:2px">
-            <div class="lrn-weight-mod" style="color:#18ccd8">F4: Scanner Gap</div>
-            <div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:62%;background:linear-gradient(90deg,rgba(24,204,216,0.35),#18ccd8)"></div></div>
-            <div class="lrn-weight-score" style="color:#18ccd8">0.62</div>
-            <div class="lrn-weight-acc">New</div>
-            <div class="lrn-weight-trend" style="color:#18ccd8">↑</div>
-          </div>
+        <div class="lrn-col-title">Keyword Signal Weights (Live · Adapted)</div>
+        <div class="lrn-weights-table" id="liveWeightTable">
+          <div style="padding:8px 0;color:var(--dim);font-size:10px">Loading keyword weights…</div>
         </div>
 
         <!-- Calibration chart -->
@@ -8634,6 +8580,8 @@ document.addEventListener('DOMContentLoaded', function() {
       span.className = 'nib-crit-item';
       span.style.color = evt.signal >= 85 ? 'var(--red)' : 'var(--amber)';
       span.textContent = '⬡ [IC·' + evt.signal + '] ' + evt.title + '  ';
+      span._geoEvt = evt;  // store for modal
+      span.onclick = function() { if (this._geoEvt) showEventModal(this._geoEvt); };
       tickerItems.prepend(span);
       while (tickerItems.children.length > 8) tickerItems.removeChild(tickerItems.lastChild);
     }
@@ -9703,14 +9651,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
       var kwHtml = kws.length ? '<div class="lrn-kw-tags">' + kws.map(function(k){ return '<span class="lrn-kw-tag">' + esc(k) + '</span>'; }).join('') + '</div>' : '';
 
+      var evtIdx = start + i;
       html +=
-        '<div class="lrn-evt-row" data-idx="' + (start+i) + '" onclick="lrnToggleRow(this)">' +
+        '<div class="lrn-evt-row" data-idx="' + evtIdx + '" onclick="lrnToggleRow(this)">' +
           '<div class="lrn-evt-hdr">' +
             '<div class="lrn-evt-time">' + esc(evt.time || fmtTime(evt.ts)) + '</div>' +
             '<div class="lrn-evt-region" style="color:' + col + '">' + esc((evt.region||'GLOBAL').slice(0,10)) + '</div>' +
             '<div class="lrn-evt-title">' + esc(evt.title || '') + '</div>' +
             '<div class="lrn-evt-sig ' + sc + '">' + (evt.signal||0) + '</div>' +
             '<div class="lrn-evt-assets">' + esc(assets) + '</div>' +
+            '<button class="lrn-detail-btn" onclick="event.stopPropagation();_openLrnModal(' + evtIdx + ')" title="Full detail">▣</button>' +
             '<div class="lrn-evt-arr">▶</div>' +
           '</div>' +
           '<div class="lrn-evt-detail">' +
@@ -9887,6 +9837,12 @@ document.addEventListener('DOMContentLoaded', function() {
   window.lrnToggleRow = function(row) {
     row.classList.toggle('expanded');
   };
+
+  /* Open event detail modal from LRN table — index into _state.filtered */
+  window._openLrnModal = function(idx) {
+    var evt = _state.filtered[idx];
+    if (evt && typeof showEventModal === 'function') showEventModal(evt);
+  };
   window.lrnPrevPage = function() {
     if (_state.page > 0) { _state.page--; renderTable(); }
   };
@@ -9972,44 +9928,90 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ── Keyword adaptation — called from fetchBackend() ────────────────── */
   /* Reads per-keyword corroboration rates from the backend and:            */
-  /*   1. Nudges _lrnSEV weights in-memory (±0.10 max) so computeReasoning */
-  /*      scores events slightly more accurately for the current corpus.     */
-  /*   2. Renders a live adaptation table in #liveAdaptation.               */
+  /*   1. Loads any prior nudges from localStorage (persist across sessions) */
+  /*   2. Computes new nudges from live corroboration data                  */
+  /*   3. Merges + saves accumulated nudges to localStorage                 */
+  /*   4. Applies nudges to window._lrnSEV in-memory                       */
+  /*   5. Renders adaptation table (#liveAdaptation)                        */
+  /*   6. Refreshes the live keyword weight bars (#liveWeightTable)         */
+  var _ADAPT_STORE_KEY = 'geointel_kw_nudges_v1';
+
+  function _loadStoredNudges() {
+    try {
+      var raw = localStorage.getItem(_ADAPT_STORE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch(e) { return {}; }
+  }
+
+  function _saveNudges(nudges) {
+    try { localStorage.setItem(_ADAPT_STORE_KEY, JSON.stringify(nudges)); } catch(e) {}
+  }
+
+  /* Apply saved nudges to _lrnSEV on startup so past sessions carry over */
+  function applyStoredAdaptations() {
+    var stored = _loadStoredNudges();
+    var SEV = window._lrnSEV || {};
+    Object.keys(stored).forEach(function(kw) {
+      if (SEV[kw] !== undefined) {
+        window._lrnSEV[kw] = Math.min(0.99, Math.max(0.05, SEV[kw] + stored[kw]));
+      }
+    });
+    _renderWeightTable(); // populate bars from stored state immediately
+  }
+
   function applyKeywordAdaptation(kwSigs) {
     var el = document.getElementById('liveAdaptation');
-    if (!el) return;
     if (!kwSigs || !Object.keys(kwSigs).length) {
-      el.innerHTML = '<div class="lrn-col-title" style="margin-top:0">Keyword Adaptation — collecting…</div>';
+      if (el) el.innerHTML = '<div class="lrn-col-title" style="margin-top:0">Keyword Adaptation — collecting…</div>';
       return;
     }
 
     var SEV = window._lrnSEV || {};
 
-    /* ── Weight nudge logic ──────────────────────────────────────────── */
-    /* Corr rate > 60% + at least 3 events → keyword reliably flags real  */
-    /* multi-source stories → nudge weight up (max +0.10).                */
-    /* Corr rate < 20% + at least 3 events → likely noisy / over-broad   */
-    /* keyword → nudge weight down (max −0.10).                           */
-    var nudges = {};
+    /* ── Load previously stored nudges ──────────────────────────────── */
+    var storedNudges = _loadStoredNudges();
+
+    /* ── Compute new nudges from live corroboration data ─────────────── */
+    /* Corr rate > 60% + ≥3 events → reliably flags real stories → +nudge */
+    /* Corr rate < 20% + ≥3 events → noisy / over-broad → −nudge          */
+    var newNudges = {};
     Object.keys(kwSigs).forEach(function(kw) {
       var sig = kwSigs[kw];
       var cr  = sig.corr_rate / 100;
       var n   = 0;
       if (cr > 0.60 && sig.count >= 3) n = +Math.min(0.10, (cr - 0.50) * 0.20);
       if (cr < 0.20 && sig.count >= 3) n = -Math.min(0.10, (0.30 - cr) * 0.20);
-      nudges[kw] = Math.round(n * 1000) / 1000;
+      newNudges[kw] = Math.round(n * 1000) / 1000;
+    });
+
+    /* ── Merge: blend stored + new (new takes 30% weight, stored 70%) ── */
+    var merged = {};
+    var allKws = Object.keys(Object.assign({}, storedNudges, newNudges));
+    allKws.forEach(function(kw) {
+      var s = storedNudges[kw] || 0;
+      var n = newNudges[kw]    || 0;
+      merged[kw] = Math.round((s * 0.70 + n * 0.30) * 1000) / 1000;
+    });
+    _saveNudges(merged);
+
+    /* ── Apply merged nudges to _lrnSEV ──────────────────────────────── */
+    Object.keys(merged).forEach(function(kw) {
       if (SEV[kw] !== undefined) {
-        window._lrnSEV[kw] = Math.min(0.99, Math.max(0.05, SEV[kw] + n));
+        window._lrnSEV[kw] = Math.min(0.99, Math.max(0.05, SEV[kw] + merged[kw]));
       }
     });
 
-    /* ── Render table ─────────────────────────────────────────────────── */
+    /* ── Update live keyword weight bars ─────────────────────────────── */
+    _renderWeightTable();
+
+    /* ── Render adaptation table ─────────────────────────────────────── */
+    if (!el) return;
     var sorted = Object.keys(kwSigs).sort(function(a, b) {
       return kwSigs[b].corr_rate - kwSigs[a].corr_rate;
     });
 
     var html = '<div class="lrn-col-title" style="margin-top:0">' +
-      'Keyword Adaptation — Live corroboration feedback</div>';
+      'Keyword Adaptation — Live corroboration · persisted</div>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:10px">';
     html += '<tr style="color:var(--dim);text-transform:uppercase;letter-spacing:0.5px">' +
       '<th style="text-align:left;padding:4px 6px;border-bottom:1px solid var(--border)">Keyword</th>' +
@@ -10021,7 +10023,7 @@ document.addEventListener('DOMContentLoaded', function() {
     sorted.forEach(function(kw) {
       var sig  = kwSigs[kw];
       var cr   = sig.corr_rate;
-      var ndg  = nudges[kw] || 0;
+      var ndg  = merged[kw] || 0;
       var crColor  = cr >= 60 ? 'var(--green)' : cr >= 30 ? '#e0b040' : '#e04040';
       var ndgColor = ndg > 0 ? 'var(--green)' : ndg < 0 ? '#e04040' : 'var(--dim)';
       var ndgText  = ndg === 0 ? '—' : (ndg > 0 ? '+' : '') + ndg.toFixed(3);
@@ -10034,6 +10036,52 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     html += '</table>';
     el.innerHTML = html;
+  }
+
+  /* ── Render live keyword weight bars from _lrnSEV ────────────────────── */
+  function _renderWeightTable() {
+    var wtEl = document.getElementById('liveWeightTable');
+    if (!wtEl) return;
+    var SEV = window._lrnSEV || {};
+    var stored = _loadStoredNudges();
+    var keys = Object.keys(SEV).sort(function(a, b) { return SEV[b] - SEV[a]; }).slice(0, 14);
+    if (!keys.length) return;
+    var html = '';
+    keys.forEach(function(kw) {
+      var w    = SEV[kw];
+      var pct  = Math.round(w * 100);
+      var ndg  = stored[kw] || 0;
+      var trendCls  = ndg > 0.005 ? 'up' : ndg < -0.005 ? 'down' : 'flat';
+      var trendChar = ndg > 0.005 ? '↑'  : ndg < -0.005 ? '↓'   : '→';
+      html += '<div class="lrn-weight-row">' +
+        '<div class="lrn-weight-mod">' + kw + '</div>' +
+        '<div class="lrn-weight-track"><div class="lrn-weight-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="lrn-weight-score">' + w.toFixed(2) + '</div>' +
+        '<div class="lrn-weight-acc">' + pct + '%</div>' +
+        '<div class="lrn-weight-trend ' + trendCls + '">' + trendChar + '</div>' +
+        '</div>';
+    });
+    wtEl.innerHTML = html;
+  }
+
+  /* ── Browser notifications for critical signals ──────────────────────── */
+  function _requestNotifPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+      // Defer slightly so it doesn't fire before the page has settled
+      setTimeout(function() { Notification.requestPermission(); }, 2000);
+    }
+  }
+
+  function _notifyIfCritical(evt) {
+    if (!evt || (evt.signal || 0) < 80) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      new Notification('⚠ GeoIntel Critical · Signal ' + evt.signal, {
+        body: '[' + (evt.region || 'GLOBAL') + '] ' + evt.title,
+        tag:  evt.title.slice(0, 50), // deduplicate if same headline fires twice
+        silent: false,
+      });
+    } catch(e) {}
   }
 
   /* ── Fetch live correlation matrix ──────────────────────────────────── */
@@ -10215,6 +10263,8 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── Init ────────────────────────────────────────────────────────────── */
   function init() {
     hookInternalTables();
+    applyStoredAdaptations();   // #1 — restore persisted keyword nudges
+    _requestNotifPermission();  // #3 — ask for browser notification permission
     wireControls();
     render();
     fetchBackend();
@@ -10241,7 +10291,11 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 (function () {
   'use strict';
-  var BACKEND     = 'http://localhost:8765';
+  // Auto-detect backend URL. If the dashboard is served by the backend itself
+  // (http://localhost:8765/) we can use a relative path; otherwise fall back
+  // to the explicit localhost address for file:// usage.
+  var BACKEND = (location.protocol === 'http:' && location.port === '8765')
+    ? '' : 'http://localhost:8765';
   var retryDelay  = 5000;
   var es          = null;
   var retryTimer  = null;
@@ -10267,6 +10321,9 @@ document.addEventListener('DOMContentLoaded', function() {
     IC.events.unshift(evt);
     var maxEvt = (IC.maxEvents || 300);
     if (IC.events.length > maxEvt) IC.events.length = maxEvt;
+
+    // Fire browser notification if signal is critical
+    _notifyIfCritical(evt);
   }
 
   /* ── Market price updates ────────────────────────────────────────────── */
@@ -10373,6 +10430,79 @@ document.addEventListener('DOMContentLoaded', function() {
     loadHistory();
   }
 })();
+</script>
+
+<!-- ── Event detail modal ─────────────────────────────────────────────── -->
+<div id="evtModal" role="dialog" aria-modal="true" aria-labelledby="evtModalTitle">
+  <div class="evt-modal-bg" onclick="closeEventModal()"></div>
+  <div class="evt-modal-box">
+    <button class="evt-modal-close" onclick="closeEventModal()" aria-label="Close">✕</button>
+    <div id="evtModalInner"></div>
+  </div>
+</div>
+
+<script>
+/* ── Event detail modal ─────────────────────────────────────────── */
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showEventModal(evt) {
+  if (!evt) return;
+  var sig = evt.signal || 0;
+  var sigCls = sig >= 80 ? 'crit' : sig >= 60 ? 'high' : sig >= 40 ? 'med' : 'low';
+  var ts = evt.ts ? new Date(evt.ts).toLocaleString() : (evt.time || '—');
+  var kws = (evt.keywords || []);
+  var assets = (evt.assets || []);
+
+  /* Reasoning if available */
+  var rHtml = '';
+  if (typeof computeReasoning === 'function') {
+    try {
+      var r = computeReasoning(evt);
+      rHtml = '<div class="evt-modal-section">' +
+        '<div class="evt-modal-sec-lbl">Signal Breakdown</div>' +
+        '<div class="evt-modal-reasoning">' +
+          '<div class="evt-modal-r-cell"><div class="evt-modal-r-lbl">S1 Severity</div><div class="evt-modal-r-val">' + r.s1 + '<span style="font-size:12px;color:var(--dim)">/25</span></div><div class="evt-modal-r-note">' + _esc(r.topSevKw||'none') + '</div></div>' +
+          '<div class="evt-modal-r-cell"><div class="evt-modal-r-lbl">S2 Keyword Density</div><div class="evt-modal-r-val">' + r.s2 + '<span style="font-size:12px;color:var(--dim)">/20</span></div><div class="evt-modal-r-note">' + r.kwHits.length + ' matches</div></div>' +
+          '<div class="evt-modal-r-cell"><div class="evt-modal-r-lbl">S3 Source Count</div><div class="evt-modal-r-val">' + r.s3 + '<span style="font-size:12px;color:var(--dim)">/15</span></div><div class="evt-modal-r-note">' + (evt.srcCount||1) + ' source(s)</div></div>' +
+          '<div class="evt-modal-r-cell"><div class="evt-modal-r-lbl">S4 Social Velocity</div><div class="evt-modal-r-val">' + r.s4 + '<span style="font-size:12px;color:var(--dim)">/15</span></div><div class="evt-modal-r-note">socialV ' + ((evt.socialV||0)*100).toFixed(0) + '%</div></div>' +
+          '<div class="evt-modal-r-cell"><div class="evt-modal-r-lbl">S5 Geographic</div><div class="evt-modal-r-val">' + r.s5 + '<span style="font-size:12px;color:var(--dim)">/15</span></div><div class="evt-modal-r-note">' + _esc(r.topGeoKw||'global') + '</div></div>' +
+          '<div class="evt-modal-r-cell"><div class="evt-modal-r-lbl">S6 Market Sensitivity</div><div class="evt-modal-r-val">' + r.s6 + '<span style="font-size:12px;color:var(--dim)">/10</span></div><div class="evt-modal-r-note">' + assets.length + ' asset(s)</div></div>' +
+        '</div></div>';
+    } catch(e) {}
+  }
+
+  var html =
+    '<div class="evt-modal-sig ' + sigCls + '">' + sig + '</div>' +
+    '<div class="evt-modal-title" id="evtModalTitle">' + _esc(evt.title) + '</div>' +
+    '<div class="evt-modal-meta">' +
+      '<span class="evt-modal-chip">⏱ ' + _esc(ts) + '</span>' +
+      '<span class="evt-modal-chip">🌍 ' + _esc(evt.region || 'GLOBAL') + '</span>' +
+      '<span class="evt-modal-chip">📡 ' + _esc(evt.source || '?') + '</span>' +
+      (evt.srcCount > 1 ? '<span class="evt-modal-chip" style="color:var(--green);border-color:rgba(40,192,96,0.4)">✓ ' + evt.srcCount + ' sources</span>' : '') +
+    '</div>' +
+    (evt.desc ? '<div class="evt-modal-section"><div class="evt-modal-sec-lbl">Summary</div><div class="evt-modal-desc">' + _esc(evt.desc) + '</div></div>' : '') +
+    (kws.length ? '<div class="evt-modal-section"><div class="evt-modal-sec-lbl">Keywords</div><div class="evt-modal-kwtags">' + kws.map(function(k){ return '<span class="evt-modal-kwtag">' + _esc(k) + '</span>'; }).join('') + '</div></div>' : '') +
+    (assets.length ? '<div class="evt-modal-section"><div class="evt-modal-sec-lbl">Affected Assets</div><div class="evt-modal-assets">' + assets.map(function(a){ return '<span class="evt-modal-asset">' + _esc(a) + '</span>'; }).join('') + '</div></div>' : '') +
+    (evt.url ? '<div class="evt-modal-section"><div class="evt-modal-sec-lbl">Source URL</div><a class="evt-modal-src-link" href="' + _esc(evt.url) + '" target="_blank" rel="noopener">' + _esc(evt.url) + '</a></div>' : '') +
+    rHtml;
+
+  document.getElementById('evtModalInner').innerHTML = html;
+  var modal = document.getElementById('evtModal');
+  modal.classList.add('open');
+  document.addEventListener('keydown', _modalKeyHandler);
+}
+
+function closeEventModal() {
+  var modal = document.getElementById('evtModal');
+  if (modal) modal.classList.remove('open');
+  document.removeEventListener('keydown', _modalKeyHandler);
+}
+
+function _modalKeyHandler(e) {
+  if (e.key === 'Escape') closeEventModal();
+}
 </script>
 </body>
 </html>
