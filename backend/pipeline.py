@@ -29,6 +29,10 @@ _broadcast_market = None
 # Cycle counter — used to throttle expensive / rate-limited sources
 _cycle_n = 0
 
+# GDELT adaptive backoff — incremented on 429, decremented each skipped cycle.
+# When > 0, GDELT is skipped even on its scheduled cycle.
+_gdelt_backoff = 0
+
 # Rolling price-change history for correlation computation (last 30 cycles)
 _price_history: deque = deque(maxlen=30)
 
@@ -54,9 +58,19 @@ async def _run_sync(fn, *args):
 async def _ingest_events(run_gdelt: bool = True) -> List[Dict]:
     """
     Fetch from all news sources concurrently.
-    run_gdelt=False skips GDELT to avoid rate-limiting on most cycles.
+    run_gdelt=False skips GDELT on most cycles (throttle).
+    Adaptive backoff: if GDELT returned 429 last attempt, skip the next
+    4 scheduled GDELT cycles (~20 min total pause) before retrying.
     return_exceptions=True ensures one failure doesn't abort the rest.
     """
+    global _gdelt_backoff
+
+    # Honour backoff even on scheduled cycles
+    if run_gdelt and _gdelt_backoff > 0:
+        _gdelt_backoff -= 1
+        print(f'[PIPELINE] GDELT backoff active — {_gdelt_backoff} cycles remaining, skipping')
+        run_gdelt = False
+
     tasks = [
         _run_sync(fetch_rss),
         _run_sync(fetch_reddit),
@@ -70,6 +84,9 @@ async def _ingest_events(run_gdelt: bool = True) -> List[Dict]:
     for name, r in zip(names, results):
         if isinstance(r, Exception):
             print(f'[PIPELINE] {name} raised: {r}')
+            if name == 'GDELT' and '429' in str(r):
+                _gdelt_backoff = 4  # skip next 4 scheduled GDELT cycles
+                print(f'[PIPELINE] GDELT 429 — backoff set to 4 cycles')
         elif isinstance(r, list):
             events.extend(r)
     return events

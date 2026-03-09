@@ -308,7 +308,7 @@ def score_event(
     """
     Compute 0-100 signal score.
       s1 = max severity weight × 25 × negation_mult  (0-25)
-      s2 = effective keyword count × 3, cap 20        (0-20)
+      s2 = severity-weighted kw sum × 5, cap 20       (0-20)
       s3 = srcCount × 4, cap 15                       (0-15)
       s4 = socialV × 15, cap 15                       (0-15)
       s5 = max geo weight × 15                        (0-15)
@@ -331,12 +331,13 @@ def score_event(
                 max_sev = effective
     s1 = max_sev * 25
 
-    # s2 — keyword density (negation-aware: negated keywords count as 0.4)
-    kw_count = sum(
-        _negation_multiplier(text, k)
+    # s2 — keyword quality (severity-weighted × negation-aware, matches frontend V9.5)
+    # High-sev keywords (nuclear=1.0 → +5) outweigh low-sev (tension=0.3 → +1.5).
+    kw_sev_sum = sum(
+        SEV[k] * _negation_multiplier(text, k)
         for k in SEV if k in text
     )
-    s2 = min(20.0, kw_count * 3)
+    s2 = min(20.0, kw_sev_sum * 5)
 
     # s3 — source corroboration
     s3 = min(15.0, src_count * 4)

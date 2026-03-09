@@ -27,10 +27,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title='GeoIntel Backend', version='1.0', lifespan=lifespan)
 
-# CORS — allow any origin because the dashboard opens as a local file://
+# CORS — restrict to local origins only.
+# Browsers send Origin: null for file:// pages; localhost variants cover
+# any dev server that might serve the dashboard over HTTP.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
+    allow_origins=[
+        'null',                    # file:// pages (Chrome/Firefox)
+        'http://localhost',
+        'http://localhost:8765',
+        'http://127.0.0.1',
+        'http://127.0.0.1:8765',
+    ],
     allow_methods=['GET'],
     allow_headers=['*'],
 )
@@ -167,6 +175,19 @@ async def api_learning(limit: int = 200):
             kw_counter[kw] += 1
     top_keywords = kw_counter.most_common(15)
 
+    # Per-keyword corroboration signal for adaptive weight tuning.
+    # A keyword reliably co-occurring with multi-source events (srcCount ≥ 2)
+    # is well-calibrated; one firing mostly on single-source events may be noisy.
+    kw_signals: dict = {}
+    for kw, count in top_keywords:
+        kw_evts = [e for e in events if kw in (e.get('keywords') or [])]
+        corr    = sum(1 for e in kw_evts if e.get('srcCount', 1) >= 2)
+        kw_signals[kw] = {
+            'count':        count,
+            'corroborated': corr,
+            'corr_rate':    round(corr / count * 100) if count > 0 else 0,
+        }
+
     # Asset frequency
     asset_counter: Counter = Counter()
     for e in events:
@@ -207,8 +228,9 @@ async def api_learning(limit: int = 200):
         'top_keywords': dict(top_keywords),
         'top_assets':   dict(top_assets),
         'top_sources':  dict(top_sources),
-        'calibration':  calibration,
-        'events':       events,
+        'calibration':      calibration,
+        'keyword_signals':  kw_signals,
+        'events':           events,
         'ts':           int(time.time() * 1000),
     })
 
