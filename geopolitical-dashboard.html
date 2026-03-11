@@ -1808,6 +1808,113 @@
     .lrn-detail-btn { background:none; border:1px solid var(--border); border-radius:2px; color:var(--dim); font-size:9px; padding:1px 4px; cursor:pointer; margin-left:4px; flex-shrink:0; }
     .lrn-detail-btn:hover { color:var(--fg); border-color:var(--blue); }
 
+    /* ══════════════════════════════════════════════════════════════════════════
+       HRS — Hit Rate System · Trade Signal Tracker · Accent: #00c8a0 (teal)
+       ══════════════════════════════════════════════════════════════════════════ */
+    .hr-wrap { margin-bottom: 24px; }
+
+    .hr-header {
+      background: rgba(0,200,160,0.05);
+      border: 1px solid rgba(0,200,160,0.30);
+      border-top: 2px solid #00c8a0;
+      border-left: 4px solid #00c8a0;
+      padding: 12px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
+    }
+    .hr-title-block { display:flex; align-items:center; gap:10px; }
+    .hr-live-dot { width:8px; height:8px; border-radius:50%; background:#00c8a0; box-shadow:0 0 8px rgba(0,200,160,0.8); animation:pulse 2s ease-in-out infinite; flex-shrink:0; }
+    .hr-title { font-size:13px; font-weight:700; letter-spacing:2px; color:#00c8a0; text-transform:uppercase; }
+    .hr-subtitle { font-size:10px; color:var(--dim); margin-top:2px; }
+    .hr-hdr-badges { display:flex; gap:8px; flex-wrap:wrap; }
+    .hr-badge { font-size:8px; font-weight:700; letter-spacing:1px; padding:3px 8px; border:1px solid rgba(0,200,160,0.35); background:rgba(0,200,160,0.08); color:#00c8a0; border-radius:2px; }
+    .hr-badge-rate { font-size:10px; }
+
+    /* Scorecard */
+    .hr-scorecard { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; }
+    @media (max-width:700px) { .hr-scorecard { grid-template-columns:1fr; } }
+    .hr-score-card { background:var(--bg2); border:1px solid var(--border); border-top:3px solid #00c8a0; padding:14px 16px; }
+    .hr-score-timeframe { font-size:9px; font-weight:700; letter-spacing:2px; color:var(--dim); text-transform:uppercase; margin-bottom:10px; }
+    .hr-score-big { font-size:38px; font-weight:700; color:#00c8a0; line-height:1; margin-bottom:4px; }
+    .hr-score-big.no-data { color:var(--dim); font-size:24px; }
+    .hr-score-pnl { font-size:13px; font-weight:700; margin-bottom:6px; }
+    .hr-score-pnl.pos { color:var(--green); }
+    .hr-score-pnl.neg { color:var(--red); }
+    .hr-score-pnl.neu { color:var(--dim); }
+    .hr-score-detail { font-size:9px; color:var(--dim); }
+    .hr-score-bar-wrap { height:5px; background:var(--border); border-radius:2px; margin-top:8px; overflow:hidden; }
+    .hr-score-bar-fill { height:100%; background:#00c8a0; border-radius:2px; transition:width 0.8s ease; }
+
+    /* 2-col body */
+    .hr-body { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+    @media (max-width:700px) { .hr-body { grid-template-columns:1fr; } }
+    .hr-body-col { background:var(--bg2); border:1px solid var(--border); padding:14px 16px; }
+    .hr-sec-title { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--bright); margin-bottom:10px; }
+    .hr-sec-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+
+    /* Asset bars */
+    .hr-asset-row { margin-bottom:10px; }
+    .hr-asset-name { font-size:10px; font-weight:700; color:var(--bright); margin-bottom:3px; display:flex; justify-content:space-between; }
+    .hr-asset-name-txt { flex:1; }
+    .hr-asset-rate-txt { color:#00c8a0; margin-left:8px; }
+    .hr-asset-bar-track { height:6px; background:var(--border); border-radius:2px; overflow:hidden; }
+    .hr-asset-bar-fill { height:100%; background:#00c8a0; border-radius:2px; transition:width 0.6s ease; }
+    .hr-asset-bar-fill.low { background:var(--red); }
+    .hr-asset-bar-fill.med { background:var(--amber); }
+    .hr-asset-sub { font-size:8px; color:var(--dim); margin-top:2px; }
+    .hr-placeholder { padding:20px; text-align:center; font-size:10px; color:var(--dim); }
+
+    /* Form */
+    .hr-toggle-btn { font-size:8px; font-weight:700; letter-spacing:1px; padding:3px 8px; border:1px solid rgba(0,200,160,0.40); background:rgba(0,200,160,0.08); color:#00c8a0; cursor:pointer; font-family:inherit; border-radius:2px; }
+    .hr-toggle-btn:hover { background:rgba(0,200,160,0.15); }
+    .hr-form-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+    @media (max-width:700px) { .hr-form-grid { grid-template-columns:repeat(2,1fr); } }
+    .hr-field label { display:block; font-size:8px; color:var(--dim); letter-spacing:0.8px; text-transform:uppercase; margin-bottom:3px; }
+    .hr-field input, .hr-field select { width:100%; background:var(--bg3); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:11px; padding:5px 8px; border-radius:2px; }
+    .hr-field input:focus, .hr-field select:focus { outline:none; border-color:#00c8a0; }
+    .hr-form-submit { background:#00c8a0; color:var(--bg); border:none; font-family:inherit; font-size:10px; font-weight:700; letter-spacing:1px; padding:7px 16px; cursor:pointer; border-radius:2px; margin-top:4px; transition:background 0.2s; }
+    .hr-form-submit:hover { background:#00a880; }
+
+    /* Table section */
+    .hr-table-section { background:var(--bg2); border:1px solid var(--border); padding:14px 16px; }
+    .hr-table-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .hr-btn { font-size:8px; font-weight:700; letter-spacing:0.8px; padding:3px 8px; border:1px solid var(--border); background:var(--bg3); color:var(--dim); cursor:pointer; font-family:inherit; border-radius:2px; }
+    .hr-btn:hover { color:var(--text); border-color:var(--text); }
+    .hr-btn-clear:hover { color:var(--red); border-color:var(--red); }
+    .hr-table-wrap { overflow-x:auto; margin-top:10px; }
+    .hr-table { width:100%; border-collapse:collapse; font-size:10px; min-width:780px; }
+    .hr-table thead th { background:var(--bg3); color:var(--amber); text-transform:uppercase; letter-spacing:0.8px; padding:7px 8px; text-align:left; font-size:9px; border-bottom:1px solid rgba(0,200,160,0.30); white-space:nowrap; }
+    .hr-table tbody tr { border-bottom:1px solid var(--border); transition:background 0.15s; }
+    .hr-table tbody tr:hover { background:var(--bg3); }
+    .hr-table tbody td { padding:7px 8px; color:var(--text); vertical-align:middle; }
+    .hr-td-asset { color:var(--bright); font-weight:700; font-size:11px; }
+    .hr-td-dir-long    { color:var(--green); font-weight:700; font-size:9px; }
+    .hr-td-dir-short   { color:var(--red);   font-weight:700; font-size:9px; }
+    .hr-td-dir-neutral { color:var(--amber); font-weight:700; font-size:9px; }
+    .hr-td-price { color:var(--amber); font-family:monospace; }
+    .hr-td-pnl-pos { color:var(--green); font-weight:700; }
+    .hr-td-pnl-neg { color:var(--red);   font-weight:700; }
+    .hr-td-pnl-neu { color:var(--dim); }
+    .hr-td-conf { color:#00c8a0; }
+    .hr-td-ts   { color:var(--dim); font-size:8px; white-space:nowrap; }
+
+    /* Outcome badges */
+    .hr-outcome { display:inline-block; font-size:8px; font-weight:700; padding:2px 6px; border-radius:2px; letter-spacing:0.5px; text-transform:uppercase; }
+    .hr-outcome.hit     { background:rgba(40,192,96,0.15);  color:var(--green); border:1px solid rgba(40,192,96,0.30); }
+    .hr-outcome.miss    { background:rgba(224,48,48,0.15);  color:var(--red);   border:1px solid rgba(224,48,48,0.30); }
+    .hr-outcome.neutral { background:rgba(232,160,32,0.10); color:var(--amber); border:1px solid rgba(232,160,32,0.30); }
+    .hr-outcome.open    { background:rgba(0,200,160,0.08);  color:#00c8a0;      border:1px solid rgba(0,200,160,0.25); }
+    .hr-outcome.expired { background:rgba(96,112,128,0.15); color:var(--dim);   border:1px solid var(--border); }
+
+    /* Eval buttons */
+    .hr-eval-btns { display:flex; gap:3px; margin-top:4px; flex-wrap:wrap; }
+    .hr-eval-btn { font-size:7px; font-weight:700; padding:2px 5px; border-radius:2px; border:1px solid var(--border); background:var(--bg); color:var(--dim); cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .hr-eval-btn.hit  { border-color:rgba(40,192,96,0.4);  color:var(--green); }
+    .hr-eval-btn.miss { border-color:rgba(224,48,48,0.4);  color:var(--red); }
+    .hr-eval-btn.neu  { border-color:rgba(232,160,32,0.4); color:var(--amber); }
+    .hr-eval-btn:hover { opacity:0.75; }
+    .hr-no-signals { padding:30px; text-align:center; color:var(--dim); font-size:11px; }
+
   </style>
 </head>
 <body>
@@ -4403,6 +4510,163 @@
     </div>
 
   </div><!-- /lrn-wrap -->
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════════
+       HIT RATE SYSTEM — Trade Signal Tracker
+       ══════════════════════════════════════════════════════════════════════════════ -->
+  <div class="hr-wrap" id="hrWrap">
+
+    <!-- Header -->
+    <div class="hr-header">
+      <div class="hr-title-block">
+        <span class="hr-live-dot"></span>
+        <div>
+          <div class="hr-title">⊕ Trade Signal Hit Rate Tracker</div>
+          <div class="hr-subtitle">Structured signal capture &middot; Hit/miss evaluation &middot; Multi-timeframe P&amp;L &middot; Bot-ready JSON export</div>
+        </div>
+      </div>
+      <div class="hr-hdr-badges">
+        <span class="hr-badge" id="hrBadgeTotal">0 SIGNALS</span>
+        <span class="hr-badge" id="hrBadgeOpen">0 OPEN</span>
+        <span class="hr-badge hr-badge-rate" id="hrBadgeRate">— HIT RATE</span>
+      </div>
+    </div>
+
+    <!-- Scorecard: Today / 7-Day / All Time -->
+    <div class="hr-scorecard">
+      <div class="hr-score-card">
+        <div class="hr-score-timeframe">Today (UTC)</div>
+        <div class="hr-score-big no-data" id="hrRateDay">—</div>
+        <div class="hr-score-pnl neu" id="hrPnlDay">P&amp;L: —</div>
+        <div class="hr-score-detail" id="hrDetailDay">No signals today</div>
+        <div class="hr-score-bar-wrap"><div class="hr-score-bar-fill" id="hrBarDay" style="width:0%"></div></div>
+      </div>
+      <div class="hr-score-card">
+        <div class="hr-score-timeframe">Last 7 Days</div>
+        <div class="hr-score-big no-data" id="hrRateWeek">—</div>
+        <div class="hr-score-pnl neu" id="hrPnlWeek">P&amp;L: —</div>
+        <div class="hr-score-detail" id="hrDetailWeek">No signals this week</div>
+        <div class="hr-score-bar-wrap"><div class="hr-score-bar-fill" id="hrBarWeek" style="width:0%"></div></div>
+      </div>
+      <div class="hr-score-card">
+        <div class="hr-score-timeframe">All Time</div>
+        <div class="hr-score-big no-data" id="hrRateAll">—</div>
+        <div class="hr-score-pnl neu" id="hrPnlAll">P&amp;L: —</div>
+        <div class="hr-score-detail" id="hrDetailAll">No signals logged</div>
+        <div class="hr-score-bar-wrap"><div class="hr-score-bar-fill" id="hrBarAll" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- 2-col body: Asset breakdown + Log form -->
+    <div class="hr-body">
+
+      <!-- Left: Per-asset breakdown -->
+      <div class="hr-body-col">
+        <div class="hr-sec-title">Per-Asset Breakdown</div>
+        <div id="hrAssetBars"><div class="hr-placeholder">Log signals to see per-asset performance.</div></div>
+      </div>
+
+      <!-- Right: Log new signal form -->
+      <div class="hr-body-col">
+        <div class="hr-sec-hdr">
+          <div class="hr-sec-title">▸ Log New Signal</div>
+          <button class="hr-toggle-btn" id="hrFormToggle" onclick="HRS.toggleForm()">+ OPEN FORM</button>
+        </div>
+        <div id="hrFormWrap" style="display:none">
+          <form onsubmit="HRS.submitForm(event)">
+            <div class="hr-form-grid">
+              <div class="hr-field">
+                <label>Asset</label>
+                <input type="text" id="hrfAsset" placeholder="WTI Crude Oil" required>
+              </div>
+              <div class="hr-field">
+                <label>Direction</label>
+                <select id="hrfDir">
+                  <option value="LONG">LONG</option>
+                  <option value="SHORT">SHORT</option>
+                  <option value="NEUTRAL">NEUTRAL</option>
+                </select>
+              </div>
+              <div class="hr-field">
+                <label>Entry Price</label>
+                <input type="number" id="hrfEntry" placeholder="81.40" step="any" required>
+              </div>
+              <div class="hr-field">
+                <label>Target Price</label>
+                <input type="number" id="hrfTarget" placeholder="95.00" step="any" required>
+              </div>
+              <div class="hr-field">
+                <label>Stop Loss</label>
+                <input type="number" id="hrfStop" placeholder="76.00" step="any" required>
+              </div>
+              <div class="hr-field">
+                <label>Confidence (0–1)</label>
+                <input type="number" id="hrfConf" placeholder="0.72" step="0.01" min="0" max="1" required>
+              </div>
+              <div class="hr-field">
+                <label>Duration</label>
+                <select id="hrfDuration">
+                  <option value="6h">6h</option>
+                  <option value="1d">1d</option>
+                  <option value="3d">3d</option>
+                  <option value="1w" selected>1w</option>
+                  <option value="2w">2w</option>
+                  <option value="4w">4w</option>
+                  <option value="6w">6w</option>
+                </select>
+              </div>
+              <div class="hr-field">
+                <label>Source</label>
+                <select id="hrfSource">
+                  <option value="GEE">GEE</option>
+                  <option value="TOE">TOE</option>
+                  <option value="IC">IC</option>
+                  <option value="Manual">Manual</option>
+                </select>
+              </div>
+            </div>
+            <button class="hr-form-submit" type="submit">▸ CAPTURE SIGNAL</button>
+          </form>
+        </div>
+      </div>
+
+    </div><!-- /hr-body -->
+
+    <!-- Full-width signal log table -->
+    <div class="hr-table-section">
+      <div class="hr-sec-hdr">
+        <div class="hr-sec-title">Signal Log — All Captured Trades</div>
+        <div class="hr-table-actions">
+          <button class="hr-btn" onclick="HRS.exportCSV()">&#8595; CSV</button>
+          <button class="hr-btn" onclick="HRS.exportJSON()">&#8595; JSON</button>
+          <button class="hr-btn hr-btn-clear" onclick="HRS.confirmClear()">&#10005; Clear All</button>
+        </div>
+      </div>
+      <div class="hr-table-wrap">
+        <table class="hr-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Asset</th>
+              <th>Dir</th>
+              <th>Entry</th>
+              <th>Target</th>
+              <th>Stop</th>
+              <th>Conf</th>
+              <th>Duration</th>
+              <th>Outcome / Evaluate</th>
+              <th>P&amp;L</th>
+              <th>Src</th>
+            </tr>
+          </thead>
+          <tbody id="hrSignalTbody">
+            <tr><td colspan="11" class="hr-no-signals">Loading signals…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /hr-wrap -->
 
   <!-- ═══════════════════════════════════════════════════════════════════════════════
        FEATURE 5 — LIVE CONTAGION MAP
@@ -10524,6 +10788,441 @@ function closeEventModal() {
 function _modalKeyHandler(e) {
   if (e.key === 'Escape') closeEventModal();
 }
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════════
+   HRS — Hit Rate System · Trade Signal Tracker
+   ══════════════════════════════════════════════════════════════════════════════
+   Architecture:
+     HRS.signals         — master array (persisted to localStorage)
+     HRS.load()          — restore from localStorage, seed on first run
+     HRS.save()          — persist to localStorage
+     HRS.capture(data)   — add a new structured signal
+     HRS.evaluate(id, outcome, closePrice) — record hit/miss/neutral
+     HRS.autoExpire()    — mark signals past duration_target as 'expired'
+     HRS.calcStats()     — compute Day/Week/AllTime hit rates + cumulative P&L
+     HRS.render()        — refresh entire UI
+     HRS.exportCSV()     — download signals as CSV
+     HRS.exportJSON()    — download signals as JSON
+     HRS.confirmClear()  — confirm + wipe all signals
+   ══════════════════════════════════════════════════════════════════════════════ */
+(function() {
+
+  var STORE_KEY = 'geodash_hitrate_v1';
+
+  /* ── Duration string → milliseconds ─────────────────────────────────────── */
+  function durationMs(str) {
+    var m = String(str || '1w').match(/^(\d+)(h|d|w)$/i);
+    if (!m) return 7 * 86400000;
+    var n = parseInt(m[1]);
+    var u = m[2].toLowerCase();
+    if (u === 'h') return n * 3600000;
+    if (u === 'd') return n * 86400000;
+    return n * 7 * 86400000; // weeks
+  }
+
+  /* ── Unique signal ID ────────────────────────────────────────────────────── */
+  var _seq = 0;
+  function makeId() {
+    return 'SIG-' + Date.now().toString(36).toUpperCase() + '-' + (++_seq).toString(36).toUpperCase();
+  }
+
+  /* ── P&L % from entry → close (direction-aware) ─────────────────────────── */
+  function calcPnl(sig, closePrice) {
+    var e = parseFloat(sig.entry_price), c = parseFloat(closePrice);
+    if (!e || !c || isNaN(e) || isNaN(c)) return null;
+    if (sig.direction === 'LONG')  return (c - e) / e * 100;
+    if (sig.direction === 'SHORT') return (e - c) / e * 100;
+    return 0;
+  }
+
+  /* ── Seed data — seeded from Trade Verification Log on first run ─────────── */
+  var SEED = [
+    {
+      signal_id: 'SIG-SEED-001', source: 'GEE',
+      timestamp: '2026-03-05T09:00:00.000Z',
+      asset: 'WTI Crude Oil', direction: 'LONG',
+      entry_price: 81.40, target_price: 95.00, stop_loss: 76.00,
+      confidence: 0.72, duration_target: '6w',
+      outcome: 'open', close_price: null, close_time: null, pnl_pct: null,
+      notes: 'Iran/Hormuz thesis — GEE P:72%'
+    },
+    {
+      signal_id: 'SIG-SEED-002', source: 'GEE',
+      timestamp: '2026-03-05T09:05:00.000Z',
+      asset: 'GDX (Gold Miners)', direction: 'LONG',
+      entry_price: 33.20, target_price: 38.50, stop_loss: 30.80,
+      confidence: 0.68, duration_target: '6w',
+      outcome: 'open', close_price: null, close_time: null, pnl_pct: null,
+      notes: 'Safe-haven / Iran risk hedge'
+    },
+    {
+      signal_id: 'SIG-SEED-003', source: 'TOE',
+      timestamp: '2026-02-10T08:30:00.000Z',
+      asset: 'EUR/USD', direction: 'SHORT',
+      entry_price: 1.0890, target_price: 1.0600, stop_loss: 1.1050,
+      confidence: 0.71, duration_target: '2w',
+      outcome: 'hit', close_price: 1.0635, close_time: '2026-02-21T14:00:00.000Z',
+      pnl_pct: 2.34, notes: 'Ukraine Phase 2→3 transition, USD strength'
+    },
+    {
+      signal_id: 'SIG-SEED-004', source: 'TOE',
+      timestamp: '2026-01-28T10:00:00.000Z',
+      asset: 'TSM (TSMC)', direction: 'SHORT',
+      entry_price: 178.50, target_price: 155.00, stop_loss: 190.00,
+      confidence: 0.42, duration_target: '2w',
+      outcome: 'miss', close_price: 189.20, close_time: '2026-02-05T09:00:00.000Z',
+      pnl_pct: -6.00, notes: 'PLA drill concern — stood down before target. Entry P<45% threshold'
+    },
+    {
+      signal_id: 'SIG-SEED-005', source: 'GEE',
+      timestamp: '2026-01-15T09:00:00.000Z',
+      asset: 'Natural Gas (NG)', direction: 'SHORT',
+      entry_price: 3.42, target_price: 2.90, stop_loss: 3.65,
+      confidence: 0.66, duration_target: '3w',
+      outcome: 'hit', close_price: 2.96, close_time: '2026-01-30T09:00:00.000Z',
+      pnl_pct: 13.45, notes: 'Mild winter + EU storage full — supply glut confirmed'
+    }
+  ];
+
+  /* ══════════════════════════════════════════════════════════════════════════ */
+  window.HRS = {
+
+    signals: [],
+
+    /* ── Load from localStorage (seed on first run) ──────────────────────── */
+    load: function() {
+      try {
+        var raw = localStorage.getItem(STORE_KEY);
+        this.signals = raw ? JSON.parse(raw) : SEED.map(function(s) { return Object.assign({}, s); });
+      } catch(e) {
+        this.signals = SEED.map(function(s) { return Object.assign({}, s); });
+      }
+      if (!localStorage.getItem(STORE_KEY)) this.save();
+      this.autoExpire();
+      this.render();
+    },
+
+    /* ── Persist to localStorage ─────────────────────────────────────────── */
+    save: function() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(this.signals)); } catch(e) {}
+    },
+
+    /* ── Add a new structured signal ─────────────────────────────────────── */
+    capture: function(data) {
+      var sig = {
+        signal_id:       data.signal_id      || makeId(),
+        source:          data.source         || 'Manual',
+        timestamp:       data.timestamp      || new Date().toISOString(),
+        asset:           String(data.asset   || '').trim(),
+        direction:       data.direction      || 'LONG',
+        entry_price:     parseFloat(data.entry_price)  || 0,
+        target_price:    parseFloat(data.target_price) || 0,
+        stop_loss:       parseFloat(data.stop_loss)    || 0,
+        confidence:      Math.min(1, Math.max(0, parseFloat(data.confidence) || 0.5)),
+        duration_target: data.duration_target || '1w',
+        outcome:         'open',
+        close_price:     null,
+        close_time:      null,
+        pnl_pct:         null,
+        notes:           data.notes || ''
+      };
+      this.signals.unshift(sig);
+      this.save();
+      this.render();
+      return sig;
+    },
+
+    /* ── Record hit / miss / neutral on a signal ─────────────────────────── */
+    evaluate: function(id, outcome, closePrice) {
+      var sig = this.signals.find(function(s) { return s.signal_id === id; });
+      if (!sig) return;
+      sig.outcome    = outcome;
+      sig.close_time = sig.close_time || new Date().toISOString();
+      if (closePrice !== undefined && closePrice !== null && closePrice !== '') {
+        sig.close_price = parseFloat(closePrice);
+        sig.pnl_pct     = calcPnl(sig, sig.close_price);
+      } else if (outcome === 'hit') {
+        sig.close_price = sig.target_price;
+        sig.pnl_pct     = calcPnl(sig, sig.target_price);
+      } else if (outcome === 'miss') {
+        sig.close_price = sig.stop_loss;
+        sig.pnl_pct     = calcPnl(sig, sig.stop_loss);
+      }
+      this.save();
+      this.render();
+    },
+
+    /* ── Auto-expire signals past their duration_target ──────────────────── */
+    autoExpire: function() {
+      var now = Date.now(), changed = false;
+      this.signals.forEach(function(sig) {
+        if (sig.outcome !== 'open') return;
+        var expiry = new Date(sig.timestamp).getTime() + durationMs(sig.duration_target);
+        if (now > expiry) { sig.outcome = 'expired'; sig.close_time = new Date(expiry).toISOString(); changed = true; }
+      });
+      if (changed) this.save();
+    },
+
+    /* ── Stats for a subset: hit rate + cumulative P&L ──────────────────── */
+    _stats: function(subset) {
+      var closed = subset.filter(function(s) { return s.outcome === 'hit' || s.outcome === 'miss'; });
+      var hits   = subset.filter(function(s) { return s.outcome === 'hit'; });
+      var pnls   = subset.filter(function(s) { return s.pnl_pct !== null; }).map(function(s) { return s.pnl_pct; });
+      return {
+        total:  subset.length,
+        closed: closed.length,
+        hits:   hits.length,
+        misses: closed.length - hits.length,
+        rate:   closed.length ? hits.length / closed.length * 100 : null,
+        pnl:    pnls.length   ? pnls.reduce(function(a, b) { return a + b; }, 0) : null
+      };
+    },
+
+    /* ── Compute Day / Week / All Time stats ─────────────────────────────── */
+    calcStats: function() {
+      var now   = Date.now();
+      var dayTs = (function() { var d = new Date(); d.setUTCHours(0,0,0,0); return d.getTime(); })();
+      var wkTs  = now - 7 * 86400000;
+      var all   = this.signals;
+      return {
+        day:  this._stats(all.filter(function(s) { return new Date(s.timestamp).getTime() >= dayTs; })),
+        week: this._stats(all.filter(function(s) { return new Date(s.timestamp).getTime() >= wkTs;  })),
+        all:  this._stats(all),
+        open: all.filter(function(s) { return s.outcome === 'open'; }).length
+      };
+    },
+
+    /* ── Per-asset hit rate + cumulative P&L breakdown ───────────────────── */
+    assetBreakdown: function() {
+      var map = {};
+      this.signals.forEach(function(sig) {
+        if (!map[sig.asset]) map[sig.asset] = { hits:0, misses:0, total:0, pnl:0, pnlCount:0 };
+        var m = map[sig.asset];
+        m.total++;
+        if (sig.outcome === 'hit')  m.hits++;
+        if (sig.outcome === 'miss') m.misses++;
+        if (sig.pnl_pct !== null)   { m.pnl += sig.pnl_pct; m.pnlCount++; }
+      });
+      return Object.keys(map).map(function(a) {
+        var m = map[a], closed = m.hits + m.misses;
+        return { asset: a, total: m.total, hits: m.hits, misses: m.misses,
+                 rate: closed ? m.hits / closed * 100 : null,
+                 pnl:  m.pnlCount ? m.pnl : null };
+      }).sort(function(a, b) { return b.total - a.total; });
+    },
+
+    /* ── Render full UI ──────────────────────────────────────────────────── */
+    render: function() {
+      this.autoExpire();
+      var stats = this.calcStats();
+      this._renderBadges(stats);
+      this._renderScorecard(stats);
+      this._renderAssetBars();
+      this._renderTable();
+    },
+
+    _renderBadges: function(stats) {
+      var set = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+      set('hrBadgeTotal', stats.all.total + ' SIGNAL' + (stats.all.total !== 1 ? 'S' : ''));
+      set('hrBadgeOpen',  stats.open + ' OPEN');
+      set('hrBadgeRate',  stats.all.rate !== null ? Math.round(stats.all.rate) + '% HIT RATE' : '— HIT RATE');
+    },
+
+    _renderScorecard: function(stats) {
+      [
+        { sfx: 'Day',  s: stats.day,  label: 'today' },
+        { sfx: 'Week', s: stats.week, label: 'this week' },
+        { sfx: 'All',  s: stats.all,  label: 'in total' }
+      ].forEach(function(item) {
+        var s  = item.s;
+        var ge = function(id) { return document.getElementById(id + item.sfx); };
+        var rateEl   = ge('hrRate'),   pnlEl  = ge('hrPnl');
+        var detailEl = ge('hrDetail'), barEl  = ge('hrBar');
+        if (!rateEl) return;
+
+        if (s.rate !== null) {
+          rateEl.textContent = Math.round(s.rate) + '%';
+          rateEl.className   = 'hr-score-big';
+        } else {
+          rateEl.textContent = '—';
+          rateEl.className   = 'hr-score-big no-data';
+        }
+        if (s.pnl !== null) {
+          pnlEl.textContent = (s.pnl >= 0 ? '+' : '') + s.pnl.toFixed(1) + '% cumulative P&L';
+          pnlEl.className   = 'hr-score-pnl ' + (s.pnl >= 0 ? 'pos' : 'neg');
+        } else {
+          pnlEl.textContent = 'P&L: —';
+          pnlEl.className   = 'hr-score-pnl neu';
+        }
+        if (detailEl) {
+          detailEl.textContent = s.total === 0
+            ? 'No signals ' + item.label
+            : s.hits + ' hit / ' + s.misses + ' miss of ' + s.closed + ' closed (' + s.total + ' total)';
+        }
+        if (barEl) barEl.style.width = (s.rate !== null ? s.rate : 0) + '%';
+      });
+    },
+
+    _renderAssetBars: function() {
+      var el = document.getElementById('hrAssetBars');
+      if (!el) return;
+      var bd = this.assetBreakdown();
+      if (!bd.length) { el.innerHTML = '<div class="hr-placeholder">Log signals to see per-asset performance.</div>'; return; }
+      el.innerHTML = bd.map(function(a) {
+        var rStr = a.rate !== null ? Math.round(a.rate) + '%' : '—';
+        var pStr = a.pnl  !== null ? ' · ' + (a.pnl >= 0 ? '+' : '') + a.pnl.toFixed(1) + '% P&L' : '';
+        var pct  = a.rate !== null ? a.rate : 0;
+        var cls  = a.rate === null ? '' : a.rate >= 60 ? '' : a.rate >= 40 ? 'med' : 'low';
+        return '<div class="hr-asset-row">' +
+          '<div class="hr-asset-name">' +
+            '<span class="hr-asset-name-txt">' + _hrEsc(a.asset) +
+              ' <span style="font-weight:normal;color:var(--dim);font-size:8px">(' + a.total + ')</span></span>' +
+            '<span class="hr-asset-rate-txt">' + rStr + '</span>' +
+          '</div>' +
+          '<div class="hr-asset-bar-track"><div class="hr-asset-bar-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
+          '<div class="hr-asset-sub">' + a.hits + ' hit · ' + a.misses + ' miss' + pStr + '</div>' +
+        '</div>';
+      }).join('');
+    },
+
+    _renderTable: function() {
+      var tbody = document.getElementById('hrSignalTbody');
+      if (!tbody) return;
+      if (!this.signals.length) {
+        tbody.innerHTML = '<tr><td colspan="11" class="hr-no-signals">No signals logged. Use the form above to capture your first trade.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = this.signals.map(function(sig) {
+        var ts  = new Date(sig.timestamp);
+        var tsStr = ts.getUTCFullYear() + '-' +
+                    String(ts.getUTCMonth()+1).padStart(2,'0') + '-' +
+                    String(ts.getUTCDate()).padStart(2,'0') + ' ' +
+                    String(ts.getUTCHours()).padStart(2,'0') + ':' +
+                    String(ts.getUTCMinutes()).padStart(2,'0');
+        var dirCls = sig.direction === 'LONG' ? 'hr-td-dir-long'
+                   : sig.direction === 'SHORT' ? 'hr-td-dir-short' : 'hr-td-dir-neutral';
+        var pnlStr = sig.pnl_pct !== null ? (sig.pnl_pct >= 0 ? '+' : '') + sig.pnl_pct.toFixed(1) + '%' : '—';
+        var pnlCls = sig.pnl_pct === null ? 'hr-td-pnl-neu' : sig.pnl_pct >= 0 ? 'hr-td-pnl-pos' : 'hr-td-pnl-neg';
+        var id = _hrEsc(sig.signal_id);
+        var evalHtml = (sig.outcome === 'open' || sig.outcome === 'expired')
+          ? '<div class="hr-eval-btns">' +
+              '<button class="hr-eval-btn hit"  onclick="HRS.evaluate(\'' + id + '\',\'hit\',null)">\u2713 HIT</button>' +
+              '<button class="hr-eval-btn miss" onclick="HRS.evaluate(\'' + id + '\',\'miss\',null)">\u2717 MISS</button>' +
+              '<button class="hr-eval-btn neu"  onclick="HRS.evaluate(\'' + id + '\',\'neutral\',null)">&mdash; NEU</button>' +
+            '</div>'
+          : '';
+        return '<tr>' +
+          '<td class="hr-td-ts">'    + tsStr + '</td>' +
+          '<td class="hr-td-asset">' + _hrEsc(sig.asset) + '</td>' +
+          '<td><span class="' + dirCls + '">' + _hrEsc(sig.direction) + '</span></td>' +
+          '<td class="hr-td-price">' + _hrFmt(sig.entry_price)  + '</td>' +
+          '<td class="hr-td-price">' + _hrFmt(sig.target_price) + '</td>' +
+          '<td class="hr-td-price">' + _hrFmt(sig.stop_loss)    + '</td>' +
+          '<td class="hr-td-conf">'  + Math.round(sig.confidence * 100) + '%</td>' +
+          '<td>'                     + _hrEsc(sig.duration_target) + '</td>' +
+          '<td><span class="hr-outcome ' + sig.outcome + '">' + sig.outcome.toUpperCase() + '</span>' + evalHtml + '</td>' +
+          '<td class="' + pnlCls + '">' + pnlStr + '</td>' +
+          '<td style="font-size:8px;color:var(--dim)">' + _hrEsc(sig.source || '') + '</td>' +
+        '</tr>';
+      }).join('');
+    },
+
+    /* ── Toggle log-signal form ──────────────────────────────────────────── */
+    toggleForm: function() {
+      var wrap = document.getElementById('hrFormWrap');
+      var btn  = document.getElementById('hrFormToggle');
+      if (!wrap) return;
+      var nowOpen = wrap.style.display !== 'none';
+      wrap.style.display = nowOpen ? 'none' : 'block';
+      if (btn) btn.textContent = nowOpen ? '+ OPEN FORM' : '\u2212 CLOSE FORM';
+    },
+
+    /* ── Handle form submit ──────────────────────────────────────────────── */
+    submitForm: function(evt) {
+      evt.preventDefault();
+      var g = function(id) { var e = document.getElementById(id); return e ? e.value : ''; };
+      this.capture({
+        asset:           g('hrfAsset'),
+        direction:       g('hrfDir'),
+        entry_price:     g('hrfEntry'),
+        target_price:    g('hrfTarget'),
+        stop_loss:       g('hrfStop'),
+        confidence:      g('hrfConf'),
+        duration_target: g('hrfDuration'),
+        source:          g('hrfSource')
+      });
+      evt.target.reset();
+      var btn = evt.target.querySelector('.hr-form-submit');
+      if (btn) {
+        btn.textContent = '\u2713 CAPTURED';
+        btn.style.background = 'var(--green)';
+        setTimeout(function() { btn.textContent = '\u25b8 CAPTURE SIGNAL'; btn.style.background = ''; }, 1800);
+      }
+    },
+
+    /* ── Export CSV ──────────────────────────────────────────────────────── */
+    exportCSV: function() {
+      var cols = ['signal_id','timestamp','asset','direction','entry_price','target_price',
+                  'stop_loss','confidence','duration_target','outcome','close_price','close_time','pnl_pct','source','notes'];
+      var lines = [cols.join(',')].concat(this.signals.map(function(s) {
+        return cols.map(function(c) {
+          var v = (s[c] === null || s[c] === undefined) ? '' : String(s[c]).replace(/"/g, '""');
+          return (v.indexOf(',') !== -1 || v.indexOf('"') !== -1) ? '"' + v + '"' : v;
+        }).join(',');
+      }));
+      _hrDownload('trade_signals_' + _hrToday() + '.csv', lines.join('\n'), 'text/csv');
+    },
+
+    /* ── Export JSON ─────────────────────────────────────────────────────── */
+    exportJSON: function() {
+      _hrDownload('trade_signals_' + _hrToday() + '.json', JSON.stringify(this.signals, null, 2), 'application/json');
+    },
+
+    /* ── Clear all signals ───────────────────────────────────────────────── */
+    confirmClear: function() {
+      if (!confirm('Clear ALL signals from the Hit Rate Tracker? This cannot be undone.')) return;
+      this.signals = [];
+      this.save();
+      this.render();
+    }
+
+  }; /* end HRS */
+
+  /* ── Private helpers ──────────────────────────────────────────────────────── */
+  function _hrEsc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function _hrFmt(n) {
+    if (n === null || n === undefined || n === '') return '—';
+    var v = parseFloat(n);
+    return isNaN(v) ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  }
+  function _hrToday() {
+    var d = new Date();
+    return d.getUTCFullYear() + '-' +
+           String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+           String(d.getUTCDate()).padStart(2, '0');
+  }
+  function _hrDownload(filename, content, mime) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ── Boot ────────────────────────────────────────────────────────────────── */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { HRS.load(); });
+  } else {
+    HRS.load();
+  }
+
+})();
 </script>
 </body>
 </html>
