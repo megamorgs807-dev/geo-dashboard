@@ -74,27 +74,81 @@
      ══════════════════════════════════════════════════════════════════════════════ */
 
   /* ── State ─────────────────────────────────────────────────────────────────── */
-  var _cfg      = {};   // active config (merged DEFAULTS + localStorage)
-  var _trades   = [];   // all trades: open + closed
-  var _cooldown = {};   // asset → timestamp of last signal processed
-  var _log      = [];   // activity log entries
-  var _seq      = 0;    // ID sequence counter
+  var _cfg       = {};   // active config (merged DEFAULTS + localStorage)
+  var _trades    = [];   // all trades: open + closed
+  var _cooldown  = {};   // asset → timestamp of last signal processed
+  var _log       = [];   // activity log entries
+  var _seq       = 0;    // ID sequence counter
+  var _livePrice = {};   // trade_id → most-recently fetched market price
 
-  /* ── Asset → price source map ──────────────────────────────────────────────── */
-  // Maps normalised asset tokens to Binance symbols for live price fetching.
-  // Add entries here as new assets are supported.
+  /* ── Price source maps ──────────────────────────────────────────────────────── */
+
+  // 1. Binance: crypto USDT pairs — public REST, no API key required
   var PRICE_SOURCES = {
     'BTC':   'BTCUSDT',
     'ETH':   'ETHUSDT',
     'BNB':   'BNBUSDT',
     'SOL':   'SOLUSDT',
-    'XAU':   'XAUUSDT',   // Gold (via Binance)
-    'GOLD':  'XAUUSDT',
     'ADA':   'ADAUSDT',
-    'DOGE':  'DOGEUSDT'
+    'DOGE':  'DOGEUSDT',
+    'XRP':   'XRPUSDT',
+    'AVAX':  'AVAXUSDT',
+    'LINK':  'LINKUSDT',
+    'DOT':   'DOTUSDT'
   };
 
-  var _priceCache = {};  // last known prices by asset token
+  // 2. CoinGecko: tokenised gold — 1 PAXG = 1 troy oz gold (CORS-open, no key)
+  // https://api.coingecko.com/api/v3/simple/price?ids=pax-gold&vs_currencies=usd
+  var COINGECKO_SOURCES = {
+    'XAU':  'pax-gold',    // PAX Gold ≈ spot gold price
+    'GOLD': 'pax-gold',
+    'PAXG': 'pax-gold',
+    'XAUT': 'tether-gold'  // Tether Gold: alternative gold token
+  };
+
+  // 3. Yahoo Finance via corsproxy.io: commodities, equities, ETFs
+  // corsproxy.io adds CORS headers; Yahoo itself blocks direct browser requests.
+  // https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1m&range=1d
+  var YAHOO_SOURCES = {
+    'WTI':     'CL=F',   // WTI Crude Oil futures
+    'CRUDE':   'CL=F',
+    'OIL':     'CL=F',
+    'BRENT':   'BZ=F',   // Brent Crude futures
+    'XAG':     'SI=F',   // Silver futures
+    'SILVER':  'SI=F',
+    'GAS':     'NG=F',   // Natural Gas futures
+    'NATURAL': 'NG=F',   // "Natural Gas" → first token = NATURAL
+    'NATGAS':  'NG=F',
+    'COPPER':  'HG=F',   // Copper futures
+    'GDX':     'GDX',    // VanEck Gold Miners ETF
+    'GLD':     'GLD',    // SPDR Gold Shares
+    'SLV':     'SLV',    // iShares Silver Trust
+    'SPY':     'SPY',
+    'QQQ':     'QQQ',
+    'DAL':     'DAL',    // Delta Air Lines
+    'UAL':     'UAL',    // United Airlines
+    'LMT':     'LMT',    // Lockheed Martin
+    'RTX':     'RTX',    // Raytheon Technologies
+    'BA':      'BA',     // Boeing
+    'XOM':     'XOM',    // ExxonMobil
+    'VIX':     '^VIX'
+  };
+
+  // 4. Frankfurter API: ECB forex rates (CORS-open, no key)
+  // https://api.frankfurter.app/latest?base={CURRENCY}&symbols=USD → rates.USD
+  var FRANKFURTER_SOURCES = {
+    'EUR':    'EUR',  'EURUSD': 'EUR',
+    'GBP':    'GBP',  'GBPUSD': 'GBP',
+    'CHF':    'CHF',
+    'JPY':    'JPY',
+    'AUD':    'AUD',
+    'CAD':    'CAD',
+    'NOK':    'NOK'
+  };
+
+  var _priceCache   = {};   // token → last known price (any source)
+  var _priceCacheTs = {};   // token → ms timestamp of last successful fetch
+  var _CACHE_TTL    = 25000; // 25 s — reuse within same 30-s monitor cycle
 
   /* ══════════════════════════════════════════════════════════════════════════════
      PERSISTENCE
@@ -124,46 +178,142 @@
 
   /* ══════════════════════════════════════════════════════════════════════════════
      PRICE FETCHING
-     Strategy:
-       1. Try Binance REST for known crypto/commodity tokens
-       2. Fall back to last cached price
-       3. Fall back to null (caller decides what to do)
+     Waterfall — all paths fire cb(price|null), never throw.
+
+       API coverage (all confirmed CORS-open from browser):
+         Binance      → crypto: BTC, ETH, SOL, …
+         CoinGecko    → gold: XAU/GOLD (via PAX Gold token 1 PAXG ≈ 1 troy oz)
+         corsproxy.io → commodities, stocks, ETFs via Yahoo Finance charts
+                        WTI/Brent oil, Silver, Nat-Gas, DAL, LMT, GDX, SPY, …
+         Frankfurter  → forex spot: EUR/USD, GBP/USD, …
+         Ticker scrape→ any price already shown in the dashboard ticker bar
+         Cache        → last-known price from any prior source
+
+       CORS situation (as of March 2026):
+         Yahoo Finance directly = CORS-blocked  ✗
+         metals.live directly  = CORS-blocked  ✗
+         Stooq directly        = CORS-blocked  ✗
+         Binance               = CORS-open     ✓
+         CoinGecko             = CORS-open     ✓
+         corsproxy.io (proxy)  = CORS-open     ✓
+         Frankfurter           = CORS-open     ✓
      ══════════════════════════════════════════════════════════════════════════════ */
 
+  var _CORS_PROXY = 'https://corsproxy.io/?';
+
   function normaliseAsset(asset) {
-    // Extract first meaningful token from asset name
-    // "WTI Crude Oil" → "WTI", "BTC/USD" → "BTC", "GDX (Gold Miners)" → "GDX"
+    // "WTI Crude Oil"→"WTI",  "BTC/USD"→"BTC",  "GDX (Gold Miners)"→"GDX"
     return String(asset || '').toUpperCase().replace(/[^A-Z0-9]/g, ' ').trim().split(' ')[0];
   }
 
+  function _cacheSet(token, price) {
+    _priceCache[token]   = price;
+    _priceCacheTs[token] = Date.now();
+  }
+
+  function _cacheFresh(token) {
+    return _priceCacheTs[token] && (Date.now() - _priceCacheTs[token]) < _CACHE_TTL;
+  }
+
+  /* Gold via CoinGecko PAX Gold (1 PAXG = 1 troy oz, price tracks spot) */
+  function _fetchCoinGecko(token, coinId, cb) {
+    if (_cacheFresh(token)) { cb(_priceCache[token] || null); return; }
+    var url = 'https://api.coingecko.com/api/v3/simple/price?ids=' +
+              encodeURIComponent(coinId) + '&vs_currencies=usd';
+    fetch(url)
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (data) {
+        var price = data && data[coinId] && parseFloat(data[coinId].usd);
+        if (!isNaN(price) && price > 0) {
+          var isFirst = !_priceCache[token];
+          _cacheSet(token, price);
+          if (isFirst) log('PRICE', 'CoinGecko → ' + token + ' $' + price.toFixed(2) +
+                           ' (via ' + coinId + ')', 'dim');
+        }
+        cb(!isNaN(price) && price > 0 ? price : (_priceCache[token] || null));
+      })
+      .catch(function () { cb(_priceCache[token] || null); });
+  }
+
+  /* Yahoo Finance chart API routed through corsproxy.io (CORS-open) */
+  function _fetchYahoo(token, sym, cb) {
+    if (_cacheFresh(token)) { cb(_priceCache[token] || null); return; }
+    var yahooUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' +
+                   encodeURIComponent(sym) + '?interval=1m&range=1d';
+    fetch(_CORS_PROXY + encodeURIComponent(yahooUrl))
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (data) {
+        var meta  = data && data.chart && data.chart.result &&
+                    data.chart.result[0] && data.chart.result[0].meta;
+        var price = meta ? parseFloat(meta.regularMarketPrice) : NaN;
+        if (!isNaN(price) && price > 0) {
+          var isFirst = !_priceCache[token];
+          _cacheSet(token, price);
+          if (isFirst) log('PRICE', 'Yahoo → ' + sym + ' $' + price.toFixed(2), 'dim');
+        }
+        cb(!isNaN(price) && price > 0 ? price : (_priceCache[token] || null));
+      })
+      .catch(function () { cb(_priceCache[token] || null); });
+  }
+
+  /* Frankfurter API — ECB-sourced forex spot rates, no API key needed */
+  function _fetchFrankfurter(token, base, cb) {
+    if (_cacheFresh(token)) { cb(_priceCache[token] || null); return; }
+    fetch('https://api.frankfurter.app/latest?base=' + base + '&symbols=USD')
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (data) {
+        var price = data && data.rates && parseFloat(data.rates.USD);
+        if (!isNaN(price) && price > 0) {
+          var isFirst = !_priceCache[token];
+          _cacheSet(token, price);
+          if (isFirst) log('PRICE', 'Frankfurter → ' + base + '/USD ' + price.toFixed(4), 'dim');
+        }
+        cb(!isNaN(price) && price > 0 ? price : (_priceCache[token] || null));
+      })
+      .catch(function () { cb(_priceCache[token] || null); });
+  }
+
+  /* Main entry point — routes to correct source, falls through to cache */
   function fetchPrice(asset, cb) {
     var token = normaliseAsset(asset);
-    var sym   = PRICE_SOURCES[token];
 
-    if (sym) {
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=' + sym)
+    // 1. Binance — crypto USDT pairs (public, no key, CORS-open)
+    if (PRICE_SOURCES[token]) {
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=' + PRICE_SOURCES[token])
         .then(function (r) { return r.json(); })
         .then(function (d) {
           var price = parseFloat(d.price);
-          if (!isNaN(price)) _priceCache[token] = price;
+          if (!isNaN(price)) _cacheSet(token, price);
           cb(!isNaN(price) ? price : (_priceCache[token] || null));
         })
         .catch(function () { cb(_priceCache[token] || null); });
-    } else {
-      // Try to read from the dashboard live ticker
-      var tickEls = document.querySelectorAll('.tick-item');
-      var found   = null;
-      tickEls.forEach(function (el) {
-        if (found) return;
-        var txt = (el.textContent || '').toUpperCase();
-        if (txt.indexOf(token) !== -1) {
-          var m = txt.match(/\$([\d,]+\.?\d*)/);
-          if (m) found = parseFloat(m[1].replace(/,/g, ''));
-        }
-      });
-      if (found) { _priceCache[token] = found; cb(found); }
-      else cb(_priceCache[token] || null);
+      return;
     }
+
+    // 2. CoinGecko — gold (XAU via PAX Gold; 1 PAXG ≈ 1 troy oz)
+    if (COINGECKO_SOURCES[token]) { _fetchCoinGecko(token, COINGECKO_SOURCES[token], cb); return; }
+
+    // 3. corsproxy + Yahoo Finance — oil, silver, nat-gas, stocks, ETFs
+    if (YAHOO_SOURCES[token]) { _fetchYahoo(token, YAHOO_SOURCES[token], cb); return; }
+
+    // 4. Frankfurter — major forex spot rates (ECB data)
+    if (FRANKFURTER_SOURCES[token]) { _fetchFrankfurter(token, FRANKFURTER_SOURCES[token], cb); return; }
+
+    // 5. Dashboard live ticker (prices already shown on-page)
+    var tickEls = document.querySelectorAll('.tick-item');
+    var found   = null;
+    tickEls.forEach(function (el) {
+      if (found) return;
+      var txt = (el.textContent || '').toUpperCase();
+      if (txt.indexOf(token) !== -1) {
+        var m = txt.match(/\$([\d,]+\.?\d*)/);
+        if (m) found = parseFloat(m[1].replace(/,/g, ''));
+      }
+    });
+    if (found) { _cacheSet(token, found); cb(found); return; }
+
+    // 6. Last-known price from any prior source
+    cb(_priceCache[token] || null);
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════
@@ -375,6 +525,9 @@
       fetchPrice(trade.asset, function (price) {
         if (!price) return;
 
+        // Store live price so renderOpenTrades() can show unrealised P&L
+        _livePrice[trade.trade_id] = price;
+
         var hitTP, hitSL;
         if (trade.direction === 'LONG') {
           hitTP = price >= trade.take_profit;
@@ -509,7 +662,33 @@
       return;
     }
     el.innerHTML = open.map(function (t) {
-      var dirCls = t.direction === 'LONG' ? 'ee-dir-long' : 'ee-dir-short';
+      var dirCls  = t.direction === 'LONG' ? 'ee-dir-long' : 'ee-dir-short';
+      var livePx  = _livePrice[t.trade_id] || null;
+
+      // Unrealised P&L row (only if we have a live price)
+      var liveRow = '';
+      if (livePx) {
+        var uPct = t.direction === 'LONG'
+          ? (livePx - t.entry_price) / t.entry_price * 100
+          : (t.entry_price - livePx) / t.entry_price * 100;
+        var uUsd = t.units * Math.abs(livePx - t.entry_price) * (uPct >= 0 ? 1 : -1);
+        var uCol = uPct >= 0 ? '#00c8a0' : '#ff4444';
+        // Distance to SL and TP as % of entry
+        var slDist = Math.abs(livePx - t.stop_loss)   / t.entry_price * 100;
+        var tpDist = Math.abs(t.take_profit - livePx) / t.entry_price * 100;
+        liveRow =
+          '<div style="font-size:9px;margin:5px 0 0 0;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07)">' +
+            'Live: <b style="color:var(--text)">$' + _num(livePx) + '</b>' +
+            '&nbsp;&nbsp;Unrealised: ' +
+            '<b style="color:' + uCol + '">' +
+              (uPct >= 0 ? '+' : '') + uPct.toFixed(2) + '%&thinsp;' +
+              '(' + (uUsd >= 0 ? '+$' : '-$') + _num(Math.abs(uUsd)) + ')' +
+            '</b>' +
+            '&nbsp;&nbsp;<span style="color:var(--dim)">SL&nbsp;' + slDist.toFixed(1) + '% away' +
+            '&nbsp;·&nbsp;TP&nbsp;' + tpDist.toFixed(1) + '% away</span>' +
+          '</div>';
+      }
+
       return '<div class="ee-trade-card">' +
         '<div class="ee-tc-hdr">' +
           '<span class="' + dirCls + '">' + t.direction + '</span>' +
@@ -523,6 +702,7 @@
           ' &nbsp; <span class="ee-tc-sl">SL: ' + _num(t.stop_loss) + '</span>' +
           ' &nbsp; <span class="ee-tc-tp">TP: ' + _num(t.take_profit) + '</span>' +
           ' &nbsp; Size: $' + _num(t.size_usd) +
+          liveRow +
         '</div>' +
         '<div class="ee-tc-actions">' +
           '<button class="ee-tc-btn close-btn" onclick="EE.manualClose(\'' + t.trade_id + '\')">&#10005; Close</button>' +
