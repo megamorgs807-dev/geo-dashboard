@@ -5191,6 +5191,8 @@
             <th>Base</th>
             <th>Adjustment</th>
             <th>Effective</th>
+            <th>Confidence</th>
+            <th>Win %</th>
           </tr>
         </thead>
         <tbody id="eeLearnTable">
@@ -9425,6 +9427,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var LEARN_MAX  = 5.0;   /* max cumulative delta in either direction */
 
   var _learnedWeights = {};  /* "keyword_ticker_dir" → cumulative delta */
+  var _learnCounts    = {};  /* "keyword_ticker_dir" → { total, tp, sl } */
   var _learnStats = { tp: 0, sl: 0, lastTs: null };
 
   function loadLearnedWeights() {
@@ -9433,20 +9436,37 @@ document.addEventListener('DOMContentLoaded', function() {
       if (raw) {
         var parsed = JSON.parse(raw);
         _learnedWeights = parsed.weights || {};
+        _learnCounts    = parsed.counts  || {};
         _learnStats     = parsed.stats   || { tp: 0, sl: 0, lastTs: null };
       }
-    } catch (e) { _learnedWeights = {}; _learnStats = { tp: 0, sl: 0, lastTs: null }; }
+    } catch (e) {
+      _learnedWeights = {}; _learnCounts = {}; _learnStats = { tp: 0, sl: 0, lastTs: null };
+    }
   }
 
   function saveLearnedWeights() {
-    try { localStorage.setItem(LEARN_KEY, JSON.stringify({ weights: _learnedWeights, stats: _learnStats })); } catch (e) {}
+    try {
+      localStorage.setItem(LEARN_KEY, JSON.stringify({
+        weights: _learnedWeights,
+        counts:  _learnCounts,
+        stats:   _learnStats
+      }));
+    } catch (e) {}
   }
 
-  /* Returns effective impact score for a keyword+entry, with learned delta applied */
+  /* Returns effective impact score for a keyword+entry, with learned delta applied.
+     Confidence ramp: applies delta at full strength only after 5+ confirming trades.
+       1 trade  → 20% of delta applied  (too early to trust)
+       3 trades → 60% of delta applied  (building evidence)
+       5 trades → 100% of delta applied (model has conviction)
+     This prevents single-trade noise from distorting the impact model.           */
   function getEffectiveImpact(kw, entry) {
-    var k     = kw + '_' + entry.t + '_' + entry.d;
-    var delta = _learnedWeights[k] || 0;
-    return Math.max(0.5, Math.min(10.0, entry.i + delta));
+    var k      = kw + '_' + entry.t + '_' + entry.d;
+    var delta  = _learnedWeights[k] || 0;
+    if (!delta) return entry.i;
+    var count  = (_learnCounts[k] && _learnCounts[k].total) || 0;
+    var conf   = Math.min(1.0, count / 5);   /* 0% → 100% over 5 trades */
+    return Math.max(0.5, Math.min(10.0, entry.i + delta * conf));
   }
 
   /* ── REGION EXTRACTION MAP ─────────────────────────────────────────────── */
@@ -9889,9 +9909,13 @@ document.addEventListener('DOMContentLoaded', function() {
         /* Clamp: base + delta must stay in [0.5, 10.0] */
         var newDelta = current + shift;
         newDelta = Math.max(-LEARN_MAX, Math.min(LEARN_MAX, newDelta));
-        /* Also ensure base + delta stays in bounds */
         newDelta = Math.max(0.5 - entry.i, Math.min(10.0 - entry.i, newDelta));
         _learnedWeights[k] = parseFloat(newDelta.toFixed(3));
+        /* Track count so the confidence ramp knows how many trades confirmed this */
+        if (!_learnCounts[k]) _learnCounts[k] = { total: 0, tp: 0, sl: 0 };
+        _learnCounts[k].total++;
+        if (trade.close_reason === 'TAKE_PROFIT') _learnCounts[k].tp++;
+        else _learnCounts[k].sl++;
       });
     });
 
@@ -9922,7 +9946,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     if (!keys.length) {
-      el.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:18px;font-size:10px">'
+      el.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--dim);padding:18px;font-size:10px">'
         + 'No weight adjustments yet — close some trades to start learning.'
         + '</td></tr>';
       return;
@@ -9933,7 +9957,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     el.innerHTML = keys.slice(0, 30).map(function(k) {
       var parts   = k.split('_');
-      /* key format: "keyword_TICKER_DIR" — keyword may contain underscores so take last 2 */
       var dir     = parts[parts.length - 1];
       var ticker  = parts[parts.length - 2];
       var kw      = parts.slice(0, parts.length - 2).join('_');
@@ -9941,10 +9964,27 @@ document.addEventListener('DOMContentLoaded', function() {
       var entries = IMPACT_MAP[kw] || [];
       var base    = 0;
       entries.forEach(function(e) { if (e.t === ticker && e.d === dir) base = e.i; });
-      var effective = Math.max(0.5, Math.min(10.0, base + delta));
-      var cls     = delta > 0 ? 'lrn-pos' : 'lrn-neg';
-      var arrow   = delta > 0 ? '&#9650;' : '&#9660;';
-      var dirCls  = dir === 'LONG' ? 'sl-long' : 'sl-short';
+
+      /* Confidence ramp: how much of the delta is actually applied */
+      var counts   = _learnCounts[k] || { total: 0, tp: 0, sl: 0 };
+      var confPct  = Math.min(100, Math.round(counts.total / 5 * 100));
+      var winRate  = counts.total > 0 ? Math.round(counts.tp / counts.total * 100) : null;
+      var effective = Math.max(0.5, Math.min(10.0, base + delta * (confPct / 100)));
+
+      var cls    = delta > 0 ? 'lrn-pos' : 'lrn-neg';
+      var arrow  = delta > 0 ? '&#9650;' : '&#9660;';
+      var dirCls = dir === 'LONG' ? 'sl-long' : 'sl-short';
+
+      /* Win rate colour */
+      var wrCls  = winRate === null ? 'lrn-base'
+                 : winRate >= 60 ? 'lrn-pos'
+                 : winRate <= 39 ? 'lrn-neg' : 'lrn-base';
+      var wrStr  = winRate !== null ? winRate + '%' : '—';
+
+      /* Confidence bar (small inline bar) */
+      var confBar = '<div style="width:40px;height:3px;background:var(--bg3);display:inline-block;vertical-align:middle;margin-left:4px">'
+        + '<div style="width:' + confPct + '%;height:100%;background:#ff9500"></div></div>';
+
       return '<tr>' +
         '<td class="lrn-kw">' + kw + '</td>' +
         '<td>' + ticker + '</td>' +
@@ -9952,6 +9992,8 @@ document.addEventListener('DOMContentLoaded', function() {
         '<td class="lrn-base">' + base.toFixed(1) + '</td>' +
         '<td class="' + cls + '">' + arrow + ' ' + (delta > 0 ? '+' : '') + delta.toFixed(2) + '</td>' +
         '<td class="lrn-eff">' + effective.toFixed(1) + '</td>' +
+        '<td style="font-size:9px;color:var(--dim)">' + counts.total + ' trades' + confBar + '</td>' +
+        '<td class="' + wrCls + '" style="font-size:9px">' + wrStr + '</td>' +
       '</tr>';
     }).join('');
   }
@@ -9959,6 +10001,7 @@ document.addEventListener('DOMContentLoaded', function() {
   /* Reset hook — called by EE.resetLearning() */
   window.onLearnReset = function() {
     _learnedWeights = {};
+    _learnCounts    = {};
     _learnStats     = { tp: 0, sl: 0, lastTs: null };
     saveLearnedWeights();
     renderLearning();

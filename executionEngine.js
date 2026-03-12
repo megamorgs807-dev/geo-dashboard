@@ -42,6 +42,28 @@
     broker:                'SIMULATION'  // future: 'BINANCE' | 'ALPACA' | 'POLYMARKET'
   };
 
+  /* ── Correlation groups — assets within each group are treated as equivalent
+     exposure. Only ONE asset per group (in the same direction) can be open at
+     a time. Prevents doubling up on WTI + BRENT, BTC + ETH, etc.              */
+  var CORR_GROUPS = [
+    ['WTI',  'BRENT', 'XLE', 'XOM'],    // oil / energy
+    ['GLD',  'XAU'],                     // gold
+    ['BTC',  'ETH',  'SOL'],            // crypto
+    ['LMT',  'RTX',  'NOC',  'XAR'],   // defense
+    ['TSM',  'NVDA', 'SMH',  'ASML'],  // semis
+    ['SPY',  'QQQ'],                     // US equities
+    ['FXI',  'EEM'],                     // emerging markets
+    ['DAL',  'UAL'],                     // airlines
+  ];
+
+  /* Returns the correlation group containing `asset`, or null */
+  function _getCorrGroup(asset) {
+    for (var i = 0; i < CORR_GROUPS.length; i++) {
+      if (CORR_GROUPS[i].indexOf(asset) !== -1) return CORR_GROUPS[i];
+    }
+    return null;
+  }
+
   /* ══════════════════════════════════════════════════════════════════════════════
      TRADE OBJECT SCHEMA
      Each trade stored in _trades[] follows this exact structure — designed to be
@@ -377,6 +399,16 @@
 
     if (open.some(function (t) { return t.asset === sig.asset; }))
       return { ok: false, reason: 'Already have open trade for ' + sig.asset };
+
+    // Correlation guard: block if a correlated asset is already open in the same direction
+    var corrGroup = _getCorrGroup(sig.asset);
+    if (corrGroup) {
+      var corrConflict = open.find(function (t) {
+        return corrGroup.indexOf(t.asset) !== -1 && t.direction === sig.dir;
+      });
+      if (corrConflict)
+        return { ok: false, reason: 'Correlated position open: ' + corrConflict.asset + ' ' + corrConflict.direction };
+    }
 
     var lastTs = _cooldown[sig.asset];
     if (lastTs && (Date.now() - lastTs) < _cfg.cooldown_ms)
