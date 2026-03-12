@@ -9180,22 +9180,172 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ── MARKET SENSITIVITY (keyword → assets) ─────────────────────────────── */
   var MKTMAP = {
-    'oil':['WTI','BRENT'],'petroleum':['WTI','BRENT'],'crude':['WTI','BRENT'],
-    'opec':['WTI','BRENT'],'aramco':['WTI','BRENT'],'pipeline':['WTI','BRENT'],
-    'hormuz':['WTI','BRENT','GLD'],'strait':['WTI','BRENT'],
-    'gold':['GLD'],'safe haven':['GLD','BTC'],'inflation':['GLD','BTC','WTI'],
-    'sanction':['BTC','GLD'],'swift':['BTC','GLD'],'dollar':['GLD','BTC'],
-    'nuclear':['GLD','LMT'],'missile':['GLD','LMT','WTI'],
-    'military':['LMT','GLD'],'defense':['LMT'],'arms':['LMT'],
-    'crypto':['BTC','ETH'],'bitcoin':['BTC'],'ethereum':['ETH'],
-    'taiwan':['TSM','GLD','LMT'],'chip':['TSM'],'semiconductor':['TSM'],
-    'china':['GLD','SPY','TSM'],'trade war':['GLD','SPY'],'tariff':['GLD','SPY'],
-    'ukraine':['WTI','BRENT','GLD','WHT'],'wheat':['WHT'],'grain':['WHT'],
-    'russia':['WTI','BRENT','GLD','WHT','GAS'],'gas':['GAS','WTI'],
-    'iran':['WTI','BRENT','GLD','LMT'],'middle east':['WTI','GLD'],
-    'fed':['GLD','SPY'],'interest rate':['GLD','SPY'],'recession':['GLD','BTC'],
-    'bank':['GLD','BTC'],'financial':['GLD','SPY'],'market crash':['GLD','BTC'],
-    'korea':['GLD','LMT'],'india':['GLD'],'pakistan':['GLD','WTI'],
+    /* Energy */
+    'oil':['WTI','BRENT','XLE'],'petroleum':['WTI','BRENT','XLE'],'crude':['WTI','BRENT','XLE'],
+    'opec':['WTI','BRENT','XLE'],'aramco':['WTI','BRENT'],'pipeline':['WTI','BRENT','XLE'],
+    'hormuz':['WTI','BRENT','GLD','XLE'],'strait':['WTI','BRENT'],
+    'gas':['GAS','WTI','XLE'],'energy':['XLE','WTI','BRENT'],
+    /* Safe havens */
+    'gold':['GLD','XAU'],'safe haven':['GLD','XAU','BTC'],'inflation':['GLD','XAU','BTC','WTI'],
+    'sanction':['BTC','GLD','XAU'],'swift':['BTC','GLD'],'dollar':['GLD','XAU','BTC'],
+    'silver':['SLV'],
+    /* Defense */
+    'nuclear':['GLD','LMT','XAR','RTX'],'missile':['GLD','LMT','XAR','WTI'],
+    'military':['LMT','XAR','RTX','NOC','GLD'],'defense':['LMT','XAR','RTX','NOC'],
+    'arms':['LMT','XAR','RTX'],'war':['GLD','WTI','XAR','LMT'],
+    'airstrike':['GLD','WTI','LMT','XAR'],'invasion':['GLD','WTI','XAR','SPY'],
+    /* Crypto */
+    'crypto':['BTC','ETH','SOL'],'bitcoin':['BTC'],'ethereum':['ETH'],'solana':['SOL'],
+    /* Semis / Tech */
+    'taiwan':['TSM','GLD','LMT','SMH'],'chip':['TSM','SMH','NVDA'],
+    'semiconductor':['TSM','SMH','NVDA','ASML'],'nvidia':['NVDA','SMH'],
+    'tech':['QQQ','SMH','NVDA'],
+    /* Macro / Markets */
+    'china':['GLD','SPY','TSM','FXI'],'trade war':['GLD','SPY','QQQ','FXI'],'tariff':['GLD','SPY','FXI'],
+    'ukraine':['WTI','BRENT','GLD','WHT','XLE'],'wheat':['WHT'],'grain':['WHT'],
+    'russia':['WTI','BRENT','GLD','WHT','GAS','XLE'],
+    'iran':['WTI','BRENT','GLD','LMT','XAR'],'middle east':['WTI','GLD','XLE'],
+    'fed':['GLD','SPY','QQQ'],'interest rate':['GLD','SPY','QQQ'],'recession':['GLD','BTC','VIX','QQQ'],
+    'bank':['GLD','BTC'],'financial':['GLD','SPY','QQQ'],'market crash':['GLD','BTC','VIX'],
+    'korea':['GLD','LMT','SPY'],'india':['INDA','GLD'],'pakistan':['GLD','WTI'],
+    /* Emerging markets / airlines / misc */
+    'emerging':['EEM','FXI','INDA'],'airline':['DAL','UAL'],'aviation':['DAL','UAL'],
+    'nasdaq':['QQQ'],'volatility':['VIX'],
+  };
+
+  /* ── Asset Registry: full watchlist metadata ─────────────────────────────────
+     ticker → { type, sector, driver, priority }
+     priority: 1=commodity/direct proxy  2=ETF/index  3=sector leader stock
+     ─────────────────────────────────────────────────────────────────────────── */
+  var ASSET_REGISTRY = {
+    /* Energy commodities */
+    'WTI':  {type:'commodity',sector:'energy',   driver:'WTI crude oil futures',        priority:1},
+    'BRENT':{type:'commodity',sector:'energy',   driver:'Brent crude benchmark',        priority:1},
+    'GAS':  {type:'commodity',sector:'energy',   driver:'Natural gas futures',          priority:1},
+    'XLE':  {type:'etf',      sector:'energy',   driver:'Energy sector ETF (SPDR)',     priority:2},
+    'XOM':  {type:'stock',    sector:'energy',   driver:'ExxonMobil',                   priority:3},
+    /* Safe havens */
+    'GLD':  {type:'etf',      sector:'safe-haven',driver:'SPDR Gold Shares ETF',        priority:2},
+    'XAU':  {type:'commodity',sector:'safe-haven',driver:'Spot gold (oz)',              priority:1},
+    'SLV':  {type:'etf',      sector:'safe-haven',driver:'iShares Silver Trust ETF',    priority:2},
+    'SILVER':{type:'commodity',sector:'safe-haven',driver:'Silver spot',                priority:1},
+    /* Defense */
+    'XAR':  {type:'etf',      sector:'defense',  driver:'SPDR Aerospace & Defense ETF', priority:2},
+    'LMT':  {type:'stock',    sector:'defense',  driver:'Lockheed Martin',              priority:3},
+    'RTX':  {type:'stock',    sector:'defense',  driver:'Raytheon Technologies',        priority:3},
+    'NOC':  {type:'stock',    sector:'defense',  driver:'Northrop Grumman',             priority:3},
+    'BAE':  {type:'stock',    sector:'defense',  driver:'BAE Systems (UK)',             priority:3},
+    /* Semis / Tech */
+    'TSM':  {type:'stock',    sector:'semis',    driver:'Taiwan Semiconductor (TSMC)',  priority:2},
+    'NVDA': {type:'stock',    sector:'semis',    driver:'NVIDIA',                       priority:3},
+    'SMH':  {type:'etf',      sector:'semis',    driver:'VanEck Semiconductor ETF',    priority:2},
+    'ASML': {type:'stock',    sector:'semis',    driver:'ASML — chip equipment',        priority:3},
+    /* Broad market */
+    'SPY':  {type:'etf',      sector:'equities', driver:'S&P 500 ETF',                 priority:2},
+    'QQQ':  {type:'etf',      sector:'equities', driver:'Nasdaq-100 ETF',              priority:2},
+    'VIX':  {type:'index',    sector:'vol',      driver:'CBOE Volatility Index',        priority:1},
+    /* Crypto */
+    'BTC':  {type:'crypto',   sector:'crypto',   driver:'Bitcoin — macro risk proxy',  priority:1},
+    'ETH':  {type:'crypto',   sector:'crypto',   driver:'Ethereum',                    priority:2},
+    'SOL':  {type:'crypto',   sector:'crypto',   driver:'Solana',                      priority:3},
+    /* Emerging markets */
+    'FXI':  {type:'etf',      sector:'emerging', driver:'China large-cap ETF (iShares)',priority:2},
+    'EEM':  {type:'etf',      sector:'emerging', driver:'MSCI Emerging Markets ETF',   priority:2},
+    'INDA': {type:'etf',      sector:'emerging', driver:'iShares India ETF',           priority:2},
+    /* Airlines */
+    'DAL':  {type:'stock',    sector:'airlines', driver:'Delta Air Lines',             priority:3},
+    'UAL':  {type:'stock',    sector:'airlines', driver:'United Airlines',             priority:3},
+    /* Agri */
+    'WHT':  {type:'commodity',sector:'agri',     driver:'Wheat futures',               priority:1},
+  };
+
+  /* ── Impact Map: keyword → [{t:ticker, i:impact(1-10), d:direction, p:priority}]
+     Models the expected directional impact of each geopolitical keyword on each asset.
+     Used by renderTrades() to score, rank and select the best candidate trades.
+     Direction: 'LONG' = positive impact (buy), 'SHORT' = negative impact (sell)
+     Priority mirrors ASSET_REGISTRY: 1=best proxy, 3=sector leader
+     ─────────────────────────────────────────────────────────────────────────── */
+  var IMPACT_MAP = {
+    /* ── Oil / Energy shocks ───────────────────────────────────────────────── */
+    'oil':      [{t:'WTI',i:9,d:'LONG',p:1},{t:'BRENT',i:9,d:'LONG',p:1},
+                 {t:'XLE',i:7,d:'LONG',p:2},{t:'XOM',i:5,d:'LONG',p:3},
+                 {t:'DAL',i:6,d:'SHORT',p:3},{t:'UAL',i:6,d:'SHORT',p:3}],
+    'petroleum':[{t:'WTI',i:9,d:'LONG',p:1},{t:'BRENT',i:9,d:'LONG',p:1},{t:'XLE',i:7,d:'LONG',p:2}],
+    'crude':    [{t:'WTI',i:9,d:'LONG',p:1},{t:'BRENT',i:9,d:'LONG',p:1},{t:'XLE',i:7,d:'LONG',p:2}],
+    'hormuz':   [{t:'WTI',i:10,d:'LONG',p:1},{t:'BRENT',i:10,d:'LONG',p:1},
+                 {t:'GLD',i:7,d:'LONG',p:2},{t:'XLE',i:8,d:'LONG',p:2},
+                 {t:'DAL',i:7,d:'SHORT',p:3},{t:'UAL',i:7,d:'SHORT',p:3}],
+    'opec':     [{t:'WTI',i:8,d:'LONG',p:1},{t:'BRENT',i:8,d:'LONG',p:1},{t:'XLE',i:6,d:'LONG',p:2}],
+    'pipeline': [{t:'WTI',i:7,d:'LONG',p:1},{t:'BRENT',i:7,d:'LONG',p:1},{t:'XLE',i:5,d:'LONG',p:2}],
+    'gas':      [{t:'GAS',i:8,d:'LONG',p:1},{t:'WTI',i:4,d:'LONG',p:2},{t:'XLE',i:5,d:'LONG',p:2}],
+    'energy':   [{t:'XLE',i:7,d:'LONG',p:1},{t:'WTI',i:6,d:'LONG',p:2},{t:'XOM',i:5,d:'LONG',p:3}],
+    /* ── Safe havens ────────────────────────────────────────────────────────── */
+    'gold':     [{t:'XAU',i:8,d:'LONG',p:1},{t:'GLD',i:8,d:'LONG',p:2},{t:'SLV',i:4,d:'LONG',p:2}],
+    'safe haven':[{t:'XAU',i:8,d:'LONG',p:1},{t:'GLD',i:8,d:'LONG',p:2},{t:'BTC',i:5,d:'LONG',p:3}],
+    'silver':   [{t:'SLV',i:7,d:'LONG',p:2},{t:'GLD',i:4,d:'LONG',p:2}],
+    'inflation':[{t:'XAU',i:7,d:'LONG',p:1},{t:'GLD',i:7,d:'LONG',p:2},{t:'BTC',i:5,d:'LONG',p:3},{t:'WTI',i:4,d:'LONG',p:2}],
+    'dollar':   [{t:'XAU',i:6,d:'LONG',p:1},{t:'GLD',i:6,d:'LONG',p:2},{t:'BTC',i:5,d:'LONG',p:3}],
+    /* ── Defense / War ──────────────────────────────────────────────────────── */
+    'military': [{t:'XAR',i:8,d:'LONG',p:1},{t:'LMT',i:7,d:'LONG',p:3},{t:'RTX',i:7,d:'LONG',p:3},{t:'NOC',i:6,d:'LONG',p:3},{t:'GLD',i:6,d:'LONG',p:2}],
+    'defense':  [{t:'XAR',i:9,d:'LONG',p:1},{t:'LMT',i:7,d:'LONG',p:3},{t:'RTX',i:7,d:'LONG',p:3},{t:'NOC',i:6,d:'LONG',p:3}],
+    'arms':     [{t:'XAR',i:7,d:'LONG',p:1},{t:'LMT',i:7,d:'LONG',p:3},{t:'RTX',i:6,d:'LONG',p:3}],
+    'nuclear':  [{t:'XAU',i:9,d:'LONG',p:1},{t:'GLD',i:9,d:'LONG',p:2},
+                 {t:'XAR',i:7,d:'LONG',p:1},{t:'LMT',i:6,d:'LONG',p:3},
+                 {t:'SPY',i:8,d:'SHORT',p:2},{t:'QQQ',i:8,d:'SHORT',p:2}],
+    'missile':  [{t:'XAU',i:8,d:'LONG',p:1},{t:'GLD',i:8,d:'LONG',p:2},{t:'XAR',i:7,d:'LONG',p:1},{t:'WTI',i:6,d:'LONG',p:2}],
+    'war':      [{t:'XAU',i:8,d:'LONG',p:1},{t:'WTI',i:7,d:'LONG',p:2},
+                 {t:'XAR',i:8,d:'LONG',p:1},{t:'SPY',i:7,d:'SHORT',p:2},
+                 {t:'DAL',i:6,d:'SHORT',p:3},{t:'UAL',i:6,d:'SHORT',p:3}],
+    'airstrike':[{t:'XAU',i:8,d:'LONG',p:1},{t:'WTI',i:7,d:'LONG',p:2},{t:'XAR',i:7,d:'LONG',p:1},{t:'LMT',i:6,d:'LONG',p:3}],
+    'invasion': [{t:'XAU',i:9,d:'LONG',p:1},{t:'WTI',i:8,d:'LONG',p:2},
+                 {t:'XAR',i:8,d:'LONG',p:1},{t:'SPY',i:8,d:'SHORT',p:2},
+                 {t:'EEM',i:7,d:'SHORT',p:2},{t:'DAL',i:6,d:'SHORT',p:3}],
+    'sanction': [{t:'BTC',i:6,d:'LONG',p:2},{t:'XAU',i:6,d:'LONG',p:1},{t:'GLD',i:6,d:'LONG',p:2},{t:'EEM',i:5,d:'SHORT',p:2}],
+    'embargo':  [{t:'WTI',i:7,d:'LONG',p:1},{t:'XAU',i:6,d:'LONG',p:1},{t:'XLE',i:5,d:'LONG',p:2}],
+    /* ── Hotspot-specific ──────────────────────────────────────────────────── */
+    'iran':     [{t:'WTI',i:9,d:'LONG',p:1},{t:'BRENT',i:9,d:'LONG',p:1},
+                 {t:'XAU',i:7,d:'LONG',p:1},{t:'XAR',i:6,d:'LONG',p:2},
+                 {t:'DAL',i:5,d:'SHORT',p:3},{t:'UAL',i:5,d:'SHORT',p:3}],
+    'middle east':[{t:'WTI',i:8,d:'LONG',p:1},{t:'XAU',i:7,d:'LONG',p:1},
+                   {t:'XLE',i:6,d:'LONG',p:2},{t:'DAL',i:5,d:'SHORT',p:3}],
+    'ukraine':  [{t:'WTI',i:7,d:'LONG',p:1},{t:'BRENT',i:7,d:'LONG',p:1},
+                 {t:'XAU',i:7,d:'LONG',p:1},{t:'WHT',i:8,d:'LONG',p:1},{t:'XLE',i:5,d:'LONG',p:2}],
+    'russia':   [{t:'WTI',i:8,d:'LONG',p:1},{t:'XAU',i:7,d:'LONG',p:1},
+                 {t:'GAS',i:7,d:'LONG',p:1},{t:'WHT',i:7,d:'LONG',p:1},{t:'EEM',i:5,d:'SHORT',p:2}],
+    'taiwan':   [{t:'TSM',i:9,d:'SHORT',p:2},{t:'SMH',i:8,d:'SHORT',p:2},
+                 {t:'XAU',i:7,d:'LONG',p:1},{t:'XAR',i:6,d:'LONG',p:2},
+                 {t:'FXI',i:7,d:'SHORT',p:2},{t:'QQQ',i:5,d:'SHORT',p:2}],
+    'china':    [{t:'FXI',i:8,d:'SHORT',p:2},{t:'XAU',i:6,d:'LONG',p:1},
+                 {t:'TSM',i:6,d:'SHORT',p:2},{t:'QQQ',i:5,d:'SHORT',p:2},{t:'INDA',i:4,d:'LONG',p:2}],
+    'korea':    [{t:'XAU',i:7,d:'LONG',p:1},{t:'XAR',i:6,d:'LONG',p:2},{t:'SPY',i:5,d:'SHORT',p:2}],
+    'india':    [{t:'INDA',i:7,d:'LONG',p:2},{t:'XAU',i:5,d:'LONG',p:1}],
+    'pakistan': [{t:'XAU',i:6,d:'LONG',p:1},{t:'INDA',i:5,d:'SHORT',p:2}],
+    /* ── Macro / Markets ───────────────────────────────────────────────────── */
+    'semiconductor':[{t:'SMH',i:8,d:'LONG',p:2},{t:'NVDA',i:7,d:'LONG',p:3},
+                     {t:'TSM',i:7,d:'LONG',p:2},{t:'ASML',i:6,d:'LONG',p:3}],
+    'chip':     [{t:'SMH',i:8,d:'LONG',p:2},{t:'TSM',i:7,d:'LONG',p:2},{t:'NVDA',i:7,d:'LONG',p:3}],
+    'nvidia':   [{t:'NVDA',i:9,d:'LONG',p:3},{t:'SMH',i:7,d:'LONG',p:2}],
+    'trade war':[{t:'XAU',i:7,d:'LONG',p:1},{t:'SPY',i:6,d:'SHORT',p:2},
+                 {t:'QQQ',i:6,d:'SHORT',p:2},{t:'FXI',i:7,d:'SHORT',p:2}],
+    'tariff':   [{t:'XAU',i:6,d:'LONG',p:1},{t:'FXI',i:5,d:'SHORT',p:2},{t:'SPY',i:4,d:'SHORT',p:2}],
+    'recession':[{t:'XAU',i:7,d:'LONG',p:1},{t:'VIX',i:8,d:'LONG',p:1},
+                 {t:'SPY',i:7,d:'SHORT',p:2},{t:'QQQ',i:7,d:'SHORT',p:2}],
+    'market crash':[{t:'XAU',i:8,d:'LONG',p:1},{t:'VIX',i:9,d:'LONG',p:1},
+                    {t:'GLD',i:8,d:'LONG',p:2},{t:'SPY',i:8,d:'SHORT',p:2},{t:'BTC',i:5,d:'SHORT',p:3}],
+    'bank':     [{t:'XAU',i:6,d:'LONG',p:1},{t:'BTC',i:5,d:'LONG',p:2},{t:'SPY',i:4,d:'SHORT',p:2}],
+    'fed':      [{t:'XAU',i:5,d:'LONG',p:1},{t:'SPY',i:4,d:'SHORT',p:2},{t:'QQQ',i:4,d:'SHORT',p:2}],
+    'interest rate':[{t:'XAU',i:5,d:'LONG',p:1},{t:'SPY',i:4,d:'SHORT',p:2},{t:'QQQ',i:4,d:'SHORT',p:2}],
+    'wheat':    [{t:'WHT',i:8,d:'LONG',p:1}],
+    'grain':    [{t:'WHT',i:7,d:'LONG',p:1}],
+    /* ── Crypto / Tech ─────────────────────────────────────────────────────── */
+    'crypto':   [{t:'BTC',i:7,d:'LONG',p:1},{t:'ETH',i:6,d:'LONG',p:2},{t:'SOL',i:5,d:'LONG',p:3}],
+    'bitcoin':  [{t:'BTC',i:8,d:'LONG',p:1}],
+    'ethereum': [{t:'ETH',i:8,d:'LONG',p:2}],
+    'solana':   [{t:'SOL',i:7,d:'LONG',p:3}],
+    'tech':     [{t:'QQQ',i:6,d:'LONG',p:2},{t:'SMH',i:5,d:'LONG',p:2},{t:'NVDA',i:5,d:'LONG',p:3}],
+    /* ── Emerging markets ──────────────────────────────────────────────────── */
+    'emerging': [{t:'EEM',i:6,d:'LONG',p:2},{t:'FXI',i:5,d:'LONG',p:2},{t:'INDA',i:5,d:'LONG',p:2}],
+    'volatility':[{t:'VIX',i:8,d:'LONG',p:1},{t:'XAU',i:5,d:'LONG',p:1},{t:'SPY',i:4,d:'SHORT',p:2}],
   };
 
   /* Expose scoring tables for the LRN reasoning module */
@@ -9451,36 +9601,142 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* ── RENDER: TRADE SIGNALS ─────────────────────────────────────────────── */
+  /* ── Multi-asset impact model — V16 ────────────────────────────────────────
+     Stage 1: scan recent events per active region against IMPACT_MAP
+              → accumulate impact scores per (ticker, direction) pair
+     Stage 2: resolve direction conflicts (same ticker LONG vs SHORT)
+              → higher impact wins; ties go to SHORT (risk-conservative)
+     Stage 3: blend region-confidence with impact bonus, apply priority uplift
+              → compute impactMult for position sizing (0.5×–2.0×)
+     Stage 4: rank by final conf, deduplicate, render + emit to EE
+     ─────────────────────────────────────────────────────────────────────── */
   function renderTrades() {
     var el = gel('intelTrades'); if (!el) return;
-    var sigs = [];
-    Object.keys(IC.regionStates).forEach(function(r){
-      var st = IC.regionStates[r]; if (st.prob < 30) return;
-      (st.assets||[]).forEach(function(asset){
-        var conf = Math.min(95, Math.round(st.prob * 0.88 + st.signalCount * 1.5));
-        var dir = ['SPY'].includes(asset) ? (st.prob>60?'SHORT':'WATCH') : 'LONG';
-        var found = sigs.find(function(s){ return s.asset===asset; });
-        if (found) { found.conf = Math.max(found.conf, conf); found.reason += ' + '+r; }
-        else sigs.push({ asset:asset, dir:dir, conf:conf, reason:st.scenario.slice(0,36), region:r });
+
+    /* Stage 1 — accumulate impact scores from IMPACT_MAP */
+    var candidates = {};  /* key: "TICKER_DIR" → entry object */
+
+    Object.keys(IC.regionStates).forEach(function(r) {
+      var st = IC.regionStates[r];
+      if (st.prob < 30) return;
+
+      var baseConf = Math.min(95, Math.round(st.prob * 0.88 + st.signalCount * 1.5));
+      var probW    = st.prob / 100;
+
+      /* Scan recent events for this region */
+      var evts = IC.events.filter(function(e){ return e.region === r; }).slice(0, 5);
+
+      evts.forEach(function(evt) {
+        var text = (evt.title + ' ' + (evt.desc || '')).toLowerCase();
+        var sigW = (evt.signal || 50) / 100;
+
+        Object.keys(IMPACT_MAP).forEach(function(kw) {
+          if (!text.includes(kw)) return;
+
+          IMPACT_MAP[kw].forEach(function(entry) {
+            var k       = entry.t + '_' + entry.d;
+            var rawScore = entry.i * sigW * probW;
+
+            if (!candidates[k]) {
+              candidates[k] = {
+                asset:    entry.t,
+                dir:      entry.d,
+                score:    0,
+                priority: entry.p,
+                conf:     baseConf,
+                reason:   (st.scenario || r).slice(0, 36),
+                region:   r
+              };
+            }
+            candidates[k].score    += rawScore;
+            candidates[k].conf      = Math.max(candidates[k].conf, baseConf);
+            candidates[k].priority  = Math.min(candidates[k].priority, entry.p);
+          });
+        });
+      });
+
+      /* Fallback: ensure ESC-registered assets appear even with no text match */
+      (st.assets || []).forEach(function(asset) {
+        var k = asset + '_LONG';
+        if (!candidates[k]) {
+          candidates[k] = {
+            asset: asset, dir: 'LONG',
+            score: st.prob * 0.015,
+            priority: (ASSET_REGISTRY[asset] ? ASSET_REGISTRY[asset].priority : 2),
+            conf: baseConf,
+            reason: (st.scenario || r).slice(0, 36),
+            region: r
+          };
+        }
       });
     });
-    sigs.sort(function(a,b){ return b.conf-a.conf; });
+
+    /* Stage 2 — resolve LONG vs SHORT conflicts on same ticker */
+    var resolved = {};
+    Object.keys(candidates).forEach(function(k) {
+      var c      = candidates[k];
+      var ticker = c.asset;
+      if (!resolved[ticker]) {
+        resolved[ticker] = c;
+      } else {
+        var ex = resolved[ticker];
+        /* Higher score wins; ties prefer SHORT (risk-conservative) */
+        if (c.score > ex.score || (c.score === ex.score && c.dir === 'SHORT')) {
+          resolved[ticker] = c;
+        }
+      }
+    });
+
+    /* Stage 3 — final confidence + impact multiplier */
+    var sigs = Object.keys(resolved).map(function(ticker) {
+      var c = resolved[ticker];
+
+      var impactBonus = Math.min(15, Math.round(c.score * 3));
+      var priBonus    = (c.priority === 1) ? 4 : (c.priority === 2) ? 2 : 0;
+      var finalConf   = Math.min(95, c.conf + impactBonus + priBonus);
+
+      /* Position size multiplier: minor event=0.5× normal=1.0× major=2.0× */
+      var impactMult  = parseFloat(Math.min(2.0, Math.max(0.5, c.score / 3)).toFixed(2));
+
+      return {
+        asset:      c.asset,
+        dir:        c.dir,
+        conf:       finalConf,
+        reason:     c.reason,
+        region:     c.region,
+        impactMult: impactMult
+      };
+    });
+
+    /* Stage 4 — rank, render, emit */
+    sigs.sort(function(a, b){ return b.conf - a.conf; });
+
     IC.stats.trades = sigs.length;
-    if (!sigs.length) { el.innerHTML = '<div class="intel-placeholder">Signal threshold not yet reached&hellip;</div>'; return; }
-    el.innerHTML = sigs.slice(0,7).map(function(s,i){
-      var bc = s.dir==='LONG'?'var(--green)':s.dir==='SHORT'?'var(--red)':'var(--amber)';
+    if (!sigs.length) {
+      el.innerHTML = '<div class="intel-placeholder">Signal threshold not yet reached&hellip;</div>';
+      return;
+    }
+
+    el.innerHTML = sigs.slice(0, 7).map(function(s, i) {
+      var bc      = s.dir === 'LONG' ? 'var(--green)' : s.dir === 'SHORT' ? 'var(--red)' : 'var(--amber)';
+      var meta    = ASSET_REGISTRY[s.asset] || {};
+      var typeTag = meta.type ? '<span style="font-size:8px;color:var(--dim);margin-left:4px">' + meta.type + '</span>' : '';
+      var multTag = s.impactMult !== 1.0
+        ? '<span style="font-size:8px;color:' + bc + ';margin-left:4px">' + s.impactMult + '&times; size</span>'
+        : '';
       return '<div class="intel-trade">' +
-        '<div class="intel-trade-rank">'+(i+1)+'</div>' +
-        '<div class="intel-trade-dir td-'+s.dir.toLowerCase()+'">'+s.dir+'</div>' +
-        '<div class="intel-trade-asset">'+s.asset+'</div>' +
+        '<div class="intel-trade-rank">' + (i + 1) + '</div>' +
+        '<div class="intel-trade-dir td-' + s.dir.toLowerCase() + '">' + s.dir + '</div>' +
+        '<div class="intel-trade-asset">' + s.asset + typeTag + '</div>' +
         '<div class="intel-trade-body">' +
-          '<div class="intel-trade-reason">'+s.reason+'</div>' +
-          '<div class="intel-trade-cbar"><div class="intel-trade-cfill" style="width:'+s.conf+'%;background:'+bc+'"></div></div>' +
+          '<div class="intel-trade-reason">' + s.reason + multTag + '</div>' +
+          '<div class="intel-trade-cbar"><div class="intel-trade-cfill" style="width:' + s.conf + '%;background:' + bc + '"></div></div>' +
         '</div>' +
-        '<div class="intel-trade-pct" style="color:'+bc+'">'+s.conf+'%</div>' +
+        '<div class="intel-trade-pct" style="color:' + bc + '">' + s.conf + '%</div>' +
       '</div>';
     }).join('');
-    /* ── EE signal bus: emit current signals to Execution Engine ── */
+
+    /* ── EE signal bus: emit ranked signals to Execution Engine ── */
     if (window.EE && typeof EE.onSignals === 'function') EE.onSignals(sigs);
   }
 

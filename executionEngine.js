@@ -413,8 +413,13 @@
       takeProfit = entryPrice * (1 - tpPct);
     }
 
-    // Position sizing: risk a fixed % of balance per trade
-    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100;
+    // Position sizing: base risk scaled by signal impact strength
+    // sig.impactMult (0.5–2.0) comes from the IMPACT_MAP scorer in renderTrades()
+    // Minor event → 0.5× normal size; major event → up to 2× normal size
+    var impactMult = (sig.impactMult && isFinite(sig.impactMult))
+      ? Math.max(0.5, Math.min(2.0, sig.impactMult))
+      : 1.0;
+    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult;
     var slDist   = Math.abs(entryPrice - stopLoss);
     var units    = slDist > 0 ? riskAmt / slDist : 0;
     var sizeUsd  = units * entryPrice;
