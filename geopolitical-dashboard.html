@@ -2048,6 +2048,53 @@
     .ee-an-dur-lbl  { font-size:8px; color:var(--dim); text-transform:uppercase; letter-spacing:0.5px; }
     .ee-an-dur-val  { font-size:14px; font-weight:700; color:var(--text); margin-top:2px; }
 
+    /* ── Signal History Log ─────────────────────────────────────────────── */
+    .ee-siglog-wrap  { margin-top:16px; }
+    .ee-sl-scroll    { max-height:280px; overflow-y:auto; border:1px solid var(--border); background:var(--bg2); }
+    .ee-sl-row       { display:grid; grid-template-columns:80px 110px 52px 38px 90px 1fr; align-items:center;
+                       gap:0; padding:5px 10px; border-bottom:1px solid rgba(255,255,255,0.04); font-size:10px; }
+    .ee-sl-row:last-child { border-bottom:none; }
+    .ee-sl-row:hover { background:rgba(255,255,255,0.03); }
+    .ee-sl-ts     { color:var(--dim); font-size:9px; font-variant-numeric:tabular-nums; }
+    .ee-sl-asset  { color:var(--text); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ee-sl-dir    { font-size:8px; font-weight:700; letter-spacing:0.8px; padding:1px 4px; border-radius:2px; display:inline-block; text-align:center; }
+    .sl-long      { background:rgba(0,200,160,0.15); color:#00c8a0; border:1px solid rgba(0,200,160,0.35); }
+    .sl-short     { background:rgba(255,68,68,0.15);  color:#ff4444; border:1px solid rgba(255,68,68,0.35); }
+    .sl-watch-dir { background:rgba(255,200,0,0.12);  color:#ffc800; border:1px solid rgba(255,200,0,0.30); }
+    .ee-sl-conf   { font-size:9px; color:var(--dim); text-align:right; padding-right:6px; }
+    .ee-sl-act    { font-size:8px; font-weight:700; letter-spacing:0.6px; padding:1px 5px; border-radius:2px; text-align:center; }
+    .sl-act-traded  { background:rgba(0,200,160,0.15); color:#00c8a0; border:1px solid rgba(0,200,160,0.3); }
+    .sl-act-skipped { background:rgba(255,149,0,0.12); color:#ff9500; border:1px solid rgba(255,149,0,0.3); }
+    .sl-act-watch   { background:rgba(120,120,140,0.15); color:var(--dim); border:1px solid var(--border); }
+    .ee-sl-region { font-size:9px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-left:6px; }
+    .sl-skip-reason { font-size:9px; color:var(--dim); font-style:italic; grid-column:2 / -1; padding-top:2px; }
+
+    /* ── Risk Tuning Simulator ──────────────────────────────────────────── */
+    .ee-sim-wrap   { margin-top:16px; }
+    .ee-sim-sliders { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+    @media (max-width:700px) { .ee-sim-sliders { grid-template-columns:repeat(2,1fr); } }
+    .ee-sim-field  { background:var(--bg2); border:1px solid var(--border); padding:10px 12px; }
+    .ee-sim-field label { display:block; font-size:8px; color:var(--dim); letter-spacing:0.8px;
+                          text-transform:uppercase; margin-bottom:4px; }
+    .ee-sim-val    { font-size:16px; font-weight:700; color:#ff9500; display:inline; }
+    .ee-sim-field input[type=range] { width:100%; margin-top:6px; accent-color:#ff9500; cursor:pointer; }
+    .ee-sim-table  { width:100%; border-collapse:collapse; font-size:11px; }
+    .ee-sim-table th { font-size:8px; letter-spacing:0.8px; text-transform:uppercase;
+                       color:var(--dim); font-weight:600; padding:5px 8px; text-align:left;
+                       border-bottom:1px solid var(--border); }
+    .ee-sim-table th:nth-child(2),
+    .ee-sim-table th:nth-child(3),
+    .ee-sim-table th:nth-child(4) { text-align:right; }
+    .ee-sim-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.04); }
+    .ee-sim-table td:nth-child(2),
+    .ee-sim-table td:nth-child(3),
+    .ee-sim-table td:nth-child(4) { text-align:right; font-variant-numeric:tabular-nums; }
+    .sim-label  { color:var(--text); }
+    .sim-pos    { color:#00c8a0; }
+    .sim-neg    { color:#ff4444; }
+    .sim-flat   { color:var(--dim); font-size:9px; }
+    .ee-sim-note { font-size:9px; color:var(--dim); margin-top:8px; text-align:right; font-style:italic; }
+
   </style>
 </head>
 <body>
@@ -5000,6 +5047,101 @@
       </div>
 
     </div><!-- /ee-analytics -->
+
+    <!-- ── Signal History Log ──────────────────────────────────────── -->
+    <div class="ee-siglog-wrap" id="eeSiglogWrap">
+
+      <div class="ee-an-header">
+        &#9776; Signal History
+        <span>Every IC signal seen &mdash; traded, skipped, or watch &middot; Last 50 shown</span>
+      </div>
+
+      <!-- Column headers -->
+      <div style="display:grid;grid-template-columns:80px 110px 52px 38px 90px 1fr;gap:0;
+                  padding:4px 10px;font-size:8px;letter-spacing:0.8px;text-transform:uppercase;
+                  color:var(--dim);border:1px solid var(--border);border-bottom:none;
+                  background:var(--bg3);">
+        <span>Time</span>
+        <span>Asset</span>
+        <span>Dir</span>
+        <span>Conf</span>
+        <span>Action</span>
+        <span style="padding-left:6px">Region / Skip Reason</span>
+      </div>
+
+      <div class="ee-sl-scroll">
+        <div id="eeSigLog">
+          <div class="ee-placeholder">No signals seen yet &mdash; waiting for IC cycle.</div>
+        </div>
+      </div>
+
+    </div><!-- /ee-siglog-wrap -->
+
+    <!-- ── Risk Tuning Simulator ────────────────────────────────────── -->
+    <div class="ee-sim-wrap" id="eeSimWrap">
+
+      <div class="ee-an-header">
+        &#9878; Risk Tuning Simulator
+        <span id="eeSimTradeCount">0 closed trades</span>
+      </div>
+
+      <p style="font-size:10px;color:var(--dim);margin:0 0 14px">
+        Drag the sliders to test different risk settings and see how your closed trade history
+        would have played out. <b style="color:var(--text)">Read-only</b> — does not change your live config.
+      </p>
+
+      <!-- Sliders -->
+      <div class="ee-sim-sliders">
+
+        <div class="ee-sim-field">
+          <label>Min Confidence &nbsp;<span class="ee-sim-val" id="simConfVal">65</span>%</label>
+          <input type="range" id="simConf" min="50" max="90" step="1" value="65"
+                 oninput="EE.updateSim()">
+        </div>
+
+        <div class="ee-sim-field">
+          <label>Stop Loss &nbsp;<span class="ee-sim-val" id="simSLVal">3</span>%</label>
+          <input type="range" id="simSL" min="1" max="10" step="0.5" value="3"
+                 oninput="EE.updateSim()">
+        </div>
+
+        <div class="ee-sim-field">
+          <label>TP Ratio &nbsp;<span class="ee-sim-val" id="simTPVal">2</span>x</label>
+          <input type="range" id="simTP" min="1" max="5" step="0.5" value="2"
+                 oninput="EE.updateSim()">
+        </div>
+
+        <div class="ee-sim-field">
+          <label>Risk / Trade &nbsp;<span class="ee-sim-val" id="simRiskVal">2</span>%</label>
+          <input type="range" id="simRisk" min="0.5" max="5" step="0.5" value="2"
+                 oninput="EE.updateSim()">
+        </div>
+
+      </div>
+
+      <!-- Comparison table -->
+      <table class="ee-sim-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Current Settings</th>
+            <th>Test Settings</th>
+            <th>Difference</th>
+          </tr>
+        </thead>
+        <tbody id="eeSimTbody">
+          <tr><td colspan="4" style="text-align:center;color:var(--dim);padding:20px;font-size:10px">
+            No closed trades yet &mdash; simulator activates after your first closed trade.
+          </td></tr>
+        </tbody>
+      </table>
+
+      <div class="ee-sim-note">
+        Simulation uses your current virtual balance ($<span id="eeSimBal">10,000</span>) as the baseline.
+        Win/loss outcomes are replayed from actual close reasons &mdash; only position sizing &amp; confidence filter change.
+      </div>
+
+    </div><!-- /ee-sim-wrap -->
 
   </div><!-- /ee-wrap -->
 

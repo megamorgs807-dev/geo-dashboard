@@ -22,8 +22,9 @@
   'use strict';
 
   /* ── Storage keys ──────────────────────────────────────────────────────────── */
-  var CFG_KEY    = 'geodash_ee_config_v1';
-  var TRADES_KEY = 'geodash_ee_trades_v1';
+  var CFG_KEY     = 'geodash_ee_config_v1';
+  var TRADES_KEY  = 'geodash_ee_trades_v1';
+  var SIGLOG_KEY  = 'geodash_ee_siglog_v1';
 
   /* ── Default risk configuration ────────────────────────────────────────────── */
   var DEFAULTS = {
@@ -81,6 +82,7 @@
   var _seq       = 0;    // ID sequence counter
   var _livePrice   = {};   // trade_id → most-recently fetched market price
   var _lastSignals = [];   // most recent IC signal batch — used by the re-scan loop
+  var _signalLog   = [];   // full history of every IC signal seen (capped at 200)
 
   /* ── Price source maps ──────────────────────────────────────────────────────── */
 
@@ -175,6 +177,33 @@
 
   function saveTrades() {
     try { localStorage.setItem(TRADES_KEY, JSON.stringify(_trades)); } catch (e) {}
+  }
+
+  function loadSigLog() {
+    try {
+      var raw = localStorage.getItem(SIGLOG_KEY);
+      _signalLog = raw ? JSON.parse(raw) : [];
+    } catch (e) { _signalLog = []; }
+  }
+
+  function saveSigLog() {
+    try { localStorage.setItem(SIGLOG_KEY, JSON.stringify(_signalLog)); } catch (e) {}
+  }
+
+  /* Record one signal event — action: 'TRADED' | 'SKIPPED' | 'WATCH' */
+  function _logSignal(sig, action, skipReason) {
+    _signalLog.unshift({
+      ts:          new Date().toISOString(),
+      asset:       sig.asset  || '—',
+      dir:         sig.dir    || '—',
+      conf:        sig.conf   || 0,
+      reason:      sig.reason || '',
+      region:      sig.region || '—',
+      action:      action,
+      skip_reason: skipReason || null
+    });
+    if (_signalLog.length > 200) _signalLog.length = 200;  // cap at 200
+    saveSigLog();
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════
@@ -505,15 +534,28 @@
   function onSignals(sigs) {
     if (!sigs || !sigs.length) return;
     _lastSignals = sigs;                 // always cache — re-scan loop needs these
-    if (!_cfg.enabled) return;           // paused mid-session: skip execution
 
     sigs.forEach(function (sig) {
-      var check = canExecute(sig);
-      if (!check.ok) return;
+      // WATCH signals: log but never execute
+      if (sig.dir === 'WATCH') {
+        _logSignal(sig, 'WATCH', null);
+        return;
+      }
 
+      if (!_cfg.enabled) {
+        _logSignal(sig, 'SKIPPED', 'Auto-execution paused');
+        return;
+      }
+
+      var check = canExecute(sig);
+      if (!check.ok) {
+        _logSignal(sig, 'SKIPPED', check.reason);
+        return;
+      }
+
+      // All checks passed — log as TRADED then fetch price and open
+      _logSignal(sig, 'TRADED', null);
       fetchPrice(sig.asset, function (price) {
-        // If we can't get a real price, use a normalised synthetic price of 100
-        // so position sizing still works in simulation
         openTrade(sig, price || 100);
       });
     });
@@ -612,6 +654,9 @@
     if (warn) warn.classList.toggle('show', _cfg.mode === 'LIVE');
     // Refresh strategy analytics panel
     renderAnalytics();
+    // Refresh signal history + risk simulator
+    renderSigLog();
+    renderSim();
   }
 
   function renderStatusBar() {
@@ -753,6 +798,165 @@
         '<span class="ee-log-msg">' + _esc(e.msg) + '</span>' +
       '</div>';
     }).join('');
+  }
+
+  /* ── Signal History Log ─────────────────────────────────────────────────────── */
+
+  function renderSigLog() {
+    var el = document.getElementById('eeSigLog');
+    if (!el) return;
+    if (!_signalLog.length) {
+      el.innerHTML = '<div class="ee-placeholder">No signals seen yet — waiting for IC cycle.</div>';
+      return;
+    }
+    el.innerHTML = _signalLog.slice(0, 50).map(function (e) {
+      var d   = new Date(e.ts);
+      var ts  = String(d.getMonth()+1).padStart(2,'0') + '/' +
+                String(d.getDate()).padStart(2,'0') + ' ' +
+                String(d.getHours()).padStart(2,'0') + ':' +
+                String(d.getMinutes()).padStart(2,'0');
+      var actionCls = e.action === 'TRADED' ? 'sl-act-traded'
+                    : e.action === 'WATCH'  ? 'sl-act-watch'
+                    : 'sl-act-skipped';
+      var actionLbl = e.action === 'TRADED' ? '&#10003; TRADED'
+                    : e.action === 'WATCH'  ? '&#9900; WATCH'
+                    : '&#8212; SKIP';
+      var dirCls  = e.dir === 'LONG' ? 'sl-long' : e.dir === 'SHORT' ? 'sl-short' : 'sl-watch-dir';
+      var skipHtml = e.skip_reason
+        ? '<span class="sl-skip-reason">' + _esc(e.skip_reason) + '</span>'
+        : '';
+      return '<div class="ee-sl-row">' +
+        '<span class="ee-sl-ts">'  + ts + '</span>' +
+        '<span class="ee-sl-asset">' + _esc(e.asset) + '</span>' +
+        '<span class="ee-sl-dir ' + dirCls + '">' + _esc(e.dir) + '</span>' +
+        '<span class="ee-sl-conf">' + e.conf + '%</span>' +
+        '<span class="ee-sl-act ' + actionCls + '">' + actionLbl + '</span>' +
+        '<span class="ee-sl-region">' + _esc(e.region) + '</span>' +
+        skipHtml +
+      '</div>';
+    }).join('');
+  }
+
+  /* ── Risk Tuning Simulator ──────────────────────────────────────────────────── */
+
+  /* Replay closed trades using different risk settings — pure read-only calc */
+  function simAnalytics(cfg) {
+    var closed   = _trades.filter(function (t) { return t.status === 'CLOSED'; });
+    var eligible = closed.filter(function (t) { return (t.confidence || 0) >= cfg.min_confidence; });
+    if (!eligible.length) return { count: 0, winRate: 0, totalPnl: 0, maxDD: 0, pf: null };
+
+    var balance  = _cfg.virtual_balance || 10000;
+    var riskUsd  = balance * cfg.risk_per_trade_pct / 100;
+    var wins = 0, totalPnl = 0, peak = 0, running = 0, maxDD = 0, grossWins = 0, grossLoss = 0;
+
+    eligible.forEach(function (t) {
+      var pnl;
+      if (t.close_reason === 'TAKE_PROFIT') {
+        pnl = riskUsd * cfg.take_profit_ratio;
+        wins++;
+        grossWins += pnl;
+      } else {
+        pnl = -riskUsd;
+        grossLoss += riskUsd;
+      }
+      totalPnl += pnl;
+      running  += pnl;
+      if (running > peak) peak = running;
+      var dd = peak - running;
+      if (dd > maxDD) maxDD = dd;
+    });
+
+    return {
+      count:    eligible.length,
+      winRate:  wins / eligible.length * 100,
+      totalPnl: totalPnl,
+      maxDD:    maxDD,
+      pf:       grossLoss > 0 ? grossWins / grossLoss : (grossWins > 0 ? Infinity : null)
+    };
+  }
+
+  function renderSim() {
+    var wrap = document.getElementById('eeSimWrap');
+    if (!wrap) return;
+
+    var closed = _trades.filter(function (t) { return t.status === 'CLOSED'; });
+    var countEl = document.getElementById('eeSimTradeCount');
+    if (countEl) countEl.textContent = closed.length + ' closed trade' + (closed.length !== 1 ? 's' : '');
+    var balEl = document.getElementById('eeSimBal');
+    if (balEl) balEl.textContent = (_cfg.virtual_balance || 10000).toLocaleString();
+
+    /* Read slider values */
+    function slVal(id, def) {
+      var e = document.getElementById(id);
+      return e ? parseFloat(e.value) : def;
+    }
+    var testCfg = {
+      min_confidence:     slVal('simConf',   _cfg.min_confidence    || 65),
+      stop_loss_pct:      slVal('simSL',     _cfg.stop_loss_pct     || 3),
+      take_profit_ratio:  slVal('simTP',     _cfg.take_profit_ratio || 2),
+      risk_per_trade_pct: slVal('simRisk',   _cfg.risk_per_trade_pct|| 2)
+    };
+
+    /* Update displayed values next to sliders */
+    function setLabel(id, val, suffix) {
+      var e = document.getElementById(id); if (e) e.textContent = val + (suffix || '');
+    }
+    setLabel('simConfVal',  testCfg.min_confidence,     '%');
+    setLabel('simSLVal',    testCfg.stop_loss_pct,       '%');
+    setLabel('simTPVal',    testCfg.take_profit_ratio,   'x');
+    setLabel('simRiskVal',  testCfg.risk_per_trade_pct,  '%');
+
+    /* Current actual settings */
+    var curCfg = {
+      min_confidence:     _cfg.min_confidence,
+      stop_loss_pct:      _cfg.stop_loss_pct,
+      take_profit_ratio:  _cfg.take_profit_ratio,
+      risk_per_trade_pct: _cfg.risk_per_trade_pct
+    };
+
+    var cur  = simAnalytics(curCfg);
+    var test = simAnalytics(testCfg);
+
+    function fmt(v, prefix, decimals) {
+      if (v === null || v === undefined) return '—';
+      if (v === Infinity) return '∞';
+      return (prefix || '') + v.toFixed(decimals !== undefined ? decimals : 2);
+    }
+    function colClass(v) { return v > 0 ? 'sim-pos' : v < 0 ? 'sim-neg' : ''; }
+
+    var rows = [
+      ['Trades Taken',   cur.count,    test.count,    '', 0],
+      ['Win Rate',       cur.winRate,  test.winRate,  '%', 1],
+      ['Total P&L',      cur.totalPnl, test.totalPnl, '$', 2],
+      ['Max Drawdown',   -cur.maxDD,   -test.maxDD,   '$', 2],
+      ['Profit Factor',  cur.pf,       test.pf,       '',  2]
+    ];
+
+    var tbody = document.getElementById('eeSimTbody');
+    if (tbody) {
+      tbody.innerHTML = rows.map(function (r) {
+        var label = r[0], cV = r[1], tV = r[2], sfx = r[3], dec = r[4];
+        var cStr = (cV === null || cV === undefined) ? '—'
+                 : (sfx === '$' ? (cV >= 0 ? '+$' : '-$') + Math.abs(cV).toFixed(dec) : cV.toFixed(dec) + sfx);
+        var tStr = (tV === null || tV === undefined) ? '—'
+                 : (sfx === '$' ? (tV >= 0 ? '+$' : '-$') + Math.abs(tV).toFixed(dec) : tV.toFixed(dec) + sfx);
+        if (r[0] === 'Trades Taken' || r[0] === 'Profit Factor') {
+          cStr = cV === null ? '—' : (cV === Infinity ? '∞' : cV.toFixed ? cV.toFixed(dec) : cV);
+          tStr = tV === null ? '—' : (tV === Infinity ? '∞' : tV.toFixed ? tV.toFixed(dec) : tV);
+        }
+        var diff = (typeof cV === 'number' && typeof tV === 'number') ? (tV - cV) : null;
+        var diffStr = diff === null ? ''
+                    : diff > 0 ? '<span class="sim-pos">▲ ' + Math.abs(diff).toFixed(dec) + sfx + '</span>'
+                    : diff < 0 ? '<span class="sim-neg">▼ ' + Math.abs(diff).toFixed(dec) + sfx + '</span>'
+                    : '<span class="sim-flat">= no change</span>';
+        return '<tr>' +
+          '<td class="sim-label">' + label + '</td>' +
+          '<td class="' + colClass(cV) + '">' + cStr + '</td>' +
+          '<td class="' + colClass(tV) + '">' + tStr + '</td>' +
+          '<td>' + diffStr + '</td>' +
+        '</tr>';
+      }).join('');
+    }
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════
@@ -1213,6 +1417,9 @@
     /* ── Called by renderTrades() hook each cycle ── */
     onSignals: onSignals,
 
+    /* ── Risk Simulator: called by slider oninput events ── */
+    updateSim: function () { renderSim(); },
+
     /* ── Toggle auto-execution on/off ── */
     toggleAuto: function () {
       _cfg.enabled = !_cfg.enabled;
@@ -1318,6 +1525,7 @@
   function init() {
     loadCfg();
     loadTrades();
+    loadSigLog();
 
     /* Always-on: force auto-execution on every page load.
        User can still pause mid-session via the STOP AUTO button,
