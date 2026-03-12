@@ -28,7 +28,7 @@
   /* ── Default risk configuration ────────────────────────────────────────────── */
   var DEFAULTS = {
     mode:                  'SIMULATION', // 'SIMULATION' | 'LIVE'
-    enabled:               false,        // auto-execution on/off
+    enabled:               true,         // auto-execution always on by default
     min_confidence:        65,           // minimum IC confidence % to auto-execute
     virtual_balance:       10000,        // starting virtual balance (USD)
     risk_per_trade_pct:    2,            // % of balance risked per trade
@@ -79,7 +79,8 @@
   var _cooldown  = {};   // asset → timestamp of last signal processed
   var _log       = [];   // activity log entries
   var _seq       = 0;    // ID sequence counter
-  var _livePrice = {};   // trade_id → most-recently fetched market price
+  var _livePrice   = {};   // trade_id → most-recently fetched market price
+  var _lastSignals = [];   // most recent IC signal batch — used by the re-scan loop
 
   /* ── Price source maps ──────────────────────────────────────────────────────── */
 
@@ -502,7 +503,9 @@
      ══════════════════════════════════════════════════════════════════════════════ */
 
   function onSignals(sigs) {
-    if (!_cfg.enabled || !sigs || !sigs.length) return;
+    if (!sigs || !sigs.length) return;
+    _lastSignals = sigs;                 // always cache — re-scan loop needs these
+    if (!_cfg.enabled) return;           // paused mid-session: skip execution
 
     sigs.forEach(function (sig) {
       var check = canExecute(sig);
@@ -1315,10 +1318,27 @@
   function init() {
     loadCfg();
     loadTrades();
-    setInterval(monitorTrades, 30000);  // price-check open trades every 30s
+
+    /* Always-on: force auto-execution on every page load.
+       User can still pause mid-session via the STOP AUTO button,
+       but it resets to ON on next reload — by design. */
+    _cfg.enabled = true;
+    saveCfg();
+
+    setInterval(monitorTrades, 30000);  // price-check open trades every 30 s
+
+    /* Re-scan loop: every 5 minutes re-process the last IC signal batch.
+       Keeps the engine finding trades even when IC cycles are slow / paused. */
+    setInterval(function () {
+      if (_cfg.enabled && _lastSignals.length) {
+        log('SCAN', 'Periodic re-scan — ' + _lastSignals.length + ' signal(s) re-evaluated', 'dim');
+        onSignals(_lastSignals);
+      }
+    }, 300000);  // 5 minutes
+
     renderUI();
     log('SYSTEM', 'Execution Engine v1.0 ready — ' + _cfg.mode + ' mode  |  ' +
-        openTrades().length + ' open trade(s) restored from storage', 'amber');
+        'Auto-scan ALWAYS ON  |  ' + openTrades().length + ' open trade(s) restored', 'green');
   }
 
   if (document.readyState === 'loading') {
