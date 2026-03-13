@@ -12116,9 +12116,39 @@ function _modalKeyHandler(e) {
       var dayTs = (function() { var d = new Date(); d.setUTCHours(0,0,0,0); return d.getTime(); })();
       var wkTs  = now - 7 * 86400000;
       var all   = this.signals;
+
+      /* Hit-rate counts use timestamp (when opened).
+         P&L uses close_time (when the trade closed) — so a trade opened
+         2 weeks ago but closed today correctly shows in today's P&L. */
+      function _periodStats(opened, closedInPeriod) {
+        var closedByOutcome = opened.filter(function(s){ return s.outcome==='hit'||s.outcome==='miss'; });
+        var hits = opened.filter(function(s){ return s.outcome==='hit'; });
+        var pnls = closedInPeriod.filter(function(s){ return s.pnl_pct !== null; })
+                                 .map(function(s){ return s.pnl_pct; });
+        var openCount = opened.filter(function(s){ return s.outcome==='open'; }).length;
+        return {
+          total:     opened.length,
+          closed:    closedByOutcome.length,
+          hits:      hits.length,
+          misses:    closedByOutcome.length - hits.length,
+          rate:      closedByOutcome.length ? hits.length / closedByOutcome.length * 100 : null,
+          pnl:       pnls.length ? pnls.reduce(function(a,b){ return a+b; }, 0) : null,
+          openCount: openCount
+        };
+      }
+      function _byClose(cutoff) {
+        return all.filter(function(s){
+          var ct = s.close_time ? new Date(s.close_time).getTime() : 0;
+          return ct >= cutoff;
+        });
+      }
+      function _byOpen(cutoff) {
+        return all.filter(function(s){ return new Date(s.timestamp).getTime() >= cutoff; });
+      }
+
       return {
-        day:  this._stats(all.filter(function(s) { return new Date(s.timestamp).getTime() >= dayTs; })),
-        week: this._stats(all.filter(function(s) { return new Date(s.timestamp).getTime() >= wkTs;  })),
+        day:  _periodStats(_byOpen(dayTs), _byClose(dayTs)),
+        week: _periodStats(_byOpen(wkTs),  _byClose(wkTs)),
         all:  this._stats(all),
         open: all.filter(function(s) { return s.outcome === 'open'; }).length
       };
@@ -12182,8 +12212,11 @@ function _modalKeyHandler(e) {
         if (s.pnl !== null) {
           pnlEl.textContent = (s.pnl >= 0 ? '+' : '') + s.pnl.toFixed(1) + '% cumulative P&L';
           pnlEl.className   = 'hr-score-pnl ' + (s.pnl >= 0 ? 'pos' : 'neg');
+        } else if (s.openCount > 0) {
+          pnlEl.textContent = 'P&L: — (' + s.openCount + ' open, awaiting close)';
+          pnlEl.className   = 'hr-score-pnl neu';
         } else {
-          pnlEl.textContent = 'P&L: —';
+          pnlEl.textContent = 'P&L: — (no closed trades)';
           pnlEl.className   = 'hr-score-pnl neu';
         }
         if (detailEl) {
@@ -12356,7 +12389,7 @@ function _modalKeyHandler(e) {
 </script>
 
 <!-- ShadowBroker Integration — injects OSINT feeds into the AI pipeline -->
-<script src="shadowbroker.js"></script>
+<script src="shadowbroker.js?v=21"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
 <script src="executionEngine.js"></script>
