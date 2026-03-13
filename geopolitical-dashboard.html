@@ -548,7 +548,8 @@
     .signal-tag.fx        { background: var(--purple); color: #fff; }
     .signal-tag.commodity { background: var(--amber); color: var(--bg); }
     .signal-tag.satellite { background: #20c0a0; color: var(--bg); }
-    .signal-tag.osint     { background: #3a4a5a; color: var(--text); }
+    .signal-tag.osint        { background: #3a4a5a; color: var(--text); }
+    .signal-tag.shadowbroker { background: #7b2fff; color: #fff; }
 
     .signal-legend { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; padding: 10px 14px; background: var(--bg3); border: 1px solid var(--border); font-size: 11px; align-items: center; }
     .sig-legend-item { display: flex; align-items: center; gap: 8px; }
@@ -6150,6 +6151,81 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════════
+       SHADOWBROKER OSINT INTEGRATION PANEL
+       ══════════════════════════════════════════════════════════════════════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-num" style="background:var(--purple)">SB</span>
+      <span class="section-title" style="color:var(--purple)">ShadowBroker OSINT Feeds</span>
+      <span class="section-ts">GDELT · AIS · ADS-B · USGS · SAT</span>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:12px">
+      <!-- Left: live feed status -->
+      <div class="card" style="border-top:2px solid var(--purple)">
+        <div class="card-title">
+          <span class="signal-tag shadowbroker">LIVE</span>
+          Feed Status &amp; Controls
+        </div>
+        <div id="sbStatusPanel" style="font-size:11px;color:var(--dim)">
+          Loading ShadowBroker feeds&hellip;
+        </div>
+      </div>
+
+      <!-- Right: asset mapping reference -->
+      <div class="card" style="border-top:2px solid var(--purple)">
+        <div class="card-title">SB Feed → Asset Mapping</div>
+        <div style="font-size:10px;line-height:1.8">
+          <div style="display:grid;grid-template-columns:140px 1fr;gap:3px 10px;color:var(--text)">
+            <span style="color:var(--dim)">GDELT Conflict</span>
+            <span>GLD · WTI · XAR · LMT (via SEV keywords)</span>
+            <span style="color:var(--dim)">Maritime — tanker/Hormuz</span>
+            <span>WTI · BRENT · XLE (oil hormuz keywords)</span>
+            <span style="color:var(--dim)">Maritime — container/Malacca</span>
+            <span>SMH · TSM (semiconductor keywords)</span>
+            <span style="color:var(--dim)">Aircraft — mil/Taiwan</span>
+            <span>TSM · SMH · GLD (taiwan chip keywords)</span>
+            <span style="color:var(--dim)">Aircraft — mil/Middle East</span>
+            <span>WTI · GLD · XAR (iran energy keywords)</span>
+            <span style="color:var(--dim)">Earthquake — M5.5+ Hormuz</span>
+            <span>WTI · BRENT (oil hormuz keywords)</span>
+            <span style="color:var(--dim)">Earthquake — M6.5+ port</span>
+            <span>SLV · XLE (energy + metals)</span>
+            <span style="color:var(--dim)">Satellite cluster — E.Europe</span>
+            <span>GLD · XAR (war escalation)</span>
+          </div>
+          <p class="note" style="margin-top:8px">Assets flow through existing MKTMAP. Confidence multiplier
+          scales <code>socialV</code> (S4 scorer) without altering thresholds.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confidence multiplier control -->
+    <div class="card" style="border-left:3px solid var(--purple);margin-bottom:0">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px">
+        <div>
+          <span style="color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1px">Confidence Multiplier</span><br>
+          <span style="color:var(--text);font-size:10px">Scales <code>socialV</code> (S4) for ShadowBroker events. 1.0 = neutral. &gt;1 = more aggressive. &lt;1 = conservative.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="sbMultSlider" min="0.1" max="3.0" step="0.1" value="1.0"
+            style="width:120px;accent-color:var(--purple)"
+            oninput="document.getElementById('sbMultVal').textContent=parseFloat(this.value).toFixed(1)+'×'; if(window.SB) SB.setMult(this.value)">
+          <span id="sbMultVal" style="color:var(--purple);font-weight:bold;min-width:32px">1.0×</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="if(window.SB){ SB.config({api:'http://localhost:8000'}); SB.pollAll(); }"
+            style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--purple);color:var(--purple);cursor:pointer;letter-spacing:0.5px">
+            ▶ CONNECT :8000</button>
+          <button onclick="if(window.SB) SB.demo();"
+            style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--amber);color:var(--amber);cursor:pointer;letter-spacing:0.5px">
+            ◉ RUN DEMO</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════════════
        SECTION 4 — GEOPOLITICAL RISK INDICATORS
        ══════════════════════════════════════════════════════════════════════════════ -->
   <div class="section">
@@ -9657,10 +9733,15 @@ document.addEventListener('DOMContentLoaded', function() {
     el.innerHTML = top.map(function(e){
       var s = e.signal||0;
       var cls = s>=75?'crit':s>=55?'high':s>=35?'med':'low';
+      var sbBadge = e.sbFeed
+        ? '<span class="signal-tag shadowbroker" style="font-size:8px;padding:1px 5px;margin-right:4px;vertical-align:middle">'
+          + e.sbFeed.toUpperCase() + '</span>'
+        : '';
       return '<div class="intel-sig-item">' +
         '<div class="intel-sig-bar-wrap"><div class="intel-sig-fill f-'+cls+'" style="width:'+s+'%"></div></div>' +
         '<span class="intel-sig-score s-'+cls+'">'+s+'</span>' +
         '<span class="intel-sig-src">'+e.source.slice(0,7).toUpperCase()+'</span>' +
+        sbBadge +
         '<span class="intel-sig-text" title="'+e.title+'">'+e.title+'</span>' +
         '<span class="intel-sig-time">'+e.time+'</span>' +
       '</div>';
@@ -9786,7 +9867,8 @@ document.addEventListener('DOMContentLoaded', function() {
             priority: (ASSET_REGISTRY[asset] ? ASSET_REGISTRY[asset].priority : 2),
             conf: baseConf,
             reason: (st.scenario || r).slice(0, 36),
-            region: r
+            region: r,
+            matchedKws: []
           };
         }
       });
@@ -9896,6 +9978,10 @@ document.addEventListener('DOMContentLoaded', function() {
     updateStats();
     renderLearning();
   }
+
+  /* ── Expose hooks for external modules (ShadowBroker, custom scripts) ─── */
+  IC.ingest    = ingest;
+  IC.redrawAll = redrawAll;
 
   /* ── LEARNING LOOP ─────────────────────────────────────────────────────── */
 
@@ -12268,6 +12354,9 @@ function _modalKeyHandler(e) {
 
 })();
 </script>
+
+<!-- ShadowBroker Integration — injects OSINT feeds into the AI pipeline -->
+<script src="shadowbroker.js"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
 <script src="executionEngine.js"></script>
