@@ -9152,24 +9152,25 @@ document.addEventListener('DOMContentLoaded', function() {
     next();
   }
 
-  /* ── RSS via allorigins proxy + DOMParser NLP ── */
+  /* ── RSS via corsproxy (primary) + allorigins (fallback) + DOMParser NLP ── */
   function fetchRssFeeds() {
     var feeds=[
-      {name:'Reuters', url:'https://feeds.reuters.com/reuters/worldNews'},
-      {name:'BBC',     url:'https://feeds.bbci.co.uk/news/world/rss.xml'},
-      {name:'AP',      url:'https://rsshub.app/ap/topics/apf-topnews'}
+      {name:'DW World', url:'https://rss.dw.com/rdf/rss-en-world'},       // replaces dead Reuters
+      {name:'BBC',      url:'https://feeds.bbci.co.uk/news/world/rss.xml'},
+      {name:'France24', url:'https://www.france24.com/en/rss'}             // replaces rsshub AP (403)
     ];
     feeds.forEach(function(feed, i) {
       setTimeout(function() {
         logMsg('info','RSS → '+feed.name+'…');
-        var u=CFG.proxy1+encodeURIComponent(feed.url);
-        fetch(u)
-          .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-          .then(function(d) {
-            if(!d.contents) throw new Error('empty');
-            setSrc('apiSrcNews','● LIVE','api-dot-live');
-            var doc=(new DOMParser()).parseFromString(d.contents,'text/xml');
+        var enc=encodeURIComponent(feed.url);
+        // Primary: corsproxy.io — returns raw XML text
+        fetch(CFG.proxy2+enc)
+          .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+          .then(function(xml) {
+            var doc=(new DOMParser()).parseFromString(xml,'text/xml');
             var items=doc.querySelectorAll('item');
+            if(!items.length) throw new Error('no items');
+            setSrc('apiSrcNews','● LIVE','api-dot-live');
             logMsg('success','RSS ✓ '+feed.name+': '+items.length+' articles');
             var gN=0;
             items.forEach(function(item) {
@@ -9181,15 +9182,17 @@ document.addEventListener('DOMContentLoaded', function() {
             logMsg(gN?'success':'info', feed.name+(gN?': '+gN+' geo signals → features updated':': no high-severity events'));
           })
           .catch(function(err) {
-            logMsg('warn','RSS '+feed.name+' proxy1 failed ('+err.message+') — trying fallback…');
-            fetch(CFG.proxy2+encodeURIComponent(feed.url))
-              .then(function(r){ return r.text(); })
-              .then(function(xml) {
-                var doc=(new DOMParser()).parseFromString(xml,'text/xml');
+            logMsg('warn','RSS '+feed.name+' corsproxy failed ('+err.message+') — trying allorigins…');
+            // Fallback: allorigins — returns JSON with .contents
+            fetch(CFG.proxy1+enc)
+              .then(function(r){ return r.json(); })
+              .then(function(d) {
+                if(!d.contents) throw new Error('empty');
+                var doc=(new DOMParser()).parseFromString(d.contents,'text/xml');
                 var items=doc.querySelectorAll('item');
                 if(!items.length) throw new Error('no items');
                 setSrc('apiSrcNews','● LIVE (fb)','api-dot-live');
-                logMsg('success','RSS '+feed.name+' fallback ✓ '+items.length+' articles');
+                logMsg('success','RSS '+feed.name+' allorigins ✓ '+items.length+' articles');
                 var gN=0;
                 items.forEach(function(item) {
                   var t=(item.querySelector('title')||{textContent:''}).textContent.trim();
@@ -9197,7 +9200,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   var evt=parseHeadline(t,dc,feed.name);
                   if(evt){ addEventCard(evt); distributeEvent(evt); gN++; }
                 });
-                if(gN) logMsg('success',feed.name+' fallback: '+gN+' geo signals');
+                if(gN) logMsg('success',feed.name+' allorigins: '+gN+' geo signals');
               })
               .catch(function(){ logMsg('error','RSS '+feed.name+': both proxies failed this cycle'); });
           });
@@ -10155,40 +10158,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ── DATA SOURCES ──────────────────────────────────────────────────────── */
 
-  // Generic RSS fetcher
+  // Generic RSS fetcher — corsproxy (raw text) first, allorigins (JSON) fallback
   function rss(url, src, cb) {
     var enc = encodeURIComponent(url);
-    fetch(IC.proxy1 + enc).then(function(r){return r.json();})
-    .then(function(d){
-      var doc = new DOMParser().parseFromString(d.contents||'','text/xml');
-      doc.querySelectorAll('item').forEach(function(item){
-        var t = (item.querySelector('title')||{}).textContent||'';
-        var d2= (item.querySelector('description')||{}).textContent||'';
+    function _parse(xml) {
+      var doc = new DOMParser().parseFromString(xml,'text/xml');
+      var items = doc.querySelectorAll('item');
+      if (!items.length) throw new Error('no items');
+      items.forEach(function(item){
+        var t  = (item.querySelector('title')||{}).textContent||'';
+        var d2 = (item.querySelector('description')||{}).textContent||'';
         cb(t,d2);
       });
       IC.liveSources.add(src);
-    }).catch(function(){
-      // fallback
-      fetch(IC.proxy2 + enc).then(function(r){return r.text();})
-      .then(function(xml){
-        var doc = new DOMParser().parseFromString(xml,'text/xml');
-        doc.querySelectorAll('item').forEach(function(item){
-          var t=(item.querySelector('title')||{}).textContent||'';
-          var d2=(item.querySelector('description')||{}).textContent||'';
-          cb(t,d2);
-        });
-        IC.liveSources.add(src);
-      }).catch(function(){});
+    }
+    // Primary: corsproxy.io (direct XML text)
+    fetch(IC.proxy2 + enc)
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(function(xml){ _parse(xml); })
+    .catch(function(){
+      // Fallback: allorigins (JSON wrapper with .contents)
+      fetch(IC.proxy1 + enc)
+      .then(function(r){ return r.json(); })
+      .then(function(d){ _parse(d.contents||''); })
+      .catch(function(){});
     });
   }
 
   // GDELT project (free, no key)
   function fetchGDELT() {
     var url = 'https://api.gdeltproject.org/api/v2/doc/doc?query=war+military+conflict+missile+nuclear&mode=artlist&format=json&maxrecords=15&sort=DateDesc&timespan=1h';
-    fetch(IC.proxy1 + encodeURIComponent(url))
-    .then(function(r){return r.json();})
-    .then(function(raw){
-      var parsed; try { parsed = JSON.parse(raw.contents||'{}'); } catch(e){ parsed = raw; }
+    // GDELT via corsproxy (direct fetch CORS-blocked; rate-limit caught gracefully)
+    fetch(IC.proxy2 + encodeURIComponent(url))
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(function(text){
+      var parsed; try { parsed = JSON.parse(text); } catch(e){ return; }
       var arts = parsed.articles || [];
       arts.forEach(function(a){ if(a.title) ingest(a.title, a.url||'', 'GDELT'); });
       if (arts.length) IC.liveSources.add('GDELT');
@@ -10209,9 +10213,9 @@ document.addEventListener('DOMContentLoaded', function() {
     rss('https://news.un.org/feed/subscribe/en/news/all/rss.xml','UN', function(t,d){ ingest(t,d,'UN'); });
   }
 
-  // NATO press releases
+  // Foreign Policy (replaces NATO RSS — nato.int/news.rss 404, iaea.org/feeds 404)
   function fetchNATO() {
-    rss('https://www.nato.int/cps/en/natohq/news.rss','NATO', function(t,d){ ingest(t,d,'NATO'); });
+    rss('https://foreignpolicy.com/feed/','FP', function(t,d){ ingest(t,d,'FP'); });
   }
 
   // BBC World
@@ -10219,9 +10223,9 @@ document.addEventListener('DOMContentLoaded', function() {
     rss('https://feeds.bbci.co.uk/news/world/rss.xml','BBC', function(t,d){ ingest(t,d,'BBC'); });
   }
 
-  // Reuters World
+  // Deutsche Welle World (replaces dead Reuters RSS — feeds.reuters.com returns 530)
   function fetchReuters() {
-    rss('https://feeds.reuters.com/reuters/worldNews','REUTERS', function(t,d){ ingest(t,d,'REUTERS'); });
+    rss('https://rss.dw.com/rdf/rss-en-world','DW', function(t,d){ ingest(t,d,'DW'); });
   }
 
   // Al Jazeera (bonus geo coverage)
@@ -10229,23 +10233,25 @@ document.addEventListener('DOMContentLoaded', function() {
     rss('https://www.aljazeera.com/xml/rss/all.xml','ALJAZ', function(t,d){ ingest(t,d,'ALJAZ'); });
   }
 
-  // OSINT / crisis feeds
+  // OSINT / crisis feeds (globalsecurity.org 404, cfr.org/rss.xml 404 — removed)
   function fetchOSINT() {
     var feeds = [
       ['https://www.bellingcat.com/feed/','BELLING'],
-      ['https://rsshub.app/crisisgroup/publications','ICG'],
-      ['https://www.globalsecurity.org/rss/newslinks.rss','GLOBSEC'],
+      ['https://www.crisisgroup.org/rss.xml','ICG'],
+      ['https://www.theguardian.com/world/rss','GUARDIAN'],
     ];
     feeds.forEach(function(f){ rss(f[0],f[1],function(t,d){ ingest(t,d,f[1]); }); });
   }
 
-  // Reddit geopolitics (no key needed)
+  // Reddit geopolitics — via corsproxy to bypass CORS block
   function fetchReddit() {
     var subs = ['geopolitics','worldnews','UkraineWarVideoReport'];
     subs.forEach(function(sub){
-      fetch('https://www.reddit.com/r/'+sub+'/new.json?limit=20')
-      .then(function(r){return r.json();})
-      .then(function(data){
+      var url = 'https://www.reddit.com/r/'+sub+'/new.json?limit=20';
+      fetch(IC.proxy2 + encodeURIComponent(url))
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+      .then(function(text){
+        var data; try { data = JSON.parse(text); } catch(e){ return; }
         var posts = ((data.data||{}).children||[]);
         posts.forEach(function(p){
           var d = p.data||{};
@@ -10258,24 +10264,24 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Binance (crypto market moves as events)
+  // CoinGecko (replaces Binance — geo-blocked in many regions, CORS issues)
   function fetchBinance() {
-    var syms = JSON.stringify(['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XAUUSDT']);
-    fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+encodeURIComponent(syms))
-    .then(function(r){return r.json();})
+    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,binancecoin&vs_currencies=usd&include_24hr_change=true')
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(function(data){
-      data.forEach(function(t){
-        var sym = t.symbol.replace('USDT','');
-        var chg = parseFloat(t.priceChangePercent||0);
+      var map = {bitcoin:'BTC', ethereum:'ETH', solana:'SOL', binancecoin:'BNB'};
+      Object.keys(map).forEach(function(id){
+        if (!data[id]) return;
+        var sym = map[id];
+        var chg = data[id].usd_24h_change || 0;
         if (Math.abs(chg) >= 4) {
-          var dir = chg>0?'surges':'drops';
+          var dir = chg > 0 ? 'surges' : 'drops';
           ingest(sym+' '+dir+' '+Math.abs(chg).toFixed(1)+'% — significant crypto move',
-            'Price: $'+parseFloat(t.lastPrice).toLocaleString(undefined,{maximumFractionDigits:2})+
-            ' | Vol: $'+parseFloat(t.quoteVolume||0).toLocaleString(undefined,{maximumFractionDigits:0}),
-            'BINANCE', {signal: Math.min(68, Math.abs(chg)*3.5), assets:[sym]});
+            'Price: $'+data[id].usd.toLocaleString(undefined,{maximumFractionDigits:2}),
+            'COINGECKO', {signal: Math.min(68, Math.abs(chg)*3.5), assets:[sym]});
         }
       });
-      IC.liveSources.add('BINANCE');
+      IC.liveSources.add('COINGECKO');
       updateStats();
     }).catch(function(){});
   }
