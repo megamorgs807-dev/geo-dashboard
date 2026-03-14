@@ -55,7 +55,7 @@
   var _pmEvents = [];   // scored PM event cache — won't be evicted by IC overflow
   var _panelTimer = null;
 
-  /* ── GEO KEYWORD FILTER ──────────────────────────────────────────────────── */
+  /* ── MARKET KEYWORD FILTER (geo + macro tradeable signals) ──────────────── */
   var PM_GEO_KWS = [
     // Conflict / military (no bare 'war' — matches "Warriors", "award" etc.)
     'conflict','attack','military','missile','troops','invasion','airstrike',
@@ -67,8 +67,16 @@
     'iran','russia','ukraine','taiwan','china','israel','gaza','hamas','hezbollah',
     'north korea','korea','pakistan','india','saudi','houthi','yemen','syria','iraq',
     'venezuela','crimea','donbas','nato','turkey',
-    // Categories
-    'election','regime','protest','government','tariff','trade war','default','inflation',
+    // Macro / politics (directly market-moving)
+    'election','regime','protest','tariff','trade war','default','inflation','recession',
+    'interest rate','federal reserve','fed rate','rate cut','rate hike','basis point',
+    'trump','congress','senate','debt ceiling','gdp','unemployment',
+    // Crypto (risk-on/off signals, directly tradeable)
+    'bitcoin','btc','ethereum','eth','crypto','solana','sol ','coinbase','binance',
+    'stablecoin','defi','sec crypto','crypto regulation',
+    // Financial markets
+    'nasdaq','s&p','dow jones','vix','gold price','silver price',
+    'dollar index','dxy','yen','yuan','euro','pound sterling',
   ];
 
   /* ── REGION MAPPING ──────────────────────────────────────────────────────── */
@@ -169,8 +177,19 @@
     return 'GLOBAL';
   }
 
+  // Sports team/league patterns that can trigger false geo keyword matches
+  var _SPORTS_BLOCK = [
+    ' vs ', ' vs. ', 'nfl ', 'nba ', 'nhl ', 'mlb ', 'nba ', 'premier league',
+    'super bowl', 'world series', 'stanley cup', 'playoffs', 'championship game',
+    'oilers', 'rangers', 'warriors', 'rockets', 'patriots', 'raiders', 'capitals',
+    'nationals', 'strikers', 'united fc', ' fc ', ' afc ', ' nfc ',
+  ];
   function _geoMatch(text) {
     var low = (text || '').toLowerCase();
+    // Reject obvious sports matchups first
+    for (var s = 0; s < _SPORTS_BLOCK.length; s++) {
+      if (low.indexOf(_SPORTS_BLOCK[s]) !== -1) return false;
+    }
     for (var i = 0; i < PM_GEO_KWS.length; i++) {
       if (low.indexOf(PM_GEO_KWS[i]) !== -1) return true;
     }
@@ -311,7 +330,7 @@
         if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return fallback; } }
         return v || fallback;
       }
-      _markets = filtered.slice(0, 20).map(function (m) {
+      _markets = filtered.slice(0, 30).map(function (m) {
         return {
           id:           m.id,
           condition_id: m.condition_id || m.conditionId || m.id,
