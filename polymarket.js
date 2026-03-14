@@ -1,14 +1,14 @@
 /* ══ POLYMARKET PREDICTION MARKET INTEGRATION ══════════════════════════════════
-   Ingests geopolitically-relevant Polymarket markets into the IC pipeline.
+   Two signal streams fed into the IC pipeline:
 
-   Signal layers (capital-weighted wallet consensus):
-     1. YES token price     — aggregate of all wallet positions (Gamma API, via corsproxy)
-     2. Order book imbalance — live bid vs ask pressure (CLOB, via corsproxy)
-     3. Whale trades        — single trades ≥ $1 000 flagged as institutional signals
-                              (Data API, via corsproxy)
+   STREAM 1 — Geopolitical markets (geo + macro)
+     YES token price (wallet consensus) · order book imbalance · whale trades
+     pmBoost: 0-18 pts added by scoreEvent() when PM confirms a geo signal
 
-   Outputs injected into window.__IC.ingest() with pmFeed / pmYesProb / pmImbalance /
-   pmWhaleNet extras — scoreEvent() picks up pmBoost of 0-18 pts automatically.
+   STREAM 2 — Short-term direction markets (new in V12)
+     Hourly / 4H / 24H BTC/ETH/SOL direction bets
+     stBoost: 0-8 pts added by scoreEvent() based on conviction distance from 0.5
+     One slot per asset — highest conviction wins; refreshed every 60 s
 
    window.PM public API:
      PM.config({ pmMult, enabled })   — reconfigure
@@ -17,29 +17,35 @@
      PM.toggleEnabled()               — pause / resume
      PM.demo()                        — inject 3 synthetic demo events
      PM.status()                      — return copy of _status
-     PM.markets()                     — return copy of _markets array
+     PM.markets()                     — return copy of geo _markets array
+     PM.events()                      — return scored geo event cache
+     PM.stEvents()                    — return scored ST direction event cache
 
-   V1  2026-03-13
+   V12  2026-03-14
    ══════════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
   /* ── CONFIG ──────────────────────────────────────────────────────────────── */
   var _cfg = {
-    enabled:       true,
-    pmMult:        1.0,               // aggressiveness multiplier 0.1-3.0
-    pollMarkets:   300000,            // 5 min — Gamma discovery is slow-changing
-    pollOrderBook:  60000,            // 1 min — matches IC TICK_MS
-    pollActivity:  120000,            // 2 min — whale trade scan
-    minVolume:     5000,              // min 24h USD volume to include a market
-    minYesPrice:   0.05,              // ignore near-zero (no real signal)
-    maxYesPrice:   0.95,              // ignore near-certain (already priced in)
-    whaleThreshold: 1000,             // min USD size to count as whale trade
-    gammaBase:  'https://gamma-api.polymarket.com',
-    clobBase:   'https://clob.polymarket.com',
-    dataBase:   'https://data-api.polymarket.com',
-    proxy:      'https://corsproxy.io/?',
-    panelId:    'pmStatusPanel',
+    enabled:          true,
+    pmMult:           1.0,               // aggressiveness multiplier 0.1-3.0
+    pollMarkets:      300000,            // 5 min — Gamma discovery (geo markets)
+    pollOrderBook:     60000,            // 1 min — CLOB order book refresh
+    pollActivity:     120000,            // 2 min — whale trade scan
+    minVolume:          5000,            // min 24h USD volume for geo markets
+    minYesPrice:        0.05,            // ignore near-zero (no real signal)
+    maxYesPrice:        0.95,            // ignore near-certain (already priced in)
+    whaleThreshold:     1000,            // min USD size to count as whale trade
+    stDiscoverPoll:   300000,            // 5 min — rediscover ST direction markets
+    stPollMs:          60000,            // 60s  — refresh ST market prices
+    stMinVol:              1,            // min 24h vol — hourly direction bets have tiny vol ($5-$20)
+    stMinConviction:    0.08,            // |YES - 0.5| threshold; 0.08 = outside 42-58% band
+    gammaBase: 'https://gamma-api.polymarket.com',
+    clobBase:  'https://clob.polymarket.com',
+    dataBase:  'https://data-api.polymarket.com',
+    proxy:     'https://corsproxy.io/?',
+    panelId:   'pmStatusPanel',
   };
 
   /* ── STATE ───────────────────────────────────────────────────────────────── */
@@ -47,15 +53,18 @@
     markets:   { ok: false, count: 0, last: null, err: '' },
     orderbook: { ok: false, count: 0, last: null, err: '' },
     activity:  { ok: false, count: 0, last: null, err: '' },
+    st:        { ok: false, count: 0, last: null, err: '' },
   };
-  var _markets  = [];   // filtered + normalised market objects
-  var _obCache  = {};   // condition_id → {bidVol, askVol, imbalance, ts}
-  var _actCache = {};   // condition_id → {whaleCount, netWhales, largestTrade, whaleBias}
-  var _seen     = new Set();
-  var _pmEvents = [];   // scored PM event cache — won't be evicted by IC overflow
-  var _panelTimer = null;
+  var _markets     = [];   // geo filtered + normalised market objects
+  var _obCache     = {};   // condition_id → {bidVol, askVol, imbalance, ts}
+  var _actCache    = {};   // condition_id → {whaleCount, netWhales, largestTrade, whaleBias}
+  var _seen        = new Set();
+  var _pmEvents    = [];   // scored geo PM event cache (max 20) — won't be evicted by IC overflow
+  var _stMarkets   = [];   // filtered short-term direction markets (one per asset)
+  var _stEvents    = [];   // scored ST event cache (max 10) — one slot per asset
+  var _stLastTitle = {};   // asset code → last injected IC title (for dedup cleanup)
 
-  /* ── MARKET KEYWORD FILTER (geo + macro tradeable signals) ──────────────── */
+  /* ── GEO MARKET KEYWORD FILTER ───────────────────────────────────────────── */
   var PM_GEO_KWS = [
     // Conflict / military
     'conflict','attack','military','missile','troops','invasion','airstrike',
@@ -101,7 +110,6 @@
   ];
 
   /* ── REGION MAPPING ──────────────────────────────────────────────────────── */
-  // Ordered most-specific first; first match wins
   var PM_REGION_MAP = [
     ['strait of hormuz','STRAIT OF HORMUZ'], ['hormuz','STRAIT OF HORMUZ'],
     ['red sea','RED SEA'], ['bab el','RED SEA'], ['houthi','RED SEA'],
@@ -124,7 +132,7 @@
     ['venezuela','SOUTH AMERICA'],
     ['niger','AFRICA'],             ['mali','AFRICA'],  ['sudan','AFRICA'],
     ['nato','EASTERN EUROPE'],
-    ['oil','MIDDLE EAST'],          ['crude','MIDDLE EAST'], // energy fallback
+    ['oil','MIDDLE EAST'],          ['crude','MIDDLE EAST'],
   ];
 
   /* ── ASSET MAPPING ───────────────────────────────────────────────────────── */
@@ -146,6 +154,45 @@
     'GLOBAL':           ['GLD'],
   };
 
+  /* ── SHORT-TERM DIRECTION MARKET DETECTION ───────────────────────────────── */
+  // Must match at least one of these to qualify as a direction market
+  var _ST_POS = [
+    // Classic direction phrasing
+    'higher in', 'be higher', 'go up', 'up or down', 'higher or lower',
+    'above or below', 'above $', 'below $', 'reach $', 'hit $', 'exceed $',
+    'less than $', 'greater than $', 'more than $',
+    'be above', 'be below', 'fall below', 'drop below', 'close above', 'close below',
+    'lower than', 'higher than',
+    // Time-scoped end events
+    'end of day', 'end of week', 'by end of day', 'by end of week',
+    // Explicit short timeframes
+    'in 1 hour', 'in 2 hour', 'in 4 hour', 'in 6 hour', 'in 12 hour',
+    'in 24 hour', 'next hour', 'this hour',
+  ];
+  // Disqualify if any of these match — long-term or non-price markets
+  var _ST_NEJ = [
+    'q1 2026','q2 2026','q3 2026','q4 2026','q1 2027',
+    'march 2026','april 2026','may 2026','june 2026','july 2026',
+    'august 2026','september 2026','october 2026',
+    'year end','end of year','all time high','all-time high','ever reach',
+    'election','win the ','championship','super bowl','world cup','mvp',
+    'military','launch a','attack on','invasion','troops',    // geo → use geo pipeline
+  ];
+  // Asset name patterns → ticker code (checked in order, first match wins)
+  var _ST_ASSETS = [
+    { p: ['bitcoin','btc'],            c: 'BTC' },
+    { p: ['ethereum',' eth ','eth/'],  c: 'ETH' },
+    { p: ['solana',' sol ','sol/'],    c: 'SOL' },
+    { p: ['ripple',' xrp'],            c: 'XRP' },
+    { p: ['dogecoin','doge'],          c: 'DOGE' },
+    { p: [' bnb','binance coin'],      c: 'BNB' },
+    { p: ['gold price','xau/usd'],     c: 'GLD' },
+    { p: ['s&p 500',' spx ',' spy '], c: 'SPY' },
+    { p: ['nasdaq',' qqq'],            c: 'QQQ' },
+    { p: ['crude oil',' wti ','brent'],c: 'WTI' },
+    { p: ['silver price',' slv '],     c: 'SLV' },
+  ];
+
   /* ── FETCH HELPERS ───────────────────────────────────────────────────────── */
   function _fetch(url, timeoutMs, cb) {
     var ctrl = new AbortController();
@@ -163,7 +210,6 @@
   function _fetchProxy(url, timeoutMs, cb) {
     _fetch(_cfg.proxy + encodeURIComponent(url), timeoutMs, function (err, data) {
       if (err) return cb(err, null);
-      // corsproxy returns raw JSON — pass through
       cb(null, data);
     });
   }
@@ -184,10 +230,23 @@
       .catch(function (e) { clearTimeout(timer); cb(e.message || 'fetch error', null); });
   }
 
-  /* ── HELPERS ─────────────────────────────────────────────────────────────── */
+  /* ── GENERAL HELPERS ─────────────────────────────────────────────────────── */
   function _hhmm() {
     var d = new Date();
-    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  // Gamma API returns outcomePrices + tokens as JSON strings — parse safely
+  function _parseField(v, fallback) {
+    if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return fallback; } }
+    return v || fallback;
+  }
+
+  // YES price from market object (handles string-encoded outcomePrices)
+  function _yesPrice(market) {
+    var op = market.outcomePrices || ['0'];
+    if (typeof op === 'string') { try { op = JSON.parse(op); } catch (e) { op = ['0']; } }
+    return parseFloat(op[0]) || 0;
   }
 
   function _textToRegion(text) {
@@ -200,14 +259,13 @@
 
   // Sports team/league patterns that can trigger false geo keyword matches
   var _SPORTS_BLOCK = [
-    ' vs ', ' vs. ', 'nfl ', 'nba ', 'nhl ', 'mlb ', 'nba ', 'premier league',
+    ' vs ', ' vs. ', 'nfl ', 'nba ', 'nhl ', 'mlb ', 'premier league',
     'super bowl', 'world series', 'stanley cup', 'playoffs', 'championship game',
     'oilers', 'rangers', 'warriors', 'rockets', 'patriots', 'raiders', 'capitals',
     'nationals', 'strikers', 'united fc', ' fc ', ' afc ', ' nfc ',
   ];
   function _geoMatch(text) {
     var low = (text || '').toLowerCase();
-    // Reject obvious sports matchups first
     for (var s = 0; s < _SPORTS_BLOCK.length; s++) {
       if (low.indexOf(_SPORTS_BLOCK[s]) !== -1) return false;
     }
@@ -223,14 +281,69 @@
     }
   }
 
-  /* outcomePrices arrives as JSON string "[\"0.72\",\"0.28\"]" from Gamma API */
-  function _yesPrice(market) {
-    var op = market.outcomePrices || ['0'];
-    if (typeof op === 'string') { try { op = JSON.parse(op); } catch (e) { op = ['0']; } }
-    return parseFloat(op[0]) || 0;
+  /* ── ST HELPER FUNCTIONS ─────────────────────────────────────────────────── */
+  // Extract asset ticker from question text; null = not a recognised asset
+  function _stAsset(question) {
+    var low = (question || '').toLowerCase();
+    for (var i = 0; i < _ST_ASSETS.length; i++) {
+      var a = _ST_ASSETS[i];
+      for (var j = 0; j < a.p.length; j++) {
+        if (low.indexOf(a.p[j]) !== -1) return a.c;
+      }
+    }
+    return null;
   }
 
-  /* ── SIGNAL SYNTHESIS ────────────────────────────────────────────────────── */
+  // Extract human-readable timeframe label from question text
+  function _stTimeframe(question) {
+    var low = (question || '').toLowerCase();
+    if (/\b1\s*h(our)?\b/.test(low) || low.indexOf('in 1 hour') !== -1 || low.indexOf('next hour') !== -1) return '1H';
+    if (/\b4\s*h(our)?\b/.test(low) || low.indexOf('in 4 hour') !== -1) return '4H';
+    if (/\b6\s*h(our)?\b/.test(low) || low.indexOf('in 6 hour') !== -1) return '6H';
+    if (/\b12\s*h(our)?\b/.test(low) || low.indexOf('in 12 hour') !== -1) return '12H';
+    if (/\b24\s*h(our)?\b/.test(low) || low.indexOf('in 24 hour') !== -1 || low.indexOf('24 hours') !== -1) return '24H';
+    if (low.indexOf('end of day') !== -1 || low.indexOf('by end of day') !== -1) return 'EOD';
+    if (low.indexOf('end of week') !== -1) return 'EOW';
+    if (low.indexOf('today') !== -1) return 'TODAY';
+    return 'DAY';
+  }
+
+  // Does the question contain an explicit short-term time keyword?
+  function _hasSTTimeword(question) {
+    var low = (question || '').toLowerCase();
+    return low.indexOf('1 hour') !== -1
+      || low.indexOf('4 hour') !== -1
+      || low.indexOf('24 hour') !== -1
+      || low.indexOf('next hour') !== -1
+      || low.indexOf('end of day') !== -1
+      || low.indexOf('this hour') !== -1;
+  }
+
+  // Combined filter: is this market a short-term direction bet on a known asset?
+  function _isSTMarket(m) {
+    var q = (m.question || '').toLowerCase();
+    if (!_stAsset(q)) return false;                             // must be a known asset
+    for (var n = 0; n < _ST_NEJ.length; n++) {
+      if (q.indexOf(_ST_NEJ[n]) !== -1) return false;          // rejected
+    }
+    for (var p = 0; p < _ST_POS.length; p++) {
+      if (q.indexOf(_ST_POS[p]) !== -1) return true;           // positive match
+    }
+    return false;
+  }
+
+  // Format ms remaining as "2h 15m" or "<1h" etc.
+  function _tte(endDate) {
+    if (!endDate) return '';
+    var msLeft = new Date(endDate).getTime() - Date.now();
+    if (msLeft <= 0) return 'exp';
+    var hLeft = Math.floor(msLeft / 3600000);
+    var mLeft = Math.floor((msLeft % 3600000) / 60000);
+    if (hLeft > 0) return hLeft + 'h' + (mLeft > 0 ? mLeft + 'm' : '');
+    return mLeft > 0 ? mLeft + 'm' : '<1m';
+  }
+
+  /* ── GEO SIGNAL SYNTHESIS ────────────────────────────────────────────────── */
   function _synthesise(market) {
     var yp  = _yesPrice(market);
     var vol = parseFloat(market.volume24hr || market.volume || 0);
@@ -238,19 +351,13 @@
     var act = _actCache[market.condition_id] || {};
     var net = act.netWhales || 0;
 
-    // Credibility weight: log scale, 0 at $0 vol → 1.0 at $50k+
-    var volW = Math.min(1.0, Math.log10(Math.max(1, vol)) / Math.log10(50000));
+    var volW   = Math.min(1.0, Math.log10(Math.max(1, vol)) / Math.log10(50000));
+    var whaleW = net / (Math.abs(net) + 3);
 
-    // Soften whale count: sigmoid-like to prevent a single $100k trade dominating
-    var whaleW = net / (Math.abs(net) + 3);   // range -1 to +1
-
-    // Core signal weights: YES price (55%) + OB pressure (25%) + whale bias (10%) + vol credibility (10%)
-    var obContrib    = 0.5 + ob    * 0.5;   // -1..+1 → 0..1
-    var whaleContrib = 0.5 + whaleW * 0.5; // -1..+1 → 0..1
+    var obContrib    = 0.5 + ob    * 0.5;
+    var whaleContrib = 0.5 + whaleW * 0.5;
     var rawSignal    = yp * 0.55 + obContrib * 0.25 + whaleContrib * 0.10 + volW * 0.10;
-
-    // Apply aggressiveness multiplier
-    var pmYesProb = Math.min(1.0, Math.max(0, rawSignal * _cfg.pmMult));
+    var pmYesProb    = Math.min(1.0, Math.max(0, rawSignal * _cfg.pmMult));
 
     return {
       pmYesProb:   pmYesProb,
@@ -263,7 +370,7 @@
     };
   }
 
-  /* ── INJECT INTO IC PIPELINE ─────────────────────────────────────────────── */
+  /* ── INJECT GEO MARKET INTO IC PIPELINE ─────────────────────────────────── */
   function _inject(market, sig) {
     if (!_cfg.enabled) return;
     var IC = window.__IC;
@@ -285,11 +392,8 @@
       + ' | Vol: $' + vol.toLocaleString(undefined, { maximumFractionDigits: 0 })
       + ' | ' + region;
 
-    // PM events refresh every poll cycle — evict stale IC entry so the updated
-    // signal replaces it rather than being blocked by the IC dedup set
     var icKey = title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 48);
     if (IC.eventIds) IC.eventIds.delete(icKey);
-    // Also remove matching stale event from the events array
     var pmMkt = (market.question || '').slice(0, 80);
     for (var i = IC.events.length - 1; i >= 0; i--) {
       if (IC.events[i].pmMarket === pmMkt) { IC.events.splice(i, 1); break; }
@@ -307,8 +411,6 @@
       pmWhaleNet:  sig.pmWhaleNet,
     });
 
-    // Capture the fully-scored event from IC immediately after injection (before eviction)
-    // and store in _pmEvents — this array is never evicted, ensuring PM signals persist
     if (IC.events[0] && IC.events[0].pmMarket === pmMkt) {
       var scored = IC.events[0];
       _pmEvents = _pmEvents.filter(function(e) { return e.pmMarket !== pmMkt; });
@@ -321,11 +423,86 @@
       });
       if (_pmEvents.length > 20) _pmEvents.pop();
     }
-
     _scheduleRedraw();
   }
 
-  /* ── POLL: MARKETS (Gamma API, via proxy — direct fetch blocked from localhost) */
+  /* ── INJECT ST DIRECTION SIGNAL INTO IC PIPELINE ────────────────────────── */
+  function _injectST(m) {
+    if (!_cfg.enabled) return;
+    var IC = window.__IC;
+    if (!IC || typeof IC.ingest !== 'function') return;
+
+    var yp = _yesPrice(m);
+    var conviction = Math.abs(yp - 0.5);
+    if (conviction < _cfg.stMinConviction) return; // inside 42-58% band — no clear signal
+
+    var asset = m.stAsset || 'CRYPTO';
+    var dir   = yp >= 0.5 ? '↑' : '↓';
+    var pct   = Math.round(yp * 100);
+    var tf    = m.stTimeframe || 'DAY';
+    var tte   = _tte(m.endDate);
+
+    var title = '[ST] ' + asset + dir + pct + '% · ' + tf + (tte ? ' · ' + tte : '');
+    var desc  = 'Short-term direction | ' + m.question.slice(0, 80)
+      + ' | Conviction: ' + Math.round(conviction * 100) + '%'
+      + (tte ? ' | Expires in: ' + tte : '');
+
+    // Clear old dedup key for this asset (title changes each update cycle as % shifts)
+    if (_stLastTitle[asset]) {
+      var oldKey = _stLastTitle[asset].toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 48);
+      if (IC.eventIds) IC.eventIds.delete(oldKey);
+    }
+    var icKey = title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 48);
+    if (IC.eventIds) IC.eventIds.delete(icKey);
+    _stLastTitle[asset] = title;
+
+    // Remove stale IC event for this asset before re-injecting
+    for (var i = IC.events.length - 1; i >= 0; i--) {
+      if (IC.events[i].stAsset === asset && IC.events[i].stFeed) {
+        IC.events.splice(i, 1); break;
+      }
+    }
+
+    IC.ingest(title, desc, 'Polymarket/ST', {
+      ts:           Date.now(),
+      region:       'GLOBAL',
+      srcCount:     1,
+      socialV:      yp,
+      stFeed:       'direction',
+      stAsset:      asset,
+      stDir:        dir,
+      stYesProb:    yp,
+      stConviction: conviction,
+      stTimeframe:  tf,
+      pmFeed:       null,   // suppress pmBadge — stBadge handles display
+    });
+
+    // Capture scored event into persistent cache
+    if (IC.events[0] && IC.events[0].stAsset === asset) {
+      var scored = IC.events[0];
+      _stEvents = _stEvents.filter(function (e) { return e.stAsset !== asset; });
+      _stEvents.unshift({
+        title:        scored.title,
+        desc:         scored.desc,
+        source:       scored.source,
+        stFeed:       scored.stFeed,
+        stAsset:      asset,
+        stDir:        dir,
+        stYesProb:    yp,
+        stConviction: conviction,
+        stTimeframe:  tf,
+        signal:       scored.signal,
+        stBoost:      scored.stBoost || 0,
+        ts:           scored.ts,
+        time:         scored.time,
+        endDate:      m.endDate,
+      });
+      if (_stEvents.length > 10) _stEvents.pop();
+    }
+    _scheduleRedraw();
+  }
+
+  /* ── POLL: GEO MARKETS (Gamma API, via proxy) ────────────────────────────── */
   function _pollMarkets() {
     var url = _cfg.gammaBase + '/markets?active=true&closed=false&limit=100&order=volume24hr&ascending=false';
     _fetchProxy(url, 15000, function (err, data) {
@@ -336,7 +513,6 @@
         return;
       }
 
-      // Filter: geo-relevant + minimum volume + meaningful YES price
       var filtered = data.filter(function (m) {
         var yp  = _yesPrice(m);
         var vol = parseFloat(m.volume24hr || m.volume || 0);
@@ -346,11 +522,6 @@
           && yp <= _cfg.maxYesPrice;
       });
 
-      // Normalise and store — Gamma returns outcomePrices + tokens as JSON strings
-      function _parseField(v, fallback) {
-        if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return fallback; } }
-        return v || fallback;
-      }
       _markets = filtered.slice(0, 50).map(function (m) {
         return {
           id:           m.id,
@@ -369,18 +540,13 @@
       _status.markets.last  = _hhmm();
       _status.markets.err   = '';
 
-      // Inject YES-price signals immediately (token IDs not in Gamma /markets response,
-      // so OB/whale data unavailable — signal still meaningful from market consensus price)
       _markets.forEach(function (m, i) {
         setTimeout(function () {
           var sig = _synthesise(m);
-          if (sig.pmYesProb >= 0.35 && sig.pmYesProb <= 0.95) {
-            _inject(m, sig);
-          }
+          if (sig.pmYesProb >= 0.35 && sig.pmYesProb <= 0.95) { _inject(m, sig); }
         }, i * 300);
       });
 
-      // Trigger order book + activity polls for each discovered market (if tokens available)
       _markets.forEach(function (m, i) {
         setTimeout(function () { _pollOrderBook(m); }, i * 800 + 500);
         setTimeout(function () { _pollActivity(m); }, i * 1000 + 800);
@@ -390,10 +556,9 @@
     });
   }
 
-  /* ── POLL: ORDER BOOK (CLOB) ─────────────────────────────────────────────── */
+  /* ── POLL: ORDER BOOK (CLOB, via proxy) ──────────────────────────────────── */
   function _pollOrderBook(market) {
-    // Get YES token_id from tokens array
-    var tokens = market.tokens || [];
+    var tokens   = market.tokens || [];
     var yesToken = null;
     for (var i = 0; i < tokens.length; i++) {
       if ((tokens[i].outcome || '').toLowerCase() === 'yes') {
@@ -401,99 +566,139 @@
         break;
       }
     }
-    if (!yesToken) {
-      // Try first token if outcome labels aren't populated
-      yesToken = tokens[0] && (tokens[0].token_id || tokens[0].tokenId);
-    }
+    if (!yesToken) yesToken = tokens[0] && (tokens[0].token_id || tokens[0].tokenId);
     if (!yesToken) return;
 
     var url = _cfg.clobBase + '/book?token_id=' + yesToken;
     _fetchProxyText(url, 8000, function (err, data) {
-      if (err || !data) {
-        _status.orderbook.err = err || 'no data';
-        return;
-      }
+      if (err || !data) { _status.orderbook.err = err || 'no data'; return; }
 
       var bids = data.bids || [];
       var asks = data.asks || [];
-
-      var bidVol = bids.reduce(function (s, b) {
-        return s + parseFloat(b.price || 0) * parseFloat(b.size || 0);
-      }, 0);
-      var askVol = asks.reduce(function (s, a) {
-        return s + parseFloat(a.price || 0) * parseFloat(a.size || 0);
-      }, 0);
-
-      var total = bidVol + askVol;
+      var bidVol = bids.reduce(function (s, b) { return s + parseFloat(b.price||0) * parseFloat(b.size||0); }, 0);
+      var askVol = asks.reduce(function (s, a) { return s + parseFloat(a.price||0) * parseFloat(a.size||0); }, 0);
+      var total  = bidVol + askVol;
       var imbalance = total > 0.001 ? (bidVol - askVol) / total : 0;
 
-      _obCache[market.condition_id] = {
-        bidVol: bidVol,
-        askVol: askVol,
-        imbalance: imbalance,
-        ts: Date.now(),
-      };
-
+      _obCache[market.condition_id] = { bidVol: bidVol, askVol: askVol, imbalance: imbalance, ts: Date.now() };
       _status.orderbook.ok    = true;
       _status.orderbook.count = Object.keys(_obCache).length;
       _status.orderbook.last  = _hhmm();
       _status.orderbook.err   = '';
 
-      // Synthesise + inject after OB data is ready
       var sig = _synthesise(market);
-      if (sig.pmYesProb >= 0.35 && sig.pmYesProb <= 0.95) {
-        _inject(market, sig);
-      }
-
+      if (sig.pmYesProb >= 0.35 && sig.pmYesProb <= 0.95) { _inject(market, sig); }
       _renderPanel();
     });
   }
 
-  /* ── POLL: ACTIVITY / WHALE DETECTION (Data API) ─────────────────────────── */
+  /* ── POLL: WHALE ACTIVITY (Data API, via proxy) ───────────────────────────── */
   function _pollActivity(market) {
-    var condId = market.condition_id;
-    var url = _cfg.dataBase + '/activity?market=' + condId + '&limit=50';
+    var url = _cfg.dataBase + '/activity?market=' + market.condition_id + '&limit=50';
     _fetchProxyText(url, 8000, function (err, data) {
-      if (err || !data) {
-        _status.activity.err = err || 'no data';
-        // Not critical — silently continue
-        return;
-      }
+      if (err || !data) { _status.activity.err = err || 'no data'; return; }
 
       var trades = Array.isArray(data) ? data : (data.data || data.activity || []);
-      var whaleBuys  = 0;
-      var whaleSells = 0;
-      var largest    = 0;
+      var whaleBuys = 0, whaleSells = 0, largest = 0;
 
       trades.forEach(function (t) {
         var usdSize = parseFloat(t.usdcSize || t.size || t.amount || 0);
         if (usdSize < _cfg.whaleThreshold) return;
-
         if (usdSize > largest) largest = usdSize;
-
-        // Determine direction: 'Yes' outcome = buying YES token = bullish
         var outcome = (t.outcome || t.side || '').toLowerCase();
         if (outcome === 'yes' || outcome === 'buy') whaleBuys++;
         else whaleSells++;
       });
 
       var netWhales = whaleBuys - whaleSells;
-      var bias = netWhales > 0 ? 'BUY' : netWhales < 0 ? 'SELL' : 'NEUTRAL';
-
-      _actCache[condId] = {
-        whaleCount:   whaleBuys + whaleSells,
-        netWhales:    netWhales,
+      _actCache[market.condition_id] = {
+        whaleCount: whaleBuys + whaleSells, netWhales: netWhales,
         largestTrade: largest,
-        whaleBias:    bias,
-        ts:           Date.now(),
+        whaleBias: netWhales > 0 ? 'BUY' : netWhales < 0 ? 'SELL' : 'NEUTRAL',
+        ts: Date.now(),
       };
-
       _status.activity.ok    = true;
       _status.activity.count = Object.keys(_actCache).length;
       _status.activity.last  = _hhmm();
       _status.activity.err   = '';
+      _renderPanel();
+    });
+  }
+
+  /* ── POLL: ST DISCOVER (find short-expiry direction markets) ─────────────── */
+  function _pollSTDiscover() {
+    if (!_cfg.enabled) return;
+    var url = _cfg.gammaBase + '/markets?active=true&closed=false&limit=100&order=volume&ascending=false';
+    _fetchProxy(url, 15000, function (err, data) {
+      if (err || !Array.isArray(data)) {
+        _status.st.err = err || 'no data';
+        return;
+      }
+
+      var now = Date.now();
+      var h7d = 604800000; // 7 days in ms — include weekly price targets too
+
+      var filtered = data.filter(function (m) {
+        var vol = parseFloat(m.volume24hr || m.volume || 0);
+        if (vol < _cfg.stMinVol) return false;
+        if (!_isSTMarket(m)) return false;
+        var endMs = m.endDate ? new Date(m.endDate).getTime() : 0;
+        var shortExpiry = endMs > now && (endMs - now) < h7d;
+        return shortExpiry || _hasSTTimeword(m.question || '');
+      });
+
+      // Normalise
+      var normalised = filtered.slice(0, 30).map(function (m) {
+        return {
+          id:           m.id,
+          condition_id: m.condition_id || m.conditionId || m.id,
+          question:     (m.question || '').trim(),
+          outcomePrices: _parseField(m.outcomePrices, ['0.5','0.5']),
+          volume24hr:   parseFloat(m.volume24hr || m.volume || 0),
+          endDate:      m.endDate || null,
+          tokens:       _parseField(m.tokens, []),
+          stAsset:      _stAsset(m.question || ''),
+          stTimeframe:  _stTimeframe(m.question || ''),
+        };
+      });
+
+      // De-duplicate: one market per asset — keep highest volume
+      var bestByAsset = {};
+      normalised.forEach(function (m) {
+        var a = m.stAsset;
+        if (!bestByAsset[a] || m.volume24hr > bestByAsset[a].volume24hr) {
+          bestByAsset[a] = m;
+        }
+      });
+      _stMarkets = Object.keys(bestByAsset).map(function (k) { return bestByAsset[k]; });
+
+      _status.st.ok    = true;
+      _status.st.count = _stMarkets.length;
+      _status.st.last  = _hhmm();
+      _status.st.err   = '';
+
+      // Inject immediately — staggered to avoid proxy rate limits
+      _stMarkets.forEach(function (m, i) {
+        setTimeout(function () { _injectST(m); }, i * 400);
+      });
 
       _renderPanel();
+    });
+  }
+
+  /* ── POLL: ST PRICE REFRESH (individual Gamma market endpoint) ───────────── */
+  function _pollSTPrice() {
+    if (!_cfg.enabled || !_stMarkets.length) return;
+    _stMarkets.forEach(function (m, i) {
+      setTimeout(function () {
+        if (!m.id) { _injectST(m); return; } // no market ID — re-use cached price
+        var url = _cfg.gammaBase + '/markets/' + m.id;
+        _fetchProxy(url, 8000, function (err, data) {
+          if (err || !data) { _injectST(m); return; } // network error — inject with cached price
+          m.outcomePrices = _parseField(data.outcomePrices, m.outcomePrices);
+          _injectST(m);
+        });
+      }, i * 600);
     });
   }
 
@@ -502,19 +707,21 @@
     var el = document.getElementById(_cfg.panelId);
     if (!el) return;
 
-    // ── Header ──
     var total = _seen.size;
     var html  = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
       + '<span class="signal-tag polymarket">POLYMARKET</span>'
       + '<span style="font-size:10px;color:var(--dim)">'
-      +   (_markets.length ? _markets.length + ' geo markets · ' + total + ' injected' : 'no markets loaded')
-      + '</span></div>';
+      +   (_markets.length ? _markets.length + ' geo · ' + total + ' injected' : 'no markets loaded')
+      + '</span>'
+      + (_stMarkets.length ? '<span style="font-size:10px;color:#e86020;margin-left:auto">' + _stMarkets.length + ' ST direction</span>' : '')
+      + '</div>';
 
     // ── Feed Status Rows ──
     var feedDefs = [
-      { key: 'markets',   label: 'Gamma Markets', src: 'gamma-api' },
-      { key: 'orderbook', label: 'CLOB Order Book', src: 'clob+proxy' },
-      { key: 'activity',  label: 'Whale Trades', src: 'data-api+proxy' },
+      { key: 'markets',   label: 'Gamma Markets',    src: 'gamma-api' },
+      { key: 'orderbook', label: 'CLOB Order Book',  src: 'clob+proxy' },
+      { key: 'activity',  label: 'Whale Trades',     src: 'data-api+proxy' },
+      { key: 'st',        label: 'ST Direction',     src: 'gamma+proxy' },
     ];
     feedDefs.forEach(function (f) {
       var s   = _status[f.key];
@@ -533,23 +740,38 @@
         + '</div>';
     });
 
-    // ── Top Markets Table ──
+    // ── ST Momentum Strip ──
+    if (_stEvents.length) {
+      html += '<div style="margin-top:8px;padding:6px;background:rgba(232,96,32,0.08);border:1px solid rgba(232,96,32,0.3);border-radius:2px">'
+        + '<div style="font-size:8px;color:#e86020;font-weight:bold;letter-spacing:1px;margin-bottom:5px">⚡ SHORT-TERM DIRECTION</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:5px">';
+      _stEvents.slice(0, 6).forEach(function (e) {
+        var upColor = 'var(--green)';
+        var dnColor = 'var(--red)';
+        var color   = e.stDir === '↑' ? upColor : dnColor;
+        var tte     = _tte(e.endDate);
+        html += '<div style="background:var(--bg3);padding:3px 7px;font-size:9px;border:1px solid rgba(232,96,32,0.2)">'
+          + '<span style="color:' + color + ';font-weight:bold">'
+          + e.stAsset + e.stDir + Math.round(e.stYesProb * 100) + '%</span>'
+          + '<span style="color:var(--dim);font-size:8px"> ' + e.stTimeframe
+          + (tte ? ' · ' + tte : '') + '</span>'
+          + '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    // ── Top Geo Markets Table ──
     if (_markets.length) {
       html += '<div style="margin-top:8px">';
       _markets.slice(0, 5).forEach(function (m) {
-        var yp  = _yesPrice(m);
-        var ypPct = Math.round(yp * 100);
-        var ob  = (_obCache[m.condition_id] || {}).imbalance || 0;
-        var act = _actCache[m.condition_id] || {};
-        var region = _textToRegion(m.question || '');
-
-        // Yield YES bar
-        var yesBarColor = yp >= 0.6 ? 'var(--red)' : yp >= 0.4 ? 'var(--amber)' : 'var(--green)';
-        // (high YES = higher geo risk = red; low YES = calmer = green)
-
-        // OB imbalance: center-origin bar
-        var obPct    = Math.round(Math.abs(ob) * 50);  // 0-50% from center
-        var obFill   = ob > 0.05
+        var yp      = _yesPrice(m);
+        var ypPct   = Math.round(yp * 100);
+        var ob      = (_obCache[m.condition_id] || {}).imbalance || 0;
+        var act     = _actCache[m.condition_id] || {};
+        var region  = _textToRegion(m.question || '');
+        var barClr  = yp >= 0.6 ? 'var(--red)' : yp >= 0.4 ? 'var(--amber)' : 'var(--green)';
+        var obPct   = Math.round(Math.abs(ob) * 50);
+        var obFill  = ob > 0.05
           ? '<div class="pm-ob-fill-bid" style="width:' + obPct + '%"></div>'
           : ob < -0.05
           ? '<div class="pm-ob-fill-ask" style="width:' + obPct + '%"></div>'
@@ -559,8 +781,6 @@
           : ob < -0.05
           ? '<span style="color:var(--red);font-size:8px">-' + Math.round(Math.abs(ob)*100) + '% ASK</span>'
           : '<span style="color:var(--dim);font-size:8px">NEUTRAL</span>';
-
-        // Whale badge
         var whaleBadge = '';
         if (act.whaleBias === 'BUY') {
           whaleBadge = '<span style="color:var(--green);font-size:8px;margin-left:4px">⬆WHALE×' + act.whaleCount + '</span>';
@@ -569,23 +789,17 @@
         }
 
         html += '<div style="padding:5px 0;border-bottom:1px solid var(--border)">'
-          // Question text
           + '<div style="font-size:9px;color:var(--bright);margin-bottom:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:340px">'
           +   m.question.slice(0, 80)
           + '</div>'
-          // Metrics row
           + '<div style="display:flex;align-items:center;gap:6px">'
-          // YES% bar
           + '<div style="width:60px;height:4px;background:var(--bg3);position:relative">'
-          +   '<div style="width:' + ypPct + '%;height:100%;background:' + yesBarColor + '"></div>'
+          +   '<div style="width:' + ypPct + '%;height:100%;background:' + barClr + '"></div>'
           + '</div>'
-          + '<span style="font-size:9px;color:' + yesBarColor + ';min-width:28px">' + ypPct + '%</span>'
-          // OB bar
+          + '<span style="font-size:9px;color:' + barClr + ';min-width:28px">' + ypPct + '%</span>'
           + '<div class="pm-ob-bar">' + obFill + '</div>'
           + obLabel
-          // Whale badge
           + whaleBadge
-          // Region tag
           + '<span style="color:var(--dim);font-size:8px;margin-left:auto">' + region.slice(0, 12) + '</span>'
           + '</div></div>';
       });
@@ -614,42 +828,33 @@
       console.warn('[Polymarket] IC pipeline not ready for demo');
       return;
     }
-
     var demos = [
       {
         condition_id: 'demo_iran_001',
         question: 'Will Iran launch a direct military attack on Israel before June 2026?',
-        outcomePrices: ['0.68','0.32'],
-        volume24hr: 124000,
-        tokens: [],
+        outcomePrices: ['0.68','0.32'], volume24hr: 124000, tokens: [],
         _sig: { pmYesProb: 0.71, pmImbalance: 0.22, pmWhaleNet: 3, whaleBias: 'BUY', whaleCount: 3, largestTrade: 8400 }
       },
       {
         condition_id: 'demo_wti_001',
         question: 'Will WTI crude oil exceed $95 per barrel before end of Q2 2026?',
-        outcomePrices: ['0.54','0.46'],
-        volume24hr: 89000,
-        tokens: [],
+        outcomePrices: ['0.54','0.46'], volume24hr: 89000, tokens: [],
         _sig: { pmYesProb: 0.54, pmImbalance: 0.08, pmWhaleNet: 1, whaleBias: 'BUY', whaleCount: 1, largestTrade: 1200 }
       },
       {
         condition_id: 'demo_russia_001',
         question: 'Will Russia launch a major new offensive in Ukraine before May 2026?',
-        outcomePrices: ['0.41','0.59'],
-        volume24hr: 210000,
-        tokens: [],
+        outcomePrices: ['0.41','0.59'], volume24hr: 210000, tokens: [],
         _sig: { pmYesProb: 0.42, pmImbalance: -0.05, pmWhaleNet: -1, whaleBias: 'SELL', whaleCount: 2, largestTrade: 3100 }
       },
     ];
-
     demos.forEach(function (m, i) {
       setTimeout(function () {
-        _obCache[m.condition_id] = { imbalance: m._sig.pmImbalance, ts: Date.now() };
+        _obCache[m.condition_id]  = { imbalance: m._sig.pmImbalance, ts: Date.now() };
         _actCache[m.condition_id] = {
           netWhales: m._sig.pmWhaleNet, whaleBias: m._sig.whaleBias,
           whaleCount: m._sig.whaleCount, largestTrade: m._sig.largestTrade,
         };
-        // Allow re-injection for demo (clear dedup key)
         _seen.delete('pm_' + m.condition_id);
         _inject(m, m._sig);
         console.log('[Polymarket] Demo: injected "' + m.question.slice(0, 40) + '…"');
@@ -659,40 +864,41 @@
 
   /* ── BOOT ─────────────────────────────────────────────────────────────────── */
   function _start() {
-    // Initial poll
+    // Geo markets
     _pollMarkets();
-    // Recurring polls
     setInterval(_pollMarkets, _cfg.pollMarkets);
-    // OB + activity are triggered from within _pollMarkets after markets load
-    // But also run them independently to keep them fresh between market polls
     setInterval(function () {
-      _markets.forEach(function (m, i) {
-        setTimeout(function () { _pollOrderBook(m); }, i * 600);
-      });
+      _markets.forEach(function (m, i) { setTimeout(function () { _pollOrderBook(m); }, i * 600); });
     }, _cfg.pollOrderBook);
     setInterval(function () {
-      _markets.forEach(function (m, i) {
-        setTimeout(function () { _pollActivity(m); }, i * 800);
-      });
+      _markets.forEach(function (m, i) { setTimeout(function () { _pollActivity(m); }, i * 800); });
     }, _cfg.pollActivity);
+
+    // Short-term direction markets
+    setTimeout(function () {
+      _pollSTDiscover();
+      setInterval(_pollSTDiscover, _cfg.stDiscoverPoll);
+      setInterval(_pollSTPrice,    _cfg.stPollMs);
+    }, 3000); // slight offset so geo poll goes first
 
     // Panel refresh
     _renderPanel();
-    setInterval(_renderPanel, 15000);  // keep panel live even without new data
+    setInterval(_renderPanel, 15000);
 
-    console.log('[Polymarket] V1 active | Mult: ' + _cfg.pmMult + '× | Mode: PAPER ONLY');
+    console.log('[Polymarket] V12 active | Geo markets + ST direction | Mult: ' + _cfg.pmMult + '× | PAPER ONLY');
   }
 
   /* ── PUBLIC API ──────────────────────────────────────────────────────────── */
   window.PM = {
     config: function (opts) {
-      if (opts && opts.pmMult   !== undefined) _cfg.pmMult   = Math.max(0.1, Math.min(3.0, parseFloat(opts.pmMult) || 1.0));
-      if (opts && opts.enabled  !== undefined) _cfg.enabled  = !!opts.enabled;
-      if (opts && opts.proxy    !== undefined) _cfg.proxy    = opts.proxy;
+      if (opts && opts.pmMult  !== undefined) _cfg.pmMult  = Math.max(0.1, Math.min(3.0, parseFloat(opts.pmMult) || 1.0));
+      if (opts && opts.enabled !== undefined) _cfg.enabled = !!opts.enabled;
+      if (opts && opts.proxy   !== undefined) _cfg.proxy   = opts.proxy;
       _renderPanel();
     },
     pollAll: function () {
       _pollMarkets();
+      _pollSTDiscover();
     },
     setMult: function (v) {
       _cfg.pmMult = Math.max(0.1, Math.min(3.0, parseFloat(v) || 1.0));
@@ -703,25 +909,18 @@
       console.log('[Polymarket] ' + (_cfg.enabled ? 'enabled' : 'paused'));
       _renderPanel();
     },
-    demo: function () {
-      _runDemo();
-    },
-    status: function () {
-      return JSON.parse(JSON.stringify(_status));
-    },
-    markets: function () {
-      return _markets.slice();
-    },
-    events: function () {
-      return _pmEvents.slice();
-    },
+    demo:     function () { _runDemo(); },
+    status:   function () { return JSON.parse(JSON.stringify(_status)); },
+    markets:  function () { return _markets.slice(); },
+    events:   function () { return _pmEvents.slice(); },
+    stEvents: function () { return _stEvents.slice(); },
   };
 
   // Boot after IC pipeline is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _start);
   } else {
-    setTimeout(_start, 1500);  // slight delay to let IC and ShadowBroker initialise first
+    setTimeout(_start, 1500);
   }
 
 })();

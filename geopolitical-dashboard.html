@@ -551,6 +551,7 @@
     .signal-tag.osint        { background: #3a4a5a; color: var(--text); }
     .signal-tag.shadowbroker { background: #7b2fff; color: #fff; }
     .signal-tag.polymarket   { background: #1ec8e0; color: var(--bg); }
+    .signal-tag.shortterm   { background: #e86020; color: #fff; }
 
     /* Polymarket order book center-origin bar */
     .pm-ob-bar { width:70px;height:4px;background:var(--bg3);display:inline-block;vertical-align:middle;position:relative;overflow:hidden; }
@@ -9702,8 +9703,18 @@ document.addEventListener('DOMContentLoaded', function() {
         ? Math.min(3, evt.pmWhaleNet) : 0;                                                     // 0-3 pts
       pmBoost = Math.min(18, probBoost + obBonus + whaleBonus);
     }
-    evt.signal   = Math.min(100, s1+s2+s3+s4+s5+s6+pmBoost);
+    // stBoost: +0 to +8 pts for short-term direction conviction
+    // Fires when PM direction market has strong conviction (|YES - 0.5| ≥ 0.08)
+    var stBoost = 0;
+    if (evt.stFeed && typeof evt.stYesProb === 'number') {
+      var stConv = Math.abs(evt.stYesProb - 0.5);                    // 0-0.5 range
+      if (stConv >= 0.08) {
+        stBoost = Math.min(8, Math.round((stConv - 0.08) / 0.42 * 8)); // 0-8 pts
+      }
+    }
+    evt.signal   = Math.min(100, s1+s2+s3+s4+s5+s6+pmBoost+stBoost);
     evt.pmBoost  = pmBoost;
+    evt.stBoost  = stBoost;
     evt.assets   = assets;
     evt.keywords = kwHits;
     evt.geoScore = geo;
@@ -9823,13 +9834,16 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── RENDER: SIGNAL FEED ───────────────────────────────────────────────── */
   function renderSignals() {
     var el = gel('intelSignalFeed'); if (!el) return;
-    // Merge: guaranteed PM slots + top news events
+    // Merge: guaranteed ST slots (most time-sensitive) + geo PM slots + news
     var pmEvts = (window.PM && typeof window.PM.events === 'function') ? window.PM.events() : [];
+    var stEvts = (window.PM && typeof window.PM.stEvents === 'function') ? window.PM.stEvents() : [];
+    var stTop3 = stEvts.slice().sort(function(a,b){ return (b.stConviction||0)-(a.stConviction||0); }).slice(0,3);
     var pmTop5 = pmEvts.slice().sort(function(a,b){ return (b.signal||0)-(a.signal||0); }).slice(0,5);
-    var nonPm  = IC.events.slice().filter(function(e){ return !e.pmFeed; })
-                   .sort(function(a,b){ return (b.signal||0)-(a.signal||0); }).slice(0, 30 - pmTop5.length);
+    var reserved = stTop3.length + pmTop5.length;
+    var nonPm  = IC.events.slice().filter(function(e){ return !e.pmFeed && !e.stFeed; })
+                   .sort(function(a,b){ return (b.signal||0)-(a.signal||0); }).slice(0, 30 - reserved);
     var seenTitles = {};
-    var top = pmTop5.concat(nonPm).filter(function(e) {
+    var top = stTop3.concat(pmTop5).concat(nonPm).filter(function(e) {
       if (seenTitles[e.title]) return false; seenTitles[e.title] = true; return true;
     }).sort(function(a,b){ return (b.signal||0)-(a.signal||0); });
     if (!top.length) { el.innerHTML = '<div class="intel-placeholder">No events yet&hellip;</div>'; return; }
@@ -9846,11 +9860,16 @@ document.addEventListener('DOMContentLoaded', function() {
           + (e.pmWhaleNet && e.pmWhaleNet !== 0 ? (e.pmWhaleNet>0?' ⬆':' ⬇') : '')
           + '</span>'
         : '';
+      var stBadge = e.stFeed
+        ? '<span class="signal-tag shortterm" style="font-size:8px;padding:1px 5px;margin-right:4px;vertical-align:middle">'
+          + 'ST·' + (e.stAsset || '') + (e.stDir || '') + (e.stYesProb ? Math.round(e.stYesProb*100)+'%' : '')
+          + '</span>'
+        : '';
       return '<div class="intel-sig-item">' +
         '<div class="intel-sig-bar-wrap"><div class="intel-sig-fill f-'+cls+'" style="width:'+s+'%"></div></div>' +
         '<span class="intel-sig-score s-'+cls+'">'+s+'</span>' +
         '<span class="intel-sig-src">'+e.source.slice(0,7).toUpperCase()+'</span>' +
-        sbBadge + pmBadge +
+        sbBadge + pmBadge + stBadge +
         '<span class="intel-sig-text" title="'+e.title+'">'+e.title+'</span>' +
         '<span class="intel-sig-time">'+e.time+'</span>' +
       '</div>';
@@ -12516,7 +12535,7 @@ function _modalKeyHandler(e) {
 <!-- ShadowBroker Integration — injects OSINT feeds into the AI pipeline -->
 <script src="shadowbroker.js?v=21"></script>
 <!-- Polymarket Integration — prediction market consensus → IC pipeline (paper trading only) -->
-<script src="polymarket.js?v=11"></script>
+<script src="polymarket.js?v=13"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
 <script src="executionEngine.js"></script>
