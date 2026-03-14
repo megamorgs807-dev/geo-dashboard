@@ -9823,7 +9823,15 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── RENDER: SIGNAL FEED ───────────────────────────────────────────────── */
   function renderSignals() {
     var el = gel('intelSignalFeed'); if (!el) return;
-    var top = IC.events.slice().sort(function(a,b){ return (b.signal||0)-(a.signal||0); }).slice(0,30);
+    // Merge: guaranteed PM slots + top news events
+    var pmEvts = (window.PM && typeof window.PM.events === 'function') ? window.PM.events() : [];
+    var pmTop5 = pmEvts.slice().sort(function(a,b){ return (b.signal||0)-(a.signal||0); }).slice(0,5);
+    var nonPm  = IC.events.slice().filter(function(e){ return !e.pmFeed; })
+                   .sort(function(a,b){ return (b.signal||0)-(a.signal||0); }).slice(0, 30 - pmTop5.length);
+    var seenTitles = {};
+    var top = pmTop5.concat(nonPm).filter(function(e) {
+      if (seenTitles[e.title]) return false; seenTitles[e.title] = true; return true;
+    }).sort(function(a,b){ return (b.signal||0)-(a.signal||0); });
     if (!top.length) { el.innerHTML = '<div class="intel-placeholder">No events yet&hellip;</div>'; return; }
     el.innerHTML = top.map(function(e){
       var s = e.signal||0;
@@ -12508,7 +12516,7 @@ function _modalKeyHandler(e) {
 <!-- ShadowBroker Integration — injects OSINT feeds into the AI pipeline -->
 <script src="shadowbroker.js?v=21"></script>
 <!-- Polymarket Integration — prediction market consensus → IC pipeline (paper trading only) -->
-<script src="polymarket.js?v=1"></script>
+<script src="polymarket.js?v=7"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
 <script src="executionEngine.js"></script>

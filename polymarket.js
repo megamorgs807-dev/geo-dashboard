@@ -2,7 +2,7 @@
    Ingests geopolitically-relevant Polymarket markets into the IC pipeline.
 
    Signal layers (capital-weighted wallet consensus):
-     1. YES token price     — aggregate of all wallet positions (Gamma API, CORS-open)
+     1. YES token price     — aggregate of all wallet positions (Gamma API, via corsproxy)
      2. Order book imbalance — live bid vs ask pressure (CLOB, via corsproxy)
      3. Whale trades        — single trades ≥ $1 000 flagged as institutional signals
                               (Data API, via corsproxy)
@@ -52,14 +52,15 @@
   var _obCache  = {};   // condition_id → {bidVol, askVol, imbalance, ts}
   var _actCache = {};   // condition_id → {whaleCount, netWhales, largestTrade, whaleBias}
   var _seen     = new Set();
+  var _pmEvents = [];   // scored PM event cache — won't be evicted by IC overflow
   var _panelTimer = null;
 
   /* ── GEO KEYWORD FILTER ──────────────────────────────────────────────────── */
   var PM_GEO_KWS = [
-    // Conflict / military
-    'war','conflict','attack','military','missile','troops','invasion','airstrike',
+    // Conflict / military (no bare 'war' — matches "Warriors", "award" etc.)
+    'conflict','attack','military','missile','troops','invasion','airstrike',
     'strike','ceasefire','nato','nuclear','sanction','offensive','coup','assassination',
-    'drone','blockade',
+    'drone','blockade','warfare','warhead',
     // Energy / commodities
     'oil','crude','opec','gas','petroleum','hormuz','energy','barrel','brent','wti',
     // Geopolitical countries & hotspots
@@ -182,9 +183,16 @@
     }
   }
 
+  /* outcomePrices arrives as JSON string "[\"0.72\",\"0.28\"]" from Gamma API */
+  function _yesPrice(market) {
+    var op = market.outcomePrices || ['0'];
+    if (typeof op === 'string') { try { op = JSON.parse(op); } catch (e) { op = ['0']; } }
+    return parseFloat(op[0]) || 0;
+  }
+
   /* ── SIGNAL SYNTHESIS ────────────────────────────────────────────────────── */
   function _synthesise(market) {
-    var yp  = parseFloat((market.outcomePrices || ['0'])[0]) || 0;
+    var yp  = _yesPrice(market);
     var vol = parseFloat(market.volume24hr || market.volume || 0);
     var ob  = (_obCache[market.condition_id] || {}).imbalance || 0;
     var act = _actCache[market.condition_id] || {};
@@ -221,15 +229,7 @@
     var IC = window.__IC;
     if (!IC || typeof IC.ingest !== 'function') return;
 
-    // Dedup on condition_id — stable identifier, won't collide across questions
-    var key = 'pm_' + (market.condition_id || market.id || '').slice(0, 32);
-    if (_seen.has(key)) return;
-    _seen.add(key);
-    if (_seen.size > 500) {
-      var arr = Array.from(_seen); _seen = new Set(arr.slice(-300));
-    }
-
-    var yp     = parseFloat((market.outcomePrices || ['0'])[0]) || 0;
+    var yp     = _yesPrice(market);
     var vol    = parseFloat(market.volume24hr || market.volume || 0);
     var region = _textToRegion(market.question || '');
     var obPct  = Math.round(Math.abs(sig.pmImbalance) * 100);
@@ -245,25 +245,50 @@
       + ' | Vol: $' + vol.toLocaleString(undefined, { maximumFractionDigits: 0 })
       + ' | ' + region;
 
+    // PM events refresh every poll cycle — evict stale IC entry so the updated
+    // signal replaces it rather than being blocked by the IC dedup set
+    var icKey = title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 48);
+    if (IC.eventIds) IC.eventIds.delete(icKey);
+    // Also remove matching stale event from the events array
+    var pmMkt = (market.question || '').slice(0, 80);
+    for (var i = IC.events.length - 1; i >= 0; i--) {
+      if (IC.events[i].pmMarket === pmMkt) { IC.events.splice(i, 1); break; }
+    }
+
     IC.ingest(title, desc, 'Polymarket/Gamma', {
       ts:          Date.now(),
       region:      region,
-      srcCount:    sig.pmImbalance !== 0 ? 2 : 1,  // 2 if OB data present
+      srcCount:    sig.pmImbalance !== 0 ? 2 : 1,
       socialV:     sig.pmYesProb,
       pmFeed:      'markets',
       pmYesProb:   sig.pmYesProb,
-      pmMarket:    (market.question || '').slice(0, 80),
+      pmMarket:    pmMkt,
       pmImbalance: sig.pmImbalance,
       pmWhaleNet:  sig.pmWhaleNet,
     });
 
+    // Capture the fully-scored event from IC immediately after injection (before eviction)
+    // and store in _pmEvents — this array is never evicted, ensuring PM signals persist
+    if (IC.events[0] && IC.events[0].pmMarket === pmMkt) {
+      var scored = IC.events[0];
+      _pmEvents = _pmEvents.filter(function(e) { return e.pmMarket !== pmMkt; });
+      _pmEvents.unshift({
+        title: scored.title, desc: scored.desc, source: scored.source,
+        pmFeed: scored.pmFeed, pmYesProb: scored.pmYesProb, pmMarket: scored.pmMarket,
+        pmImbalance: scored.pmImbalance, pmWhaleNet: scored.pmWhaleNet,
+        signal: scored.signal, pmBoost: scored.pmBoost,
+        ts: scored.ts, time: scored.time, region: scored.region,
+      });
+      if (_pmEvents.length > 20) _pmEvents.pop();
+    }
+
     _scheduleRedraw();
   }
 
-  /* ── POLL: MARKETS (Gamma API) ───────────────────────────────────────────── */
+  /* ── POLL: MARKETS (Gamma API, via proxy — direct fetch blocked from localhost) */
   function _pollMarkets() {
     var url = _cfg.gammaBase + '/markets?active=true&closed=false&limit=100&order=volume24hr&ascending=false';
-    _fetch(url, 12000, function (err, data) {
+    _fetchProxy(url, 15000, function (err, data) {
       if (err || !Array.isArray(data)) {
         _status.markets.ok  = false;
         _status.markets.err = err || 'no data';
@@ -273,7 +298,7 @@
 
       // Filter: geo-relevant + minimum volume + meaningful YES price
       var filtered = data.filter(function (m) {
-        var yp  = parseFloat((m.outcomePrices || ['0'])[0]) || 0;
+        var yp  = _yesPrice(m);
         var vol = parseFloat(m.volume24hr || m.volume || 0);
         return _geoMatch(m.question || '')
           && vol >= _cfg.minVolume
@@ -281,17 +306,21 @@
           && yp <= _cfg.maxYesPrice;
       });
 
-      // Normalise and store
+      // Normalise and store — Gamma returns outcomePrices + tokens as JSON strings
+      function _parseField(v, fallback) {
+        if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return fallback; } }
+        return v || fallback;
+      }
       _markets = filtered.slice(0, 20).map(function (m) {
         return {
           id:           m.id,
           condition_id: m.condition_id || m.conditionId || m.id,
           question:     (m.question || '').trim(),
-          outcomePrices: m.outcomePrices || ['0.5','0.5'],
+          outcomePrices: _parseField(m.outcomePrices, ['0.5','0.5']),
           volume24hr:   parseFloat(m.volume24hr || m.volume || 0),
           liquidityNum: parseFloat(m.liquidityNum || 0),
           endDate:      m.endDate || null,
-          tokens:       m.tokens || [],
+          tokens:       _parseField(m.tokens, []),
         };
       });
 
@@ -300,10 +329,21 @@
       _status.markets.last  = _hhmm();
       _status.markets.err   = '';
 
-      // Trigger order book + activity polls for each discovered market
+      // Inject YES-price signals immediately (token IDs not in Gamma /markets response,
+      // so OB/whale data unavailable — signal still meaningful from market consensus price)
       _markets.forEach(function (m, i) {
-        setTimeout(function () { _pollOrderBook(m); }, i * 800);
-        setTimeout(function () { _pollActivity(m); }, i * 1000 + 300);
+        setTimeout(function () {
+          var sig = _synthesise(m);
+          if (sig.pmYesProb >= 0.35 && sig.pmYesProb <= 0.95) {
+            _inject(m, sig);
+          }
+        }, i * 300);
+      });
+
+      // Trigger order book + activity polls for each discovered market (if tokens available)
+      _markets.forEach(function (m, i) {
+        setTimeout(function () { _pollOrderBook(m); }, i * 800 + 500);
+        setTimeout(function () { _pollActivity(m); }, i * 1000 + 800);
       });
 
       _renderPanel();
@@ -457,7 +497,7 @@
     if (_markets.length) {
       html += '<div style="margin-top:8px">';
       _markets.slice(0, 5).forEach(function (m) {
-        var yp  = parseFloat((m.outcomePrices || ['0'])[0]) || 0;
+        var yp  = _yesPrice(m);
         var ypPct = Math.round(yp * 100);
         var ob  = (_obCache[m.condition_id] || {}).imbalance || 0;
         var act = _actCache[m.condition_id] || {};
@@ -631,6 +671,9 @@
     },
     markets: function () {
       return _markets.slice();
+    },
+    events: function () {
+      return _pmEvents.slice();
     },
   };
 
