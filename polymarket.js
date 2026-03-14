@@ -57,26 +57,47 @@
 
   /* ── MARKET KEYWORD FILTER (geo + macro tradeable signals) ──────────────── */
   var PM_GEO_KWS = [
-    // Conflict / military (no bare 'war' — matches "Warriors", "award" etc.)
+    // Conflict / military
     'conflict','attack','military','missile','troops','invasion','airstrike',
     'strike','ceasefire','nato','nuclear','sanction','offensive','coup','assassination',
-    'drone','blockade','warfare','warhead',
+    'drone','blockade','warfare','warhead','peacekeeping','arms deal',
+
     // Energy / commodities
     'oil','crude','opec','gas','petroleum','hormuz','energy','barrel','brent','wti',
+    'natural gas','lng','uranium','lithium','copper','wheat','corn','soybean',
+    'rare earth','palladium','platinum','coal',
+
     // Geopolitical countries & hotspots
     'iran','russia','ukraine','taiwan','china','israel','gaza','hamas','hezbollah',
     'north korea','korea','pakistan','india','saudi','houthi','yemen','syria','iraq',
-    'venezuela','crimea','donbas','nato','turkey',
-    // Macro / politics (directly market-moving)
-    'election','regime','protest','tariff','trade war','default','inflation','recession',
-    'interest rate','federal reserve','fed rate','rate cut','rate hike','basis point',
-    'trump','congress','senate','debt ceiling','gdp','unemployment',
-    // Crypto (risk-on/off signals, directly tradeable)
-    'bitcoin','btc','ethereum','eth','crypto','solana','sol ','coinbase','binance',
-    'stablecoin','defi','sec crypto','crypto regulation',
-    // Financial markets
-    'nasdaq','s&p','dow jones','vix','gold price','silver price',
-    'dollar index','dxy','yen','yuan','euro','pound sterling',
+    'venezuela','crimea','donbas','turkey','afghanistan','myanmar','ethiopia','sudan',
+    'mexico','nato','europe','european union','g7','g20',
+
+    // US macro / politics
+    'election','regime','tariff','trade war','default','inflation','recession','stagflation',
+    'interest rate','federal reserve','fomc','rate cut','rate hike','basis point',
+    'trump','congress','senate','house vote','debt ceiling','government shutdown',
+    'gdp','unemployment','nonfarm','payroll','cpi','ppi','jobs report',
+    'powell','yellen','treasury','stimulus','spending bill','budget',
+
+    // Geopolitical leaders & orgs
+    'putin','zelensky','netanyahu','xi jinping','kim jong','modi','erdogan',
+    'imf','world bank','wto','opec','brics','un security',
+
+    // Crypto
+    'bitcoin','btc','ethereum','eth','crypto','solana','xrp','ripple',
+    'dogecoin','coinbase','binance','stablecoin','tether','usdc',
+    'defi','nft','crypto regulation','sec crypto','tiktok ban',
+
+    // Financial markets & instruments
+    'nasdaq','s&p 500','dow jones','vix','gold price','silver price',
+    'dollar index','dxy','yen','yuan','renminbi','euro','pound sterling',
+    '10-year','treasury yield','bond yield','fed balance','quantitative',
+    'ipo','merger','acquisition','bankruptcy','short squeeze',
+
+    // Tech / strategic
+    'semiconductor','chip ban','huawei','tiktok','ai regulation',
+    'antitrust','monopoly','data privacy',
   ];
 
   /* ── REGION MAPPING ──────────────────────────────────────────────────────── */
@@ -330,7 +351,7 @@
         if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return fallback; } }
         return v || fallback;
       }
-      _markets = filtered.slice(0, 30).map(function (m) {
+      _markets = filtered.slice(0, 50).map(function (m) {
         return {
           id:           m.id,
           condition_id: m.condition_id || m.conditionId || m.id,
