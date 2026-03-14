@@ -1,4 +1,4 @@
-/* GII Social Agent — gii-social.js v2
+/* GII Social Agent — gii-social.js v3
  * Monitors social velocity / GDELT sentiment signals
  * Reads: window.__IC.events (source: REDDIT / GDELT)
  * Exposes: window.GII_AGENT_SOCIAL
@@ -64,13 +64,16 @@
     var now = Date.now();
     var cutoff = now - 12 * 60 * 60 * 1000; // 12h for social velocity
 
-    // Filter to REDDIT/GDELT sourced events only
+    // Filter to REDDIT/GDELT sourced events, OR events with meaningful social velocity (>0.3)
+    // Bug fix: ALL IC events have e.socialV defined (default 0), so checking !== undefined
+    // would match every single event. Use a threshold of >0.3 instead.
     var socialEvents = IC.events.filter(function (e) {
       if (e.ts <= cutoff) return false;
       var src = (e.source || e.feed || '').toUpperCase();
-      // Also check for socialV property which indicates social signal
-      return src.indexOf('REDDIT') !== -1 || src.indexOf('GDELT') !== -1 ||
-             src.indexOf('SOCIAL') !== -1 || e.socialV !== undefined;
+      var isSocialSource = src.indexOf('REDDIT') !== -1 || src.indexOf('GDELT') !== -1 ||
+                           src.indexOf('SOCIAL') !== -1;
+      var hasSignificantVelocity = typeof e.socialV === 'number' && e.socialV > 0.3;
+      return isSocialSource || hasSignificantVelocity;
     });
 
     _status.socialEventCount = socialEvents.length;

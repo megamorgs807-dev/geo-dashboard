@@ -1,4 +1,4 @@
-/* GII Core — gii-core.js v1
+/* GII Core — gii-core.js v2
  * Multi-agent orchestrator: Bayesian engine, GTI, convergence, portfolio manager
  * Depends on: all GII_AGENT_* globals, window.__IC, window.PM, window.EE
  * Exposes: window.GII
@@ -84,18 +84,31 @@
     { name: 'maritime',   global: 'GII_AGENT_MARITIME'   },
     { name: 'social',     global: 'GII_AGENT_SOCIAL'     },
     { name: 'polymarket', global: 'GII_AGENT_POLYMARKET' },
-    { name: 'regime',     global: 'GII_AGENT_REGIME'     }
+    { name: 'regime',     global: 'GII_AGENT_REGIME'     },
+    { name: 'satellite',  global: 'GII_AGENT_SATELLITE'  },
+    { name: 'historical', global: 'GII_AGENT_HISTORICAL' }
   ];
 
   function _getAgent(def) { return window[def.global] || null; }
 
   function _collectAllSignals() {
     var all = [];
+    var staleThreshold = Date.now() - CYCLE_INTERVAL * 2; // signals older than 2 cycles are stale
     AGENTS.forEach(function (def) {
       var agent = _getAgent(def);
       if (!agent) return;
+      // Warn if agent hasn't polled recently (stale data guard)
+      try {
+        var st = agent.status();
+        if (st && st.lastPoll && st.lastPoll < staleThreshold) {
+          console.warn('[GII] Agent ' + def.name + ' may have stale signals (last poll: ' +
+            new Date(st.lastPoll).toLocaleTimeString() + ')');
+        }
+      } catch (e) {}
       var sigs = [];
-      try { sigs = agent.signals() || []; } catch (e) {}
+      try { sigs = agent.signals() || []; } catch (e) {
+        console.warn('[GII] Agent ' + def.name + ' signals() error: ' + (e.message || String(e)));
+      }
       // Attach agent name for weighting
       sigs.forEach(function (s) {
         all.push(Object.assign({}, s, { _agentName: def.name }));
@@ -307,14 +320,19 @@
       : 0.20;
     var c1 = meanRegionProb * 100;
 
-    // Component 2 (20%): high-signal event density (last 24h)
+    // Component 2 (20%): high-signal event intensity (last 24h)
+    // Weighted by avg signal strength, not raw count — prevents noise inflation
     var c2 = 0;
     if (IC && IC.events) {
       var cutoff24 = Date.now() - 24 * 60 * 60 * 1000;
       var highEvts = IC.events.filter(function (e) {
-        return e.timestamp > cutoff24 && (e.signal || e.severity || 0) >= 70;
+        return e.ts > cutoff24 && (e.signal || e.severity || 0) >= 70;   // fixed: e.ts not e.timestamp
       });
-      c2 = _clamp(highEvts.length * 5, 0, 100); // 20 events → 100
+      if (highEvts.length) {
+        var avgSig = highEvts.reduce(function (s, e) { return s + (e.signal || e.severity || 70); }, 0) / highEvts.length;
+        var countFactor = _clamp(highEvts.length / 10, 0.1, 1.0); // 10+ events = full weight; 1 event = 10%
+        c2 = _clamp(avgSig * countFactor, 0, 100);
+      }
     }
 
     // Component 3 (20%): agent convergence score
@@ -433,7 +451,7 @@
     var IC = window.__IC;
     if (IC && IC.regionStates) {
       Object.keys(IC.regionStates).forEach(function (r) {
-        if (IC.regionStates[r].prob > 30) regions[r] = true;
+        if (IC.regionStates[r].prob > 15) regions[r] = true;   // lowered from 30 — catches new events faster
       });
     }
     return Object.keys(regions);
@@ -444,11 +462,15 @@
   function _cycle() {
     _lastCycleTs = Date.now();
 
-    // 1. Poll all agents
+    // 1. Poll all agents — log errors but never crash the cycle
     AGENTS.forEach(function (def) {
       var agent = _getAgent(def);
       if (agent && typeof agent.poll === 'function') {
-        try { agent.poll(); } catch (e) {}
+        try {
+          agent.poll();
+        } catch (e) {
+          console.warn('[GII] Agent ' + def.name + ' poll() error: ' + (e.message || String(e)));
+        }
       }
     });
 
