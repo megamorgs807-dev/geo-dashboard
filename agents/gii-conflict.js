@@ -1,4 +1,4 @@
-/* GII Conflict Agent — gii-conflict.js v1
+/* GII Conflict Agent — gii-conflict.js v2
  * Monitors armed-conflict and escalation signals
  * Reads: window.__IC.events, window.__IC.regionStates
  * Exposes: window.GII_AGENT_CONFLICT
@@ -87,7 +87,7 @@
     var conflictEvents = IC.events.filter(function (e) {
       var sig = e.signal || e.severity || 0;
       var text = e.headline || e.text || e.title || '';
-      return sig >= MIN_SEVERITY && e.timestamp > cutoff && _matchesSev(text);
+      return sig >= MIN_SEVERITY && e.ts > cutoff && _matchesSev(text);
     });
 
     _status.conflictEventCount = conflictEvents.length;

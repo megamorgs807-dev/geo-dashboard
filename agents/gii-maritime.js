@@ -1,4 +1,4 @@
-/* GII Maritime Agent — gii-maritime.js v1
+/* GII Maritime Agent — gii-maritime.js v2
  * Monitors maritime chokepoints, naval movements, Hormuz pattern
  * Reads: window.__IC.events (sbFeed: 'maritime'/'aircraft')
  * Exposes: window.GII_AGENT_MARITIME
@@ -136,7 +136,7 @@
 
     // Get maritime/aircraft events — either sbFeed tagged or keyword match
     var maritimeEvents = IC.events.filter(function (e) {
-      if (e.timestamp <= cutoff) return false;
+      if (e.ts <= cutoff) return false;
       if (e.sbFeed === 'maritime' || e.sbFeed === 'aircraft') return true;
       var text = e.headline || e.text || e.title || '';
       return _matchesKeywords(text, MARITIME_KEYWORDS);

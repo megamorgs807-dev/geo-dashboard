@@ -1,4 +1,4 @@
-/* GII Regime Agent — gii-regime.js v1
+/* GII Regime Agent — gii-regime.js v2
  * Detects structural regime shifts from IC events
  * Reads: window.__IC.events (last 2h, signal >= 70)
  * Exposes: window.GII_AGENT_REGIME
@@ -91,7 +91,7 @@
     // High-signal events in last 2h
     var highSigEvents = IC.events.filter(function (e) {
       var sig = e.signal || e.severity || 0;
-      return e.timestamp > cutoff && sig >= MIN_SIGNAL;
+      return e.ts > cutoff && sig >= MIN_SIGNAL;
     });
 
     _status.eventCount = highSigEvents.length;

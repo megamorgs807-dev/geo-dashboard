@@ -1,4 +1,4 @@
-/* GII Sanctions Agent — gii-sanctions.js v1
+/* GII Sanctions Agent — gii-sanctions.js v2
  * Monitors sanctions, embargoes, and financial restrictions
  * Reads: window.__IC.events, window.__IC.regionStates
  * Exposes: window.GII_AGENT_SANCTIONS
@@ -74,7 +74,7 @@
     // Filter to sanction events
     var sanctionEvents = IC.events.filter(function (e) {
       var text = e.headline || e.text || e.title || '';
-      return e.timestamp > cutoff && _matchesSanction(text);
+      return e.ts > cutoff && _matchesSanction(text);
     });
 
     _status.sanctionEventCount = sanctionEvents.length;

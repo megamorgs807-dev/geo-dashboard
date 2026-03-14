@@ -1,4 +1,4 @@
-/* GII Macro Agent — gii-macro.js v1
+/* GII Macro Agent — gii-macro.js v2
  * Monitors macro-financial signals (VIX, DXY, US10Y, regime)
  * Reads: /api/market, /api/regime
  * Exposes: window.GII_AGENT_MACRO
@@ -169,12 +169,14 @@
 
   // ── public poll ────────────────────────────────────────────────────────────
 
+  var _API = (typeof window !== 'undefined' && window.GEO_API_BASE) || 'http://localhost:8765';
+
   function poll() {
     _status.lastPoll = Date.now();
-    _fetchJSON('/api/market', function (err, market) {
+    _fetchJSON(_API + '/api/market', function (err, market) {
       if (err) { _status.online = false; return; }
       _status.online = true;
-      _fetchJSON('/api/regime', function (err2, regime) {
+      _fetchJSON(_API + '/api/regime', function (err2, regime) {
         _analyseMarket(market, err2 ? null : regime);
       });
     });

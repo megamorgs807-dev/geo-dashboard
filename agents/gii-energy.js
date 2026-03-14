@@ -1,4 +1,4 @@
-/* GII Energy Agent — gii-energy.js v1
+/* GII Energy Agent — gii-energy.js v2
  * Monitors oil/gas/energy geopolitical signals
  * Reads: window.__IC.events, window.__IC.regionStates, window.SB, /api/market
  * Exposes: window.GII_AGENT_ENERGY
@@ -43,8 +43,10 @@
 
   // ── market data fetch ──────────────────────────────────────────────────────
 
+  var _API = (typeof window !== 'undefined' && window.GEO_API_BASE) || 'http://localhost:8765';
+
   function _fetchMarket(cb) {
-    fetch('/api/market', { method: 'GET', headers: { 'Content-Type': 'application/json' } })
+    fetch(_API + '/api/market', { method: 'GET', headers: { 'Content-Type': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { cb(null, d); })
       .catch(function (e) { cb(e, null); });
@@ -59,7 +61,7 @@
     var now = Date.now();
     var cutoff = now - 24 * 60 * 60 * 1000; // 24h
     var energyEvents = IC.events.filter(function (e) {
-      return e.timestamp > cutoff && _matchesEnergy(e.headline || e.text || e.title || '');
+      return e.ts > cutoff && _matchesEnergy(e.headline || e.text || e.title || '');
     });
 
     _status.energyEventCount = energyEvents.length;
