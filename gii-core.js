@@ -1,4 +1,4 @@
-/* GII Core — gii-core.js v3
+/* GII Core — gii-core.js v4
  * Multi-agent orchestrator: Bayesian engine, GTI, convergence, portfolio manager
  * Depends on: all GII_AGENT_* globals, window.__IC, window.PM, window.EE
  * Exposes: window.GII
@@ -88,7 +88,9 @@
     { name: 'satellite',  global: 'GII_AGENT_SATELLITE'  },
     { name: 'historical', global: 'GII_AGENT_HISTORICAL' },
     { name: 'liquidity',  global: 'GII_AGENT_LIQUIDITY'  },
-    { name: 'calendar',   global: 'GII_AGENT_CALENDAR'   }
+    { name: 'calendar',   global: 'GII_AGENT_CALENDAR'   },
+    { name: 'chokepoint', global: 'GII_AGENT_CHOKEPOINT' },
+    { name: 'narrative',  global: 'GII_AGENT_NARRATIVE'  }
   ];
 
   function _getAgent(def) { return window[def.global] || null; }

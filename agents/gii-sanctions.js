@@ -1,5 +1,6 @@
-/* GII Sanctions Agent — gii-sanctions.js v2
- * Monitors sanctions, embargoes, and financial restrictions
+/* GII Sanctions Agent — gii-sanctions.js v3
+ * Monitors sanctions, embargoes, financial restrictions AND pre-sanctions pipeline signals
+ * (legislative activity, treasury warnings, regulatory filings, diplomatic meetings)
  * Reads: window.__IC.events, window.__IC.regionStates
  * Exposes: window.GII_AGENT_SANCTIONS
  */
@@ -17,6 +18,20 @@
     'designation', 'restricted list', 'entity list', 'sdn list'
   ];
 
+  // Pre-sanctions pipeline keywords — legislative / regulatory / diplomatic warnings
+  // These fire BEFORE formal sanctions are announced
+  var LEGISLATIVE_KEYWORDS = [
+    'congressional hearing sanctions', 'senate committee sanctions', 'house committee sanctions',
+    'bipartisan sanctions', 'sanctions bill', 'sanctions vote', 'sanctions legislation',
+    'treasury statement', 'treasury warning', 'treasury notice', 'ofac review', 'ofac alert',
+    'treasury designation', 'entity list update', 'export control draft', 'regulatory filing',
+    'executive order sanctions', 'emergency economic powers', 'ieepa',
+    'sanctions package under review', 'considering sanctions', 'weighing sanctions',
+    'preparing sanctions', 'studying sanctions', 'sanctions options', 'sanctions threat',
+    'diplomatic warning sanctions', 'final warning', 'ultimatum deadline', 'last chance',
+    'policy memo sanctions', 'leaked sanctions', 'sanctions under discussion'
+  ];
+
   // Classify sanctions into impact categories
   var ENERGY_TERMS = ['oil', 'gas', 'energy', 'petroleum', 'lng', 'pipeline', 'refinery'];
   var FINANCIAL_TERMS = ['swift', 'bank', 'finance', 'currency', 'capital', 'dollar', 'payment'];
@@ -31,6 +46,7 @@
   var _status = {
     lastPoll: null,
     sanctionEventCount: 0,
+    legislativeEvents: 0,
     energySanctions: 0,
     financialSanctions: 0,
     techSanctions: 0,
@@ -49,10 +65,11 @@
     return false;
   }
 
-  function _matchesSanction(text) { return _matchesKeywords(text, SANCTION_KEYWORDS); }
-  function _matchesEnergy(text)   { return _matchesKeywords(text, ENERGY_TERMS); }
-  function _matchesFinancial(text){ return _matchesKeywords(text, FINANCIAL_TERMS); }
-  function _matchesTech(text)     { return _matchesKeywords(text, TECH_TERMS); }
+  function _matchesSanction(text)    { return _matchesKeywords(text, SANCTION_KEYWORDS); }
+  function _matchesLegislative(text) { return _matchesKeywords(text, LEGISLATIVE_KEYWORDS); }
+  function _matchesEnergy(text)      { return _matchesKeywords(text, ENERGY_TERMS); }
+  function _matchesFinancial(text)   { return _matchesKeywords(text, FINANCIAL_TERMS); }
+  function _matchesTech(text)        { return _matchesKeywords(text, TECH_TERMS); }
 
   function _clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
@@ -177,6 +194,52 @@
           reasoning: techEvts.length + ' tech ban/chip sanction events | top: ' + (topT.headline || '').substring(0, 60),
           region: topT.region || 'GLOBAL',
           evidenceKeys: ['chip ban', 'semiconductor ban', 'tech']
+        });
+      });
+    }
+
+    // ── Pre-sanctions pipeline: legislative / regulatory / diplomatic ─────────
+    // Fires BEFORE formal sanctions — early warning signals from the policy process
+
+    var legEvts = IC.events.filter(function (e) {
+      var text = e.headline || e.text || e.title || '';
+      return e.ts > cutoff && _matchesLegislative(text);
+    });
+
+    _status.legislativeEvents = legEvts.length;
+
+    if (legEvts.length >= 1) {
+      // Group by region to give per-region pre-sanctions signal
+      var byRegion = {};
+      legEvts.forEach(function (e) {
+        var r = (e.region || 'GLOBAL').toUpperCase();
+        if (!byRegion[r]) byRegion[r] = [];
+        byRegion[r].push(e);
+      });
+
+      Object.keys(byRegion).forEach(function (region) {
+        var evts = byRegion[region];
+        var topSig = Math.max.apply(null, evts.map(function (e) { return e.signal || e.severity || 50; }));
+        var prior = IC.regionStates && IC.regionStates[region]
+          ? _clamp((IC.regionStates[region].prob || 0) / 100, 0.05, 0.90) : 0.20;
+
+        // Pre-pipeline signals are lower confidence than confirmed sanctions
+        var conf = _clamp(topSig / 100 * 0.60 * (0.5 + prior), 0.22, 0.68);
+        var topHeadline = (evts[0].headline || evts[0].title || '').substring(0, 70);
+        var typeLabel = evts.length > 1 ? evts.length + ' legislative events' : 'legislative activity';
+
+        // Determine asset: check if region/text hints at energy or tech
+        var fullText = evts.map(function (e) { return e.headline || e.title || ''; }).join(' ');
+        var asset = _matchesEnergy(fullText) ? 'WTI' : _matchesTech(fullText) ? 'TSM' : 'GLD';
+
+        _pushSignal({
+          source:       'sanctions',
+          asset:        asset,
+          bias:         'long',
+          confidence:   conf,
+          reasoning:    '[PRE-SANCTIONS PIPELINE] ' + typeLabel + ' in ' + region + ' | ' + topHeadline,
+          region:       region,
+          evidenceKeys: ['treasury warning', 'sanctions bill', 'legislative', 'policy']
         });
       });
     }
