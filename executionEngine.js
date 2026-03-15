@@ -1117,7 +1117,8 @@
     }
     el.innerHTML = open.map(function (t) {
       var dirCls  = t.direction === 'LONG' ? 'ee-dir-long' : 'ee-dir-short';
-      var livePx  = _livePrice[t.trade_id] || null;
+      // Prefer freshly-polled price; fall back to price cache so P&L always shows
+      var livePx  = _livePrice[t.trade_id] || _priceCache[normaliseAsset(t.asset)] || null;
 
       // Unrealised P&L row (only if we have a live price)
       var liveRow = '';
@@ -1156,6 +1157,7 @@
           ' &nbsp; <span class="ee-tc-sl">SL: ' + _num(t.stop_loss) + '</span>' +
           ' &nbsp; <span class="ee-tc-tp">TP: ' + _num(t.take_profit) + '</span>' +
           ' &nbsp; Size: $' + _num(t.size_usd) +
+          ' &nbsp; <span style="color:#e040fb">Lev: ' + (t.size_usd > 0 ? (t.size_usd / _cfg.virtual_balance).toFixed(2) : '—') + '×</span>' +
           liveRow +
         '</div>' +
         '<div class="ee-tc-actions">' +
