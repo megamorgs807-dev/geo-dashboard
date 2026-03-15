@@ -1663,6 +1663,39 @@
     drawHBar('eeChartAssetPnl', assetPnlItems, 'pnl_usd', 'label',
       function (v) { return v >= 0 ? '#00c8a0' : '#ff4444'; });
 
+    /* ── Open positions unrealised P&L bar ── */
+    var openEl = document.getElementById('eeAnOpenPnl');
+    if (openEl) {
+      var openT = openTrades();
+      if (!openT.length) {
+        openEl.textContent = 'No open positions';
+        openEl.style.color = 'var(--dim)';
+      } else {
+        var totPct = 0, totUsd = 0, priced = 0;
+        openT.forEach(function (t) {
+          var px = _livePrice[t.trade_id] || null;
+          if (!px) return;
+          var p = t.direction === 'LONG'
+            ? (px - t.entry_price) / t.entry_price * 100
+            : (t.entry_price - px) / t.entry_price * 100;
+          totPct += p;
+          totUsd += t.units * Math.abs(px - t.entry_price) * (p >= 0 ? 1 : -1);
+          priced++;
+        });
+        if (priced === 0) {
+          openEl.textContent = openT.length + ' open trade' + (openT.length > 1 ? 's' : '') + ' — awaiting price feed';
+          openEl.style.color = 'var(--dim)';
+        } else {
+          var ap = Math.round(totPct * 100) / 100;
+          var au = Math.round(totUsd * 100) / 100;
+          openEl.textContent = openT.length + ' open · Unrealised: ' +
+            (ap >= 0 ? '+' : '') + ap.toFixed(1) + '%  (' +
+            (au >= 0 ? '+$' : '-$') + _num(Math.abs(au)) + ')';
+          openEl.style.color = totUsd >= 0 ? 'var(--green)' : 'var(--red)';
+        }
+      }
+    }
+
     var regionItems = Object.keys(a.regionMap).map(function (k) {
       return { label: k, pnl_usd: a.regionMap[k].pnl_usd };
     }).sort(function (x, y) { return Math.abs(y.pnl_usd) - Math.abs(x.pnl_usd); });
@@ -1781,6 +1814,22 @@
     /* ── Data access for external scripts / debugging ── */
     getOpenTrades:  function () { return openTrades().slice(); },
     getAllTrades:    function () { return _trades.slice(); },
+
+    /* ── Unrealised P&L for open trades using latest live prices ── */
+    unrealisedPnl: function () {
+      var result = [];
+      openTrades().forEach(function (t) {
+        var px = _livePrice[t.trade_id] || null;
+        if (!px) return;
+        var pct = t.direction === 'LONG'
+          ? (px - t.entry_price) / t.entry_price * 100
+          : (t.entry_price - px) / t.entry_price * 100;
+        var usd = t.units * Math.abs(px - t.entry_price) * (pct >= 0 ? 1 : -1);
+        result.push({ trade_id: t.trade_id, signal_id: t.signal_id, asset: t.asset,
+                      pct: Math.round(pct * 100) / 100, usd: Math.round(usd * 100) / 100 });
+      });
+      return result;
+    },
     getConfig:      function () { return Object.assign({}, _cfg); },
     exportJSON:     function () {
       var blob = new Blob([JSON.stringify(_trades, null, 2)], { type: 'application/json' });

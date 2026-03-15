@@ -5001,6 +5001,12 @@
         <span>Updates after each closed trade &middot; Canvas charts</span>
       </div>
 
+      <!-- Open positions live unrealised P&L -->
+      <div style="padding:6px 12px 2px;font-size:10px;font-weight:600;letter-spacing:0.5px;color:var(--dim)">
+        OPEN POSITIONS &nbsp;
+        <span id="eeAnOpenPnl" style="font-weight:500;color:var(--dim)">No open positions</span>
+      </div>
+
       <!-- Win rate: Today / Week / All Time -->
       <div class="ee-an-wr-row">
         <div class="ee-an-wr-card">
@@ -12333,8 +12339,23 @@ function _modalKeyHandler(e) {
           pnlEl.textContent = (s.pnl >= 0 ? '+' : '') + s.pnl.toFixed(1) + '% cumulative P&L';
           pnlEl.className   = 'hr-score-pnl ' + (s.pnl >= 0 ? 'pos' : 'neg');
         } else if (s.openCount > 0) {
-          pnlEl.textContent = 'P&L: — (' + s.openCount + ' open, awaiting close)';
-          pnlEl.className   = 'hr-score-pnl neu';
+          // Show live unrealised P&L from EE if prices are available
+          var unreal = null;
+          if (window.EE && typeof EE.unrealisedPnl === 'function') {
+            var eeUp = EE.unrealisedPnl();
+            if (eeUp.length) {
+              unreal = 0;
+              eeUp.forEach(function (u) { unreal += u.pct; });
+              unreal = Math.round(unreal * 100) / 100;
+            }
+          }
+          if (unreal !== null) {
+            pnlEl.textContent = 'Unrealised: ' + (unreal >= 0 ? '+' : '') + unreal.toFixed(1) + '% (' + s.openCount + ' open)';
+            pnlEl.className   = 'hr-score-pnl ' + (unreal >= 0 ? 'pos' : 'neg');
+          } else {
+            pnlEl.textContent = 'P&L: — (' + s.openCount + ' open, awaiting price)';
+            pnlEl.className   = 'hr-score-pnl neu';
+          }
         } else {
           pnlEl.textContent = 'P&L: — (no closed trades)';
           pnlEl.className   = 'hr-score-pnl neu';
@@ -12514,7 +12535,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=8"></script>
+<script src="executionEngine.js?v=9"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
