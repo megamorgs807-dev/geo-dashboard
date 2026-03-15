@@ -4923,6 +4923,7 @@
         <div class="ee-cfg-field"><label>TP Ratio (R:R)</label>  <input type="number" id="eeCfg_take_profit_ratio"  value="2"     min="0.5" max="10"        step="0.1"></div>
         <div class="ee-cfg-field"><label>Max Open Trades</label> <input type="number" id="eeCfg_max_open_trades"    value="5"     min="1"   max="20"        step="1"></div>
         <div class="ee-cfg-field"><label>Max / Region</label>    <input type="number" id="eeCfg_max_per_region"     value="2"     min="1"   max="5"         step="1"></div>
+        <div class="ee-cfg-field"><label>Max / Sector</label>    <input type="number" id="eeCfg_max_per_sector"     value="2"     min="1"   max="5"         step="1"></div>
         <div class="ee-cfg-field"><label>Virtual Balance $</label><input type="number" id="eeCfg_virtual_balance"   value="10000" min="100" max="10000000"   step="100"></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
@@ -9359,6 +9360,7 @@ document.addEventListener('DOMContentLoaded', function() {
     cycleN      : 0,
     events      : [],
     eventIds    : new Set(),
+    _eventTimes : {},       // id → timestamp(ms); used by the dedup pruner
     regionStates: {},
     liveSources : new Set(),
     stats       : { events:0, high:0, warnings:0, trades:0 },
@@ -9367,6 +9369,31 @@ document.addEventListener('DOMContentLoaded', function() {
     maxEvents   : 300,
     TICK_MS     : 60000,
   };
+
+  /* Prune IC.eventIds — removes entries older than 48h every 30 min.
+     Without this the Set grows forever across a long browser session,
+     wasting memory and blocking re-ingest of genuinely new events with
+     the same headline after 2+ days.                                    */
+  function _pruneEventIds() {
+    var cutoff = Date.now() - 48 * 60 * 60 * 1000;  // 48h ago
+    Object.keys(IC._eventTimes).forEach(function (id) {
+      if (IC._eventTimes[id] < cutoff) {
+        IC.eventIds.delete(id);
+        delete IC._eventTimes[id];
+      }
+    });
+    // Safety size cap: if still >2000 entries, rebuild from active events only
+    if (IC.eventIds.size > 2000) {
+      IC.eventIds = new Set();
+      IC._eventTimes = {};
+      IC.events.forEach(function (e) {
+        var k = dedupeKey(e.title, e.desc);
+        IC.eventIds.add(k);
+        IC._eventTimes[k] = e.ts || Date.now();
+      });
+    }
+  }
+  setInterval(_pruneEventIds, 30 * 60 * 1000);   // run every 30 min
   window.__IC = IC;
 
   /* ── GEOGRAPHIC IMPORTANCE (0–1) ───────────────────────────────────────── */
@@ -9583,6 +9610,57 @@ document.addEventListener('DOMContentLoaded', function() {
     /* ── Emerging markets ──────────────────────────────────────────────────── */
     'emerging': [{t:'EEM',i:6,d:'LONG',p:2},{t:'FXI',i:5,d:'LONG',p:2},{t:'INDA',i:5,d:'LONG',p:2}],
     'volatility':[{t:'VIX',i:8,d:'LONG',p:1},{t:'XAU',i:5,d:'LONG',p:1},{t:'SPY',i:4,d:'SHORT',p:2}],
+    /* ── Forex / Currency ──────────────────────────────────────────────────── */
+    'yen':       [{t:'JPY',i:7,d:'LONG',p:1},{t:'XAU',i:4,d:'LONG',p:2}],
+    'japan':     [{t:'JPY',i:6,d:'LONG',p:1},{t:'XAU',i:4,d:'LONG',p:2}],
+    'swiss':     [{t:'CHF',i:7,d:'LONG',p:1},{t:'XAU',i:5,d:'LONG',p:2}],
+    'franc':     [{t:'CHF',i:7,d:'LONG',p:1},{t:'XAU',i:4,d:'LONG',p:2}],
+    'norway':    [{t:'NOK',i:6,d:'LONG',p:1},{t:'WTI',i:4,d:'LONG',p:2}],
+    'devaluation':[{t:'XAU',i:7,d:'LONG',p:1},{t:'GLD',i:7,d:'LONG',p:2},{t:'BTC',i:6,d:'LONG',p:3}],
+    'currency crisis':[{t:'XAU',i:8,d:'LONG',p:1},{t:'GLD',i:8,d:'LONG',p:2},{t:'BTC',i:5,d:'LONG',p:3},{t:'EEM',i:7,d:'SHORT',p:2}],
+    /* ── Battery / Critical minerals ───────────────────────────────────────── */
+    'lithium':   [{t:'LIT',i:8,d:'LONG',p:1},{t:'TSLA',i:5,d:'LONG',p:3},{t:'BYD',i:5,d:'LONG',p:3}],
+    'cobalt':    [{t:'LIT',i:7,d:'LONG',p:1}],
+    'battery':   [{t:'LIT',i:7,d:'LONG',p:1},{t:'TSLA',i:5,d:'LONG',p:3}],
+    'ev':        [{t:'TSLA',i:7,d:'LONG',p:3},{t:'LIT',i:6,d:'LONG',p:1}],
+    'copper':    [{t:'COPX',i:8,d:'LONG',p:1},{t:'XME',i:6,d:'LONG',p:2}],
+    'rare earth':[{t:'SMH',i:6,d:'SHORT',p:2},{t:'XME',i:5,d:'LONG',p:2}],
+    /* ── AI / Technology disruption ────────────────────────────────────────── */
+    'artificial intelligence':[{t:'NVDA',i:8,d:'LONG',p:3},{t:'SMH',i:7,d:'LONG',p:2},{t:'QQQ',i:5,d:'LONG',p:2}],
+    'ai':        [{t:'NVDA',i:7,d:'LONG',p:3},{t:'QQQ',i:5,d:'LONG',p:2}],
+    'llm':       [{t:'NVDA',i:7,d:'LONG',p:3},{t:'QQQ',i:5,d:'LONG',p:2}],
+    'data center':[{t:'NVDA',i:7,d:'LONG',p:3},{t:'SMH',i:6,d:'LONG',p:2}],
+    /* ── Cyber / Infrastructure attacks ────────────────────────────────────── */
+    'cyberattack':[{t:'XAU',i:6,d:'LONG',p:1},{t:'SPY',i:5,d:'SHORT',p:2},{t:'BTC',i:4,d:'SHORT',p:3}],
+    'cyber':     [{t:'XAU',i:5,d:'LONG',p:1},{t:'SPY',i:4,d:'SHORT',p:2}],
+    'infrastructure':[{t:'XAU',i:5,d:'LONG',p:1},{t:'SPY',i:4,d:'SHORT',p:2}],
+    'power grid':[{t:'XAU',i:6,d:'LONG',p:1},{t:'WTI',i:5,d:'LONG',p:2},{t:'SPY',i:5,d:'SHORT',p:2}],
+    'hacking':   [{t:'XAU',i:5,d:'LONG',p:1},{t:'SPY',i:4,d:'SHORT',p:2}],
+    /* ── Agriculture / Food security ────────────────────────────────────────── */
+    'drought':   [{t:'WHT',i:8,d:'LONG',p:1},{t:'CORN',i:7,d:'LONG',p:1},{t:'XAU',i:4,d:'LONG',p:2}],
+    'flood':     [{t:'WHT',i:6,d:'LONG',p:1},{t:'CORN',i:6,d:'LONG',p:1}],
+    'corn':      [{t:'CORN',i:8,d:'LONG',p:1}],
+    'soybean':   [{t:'SOYB',i:8,d:'LONG',p:1}],
+    'agriculture':[{t:'WHT',i:6,d:'LONG',p:1},{t:'CORN',i:5,d:'LONG',p:1}],
+    'food':      [{t:'WHT',i:5,d:'LONG',p:1},{t:'CORN',i:4,d:'LONG',p:1}],
+    /* ── Shipping / Logistics ────────────────────────────────────────────────── */
+    'shipping':  [{t:'WTI',i:5,d:'LONG',p:2},{t:'DAL',i:4,d:'SHORT',p:3}],
+    'suez':      [{t:'WTI',i:8,d:'LONG',p:1},{t:'BRENT',i:8,d:'LONG',p:1},{t:'XLE',i:6,d:'LONG',p:2},{t:'DAL',i:5,d:'SHORT',p:3}],
+    'red sea':   [{t:'WTI',i:7,d:'LONG',p:1},{t:'BRENT',i:7,d:'LONG',p:1},{t:'XLE',i:5,d:'LONG',p:2}],
+    'houthi':    [{t:'WTI',i:7,d:'LONG',p:1},{t:'BRENT',i:7,d:'LONG',p:1},{t:'XAR',i:5,d:'LONG',p:2}],
+    'chokepoint':[{t:'WTI',i:8,d:'LONG',p:1},{t:'BRENT',i:8,d:'LONG',p:1},{t:'XAU',i:5,d:'LONG',p:2}],
+    /* ── Financial system ───────────────────────────────────────────────────── */
+    'swift':     [{t:'BTC',i:7,d:'LONG',p:2},{t:'XAU',i:6,d:'LONG',p:1},{t:'GLD',i:6,d:'LONG',p:2}],
+    'contagion': [{t:'XAU',i:7,d:'LONG',p:1},{t:'VIX',i:7,d:'LONG',p:1},{t:'SPY',i:6,d:'SHORT',p:2},{t:'EEM',i:6,d:'SHORT',p:2}],
+    'default':   [{t:'XAU',i:7,d:'LONG',p:1},{t:'GLD',i:7,d:'LONG',p:2},{t:'EEM',i:6,d:'SHORT',p:2}],
+    'debt':      [{t:'XAU',i:5,d:'LONG',p:1},{t:'BTC',i:4,d:'LONG',p:3},{t:'SPY',i:4,d:'SHORT',p:2}],
+    'imf':       [{t:'XAU',i:5,d:'LONG',p:1},{t:'EEM',i:5,d:'SHORT',p:2}],
+    /* ── Regime / Political risk ────────────────────────────────────────────── */
+    'coup':      [{t:'XAU',i:8,d:'LONG',p:1},{t:'WTI',i:6,d:'LONG',p:2},{t:'EEM',i:7,d:'SHORT',p:2}],
+    'assassination':[{t:'XAU',i:8,d:'LONG',p:1},{t:'WTI',i:7,d:'LONG',p:2},{t:'VIX',i:7,d:'LONG',p:1}],
+    'election':  [{t:'VIX',i:5,d:'LONG',p:1},{t:'XAU',i:4,d:'LONG',p:2}],
+    'protest':   [{t:'XAU',i:4,d:'LONG',p:1},{t:'EEM',i:4,d:'SHORT',p:2}],
+    'civil war': [{t:'XAU',i:8,d:'LONG',p:1},{t:'WTI',i:6,d:'LONG',p:2},{t:'EEM',i:6,d:'SHORT',p:2}],
   };
 
   /* Expose scoring tables for the LRN reasoning module */
@@ -9604,6 +9682,22 @@ document.addEventListener('DOMContentLoaded', function() {
   var _learnCounts    = {};  /* "keyword_ticker_dir" → { total, tp, sl } */
   var _learnStats = { tp: 0, sl: 0, lastTs: null };
 
+  /* Sector map: asset → sector key.  Used for 30% sector-level blending. */
+  var SECTOR_MAP = {
+    'WTI':'energy','BRENT':'energy','XLE':'energy','XOM':'energy','GAS':'energy',
+    'XAU':'precious','GLD':'precious','SLV':'precious',
+    'XAR':'defense','LMT':'defense','RTX':'defense','NOC':'defense',
+    'BTC':'crypto','ETH':'crypto','SOL':'crypto','BNB':'crypto','ADA':'crypto',
+    'SPY':'equity','QQQ':'equity','VIX':'equity','EEM':'equity','FXI':'equity','INDA':'equity',
+    'SMH':'semis','TSM':'semis','NVDA':'semis','ASML':'semis',
+    'WHT':'agri','CORN':'agri','SOYB':'agri',
+    'DAL':'airlines','UAL':'airlines',
+    'LIT':'battery','COPX':'metals','XME':'metals',
+    'JPY':'forex','CHF':'forex','NOK':'forex'
+  };
+  var _sectorWeights = {};  /* "sector_dir" → cumulative delta */
+  var _sectorCounts  = {};  /* "sector_dir" → { total, tp, sl } */
+
   function loadLearnedWeights() {
     try {
       var raw = localStorage.getItem(LEARN_KEY);
@@ -9612,35 +9706,55 @@ document.addEventListener('DOMContentLoaded', function() {
         _learnedWeights = parsed.weights || {};
         _learnCounts    = parsed.counts  || {};
         _learnStats     = parsed.stats   || { tp: 0, sl: 0, lastTs: null };
+        _sectorWeights  = parsed.sectorW || {};
+        _sectorCounts   = parsed.sectorC || {};
       }
     } catch (e) {
       _learnedWeights = {}; _learnCounts = {}; _learnStats = { tp: 0, sl: 0, lastTs: null };
+      _sectorWeights  = {}; _sectorCounts = {};
     }
   }
 
   function saveLearnedWeights() {
     try {
       localStorage.setItem(LEARN_KEY, JSON.stringify({
-        weights: _learnedWeights,
-        counts:  _learnCounts,
-        stats:   _learnStats
+        weights:  _learnedWeights,
+        counts:   _learnCounts,
+        stats:    _learnStats,
+        sectorW:  _sectorWeights,
+        sectorC:  _sectorCounts
       }));
     } catch (e) {}
   }
 
   /* Returns effective impact score for a keyword+entry, with learned delta applied.
-     Confidence ramp: applies delta at full strength only after 5+ confirming trades.
-       1 trade  → 20% of delta applied  (too early to trust)
-       3 trades → 60% of delta applied  (building evidence)
-       5 trades → 100% of delta applied (model has conviction)
+     Blends 70% asset-specific learning + 30% sector-wide learning for generalisation.
+     Confidence ramp: applies delta at full strength only after ~15 confirming trades.
+       1 trade  → ~40% of delta applied  (early signal)
+       3 trades → ~60% of delta applied  (building evidence)
+       15 trades → 100% of delta applied (full conviction)
      This prevents single-trade noise from distorting the impact model.           */
   function getEffectiveImpact(kw, entry) {
     var k      = kw + '_' + entry.t + '_' + entry.d;
     var delta  = _learnedWeights[k] || 0;
-    if (!delta) return entry.i;
     var count  = (_learnCounts[k] && _learnCounts[k].total) || 0;
-    var conf   = Math.min(1.0, count / 5);   /* 0% → 100% over 5 trades */
-    return Math.max(0.5, Math.min(10.0, entry.i + delta * conf));
+    var conf   = Math.min(1.0, Math.pow(count / 3, 0.7));
+
+    // Sector delta: 30% blend if we have sector data
+    var sector     = SECTOR_MAP[entry.t];
+    var sk         = sector ? (sector + '_' + entry.d) : null;
+    var secDelta   = sk ? (_sectorWeights[sk] || 0) : 0;
+    var secCount   = sk ? ((_sectorCounts[sk] && _sectorCounts[sk].total) || 0) : 0;
+    var secConf    = Math.min(1.0, Math.pow(secCount / 3, 0.7));
+
+    var blended = (delta && secDelta)
+      ? delta * conf * 0.70 + secDelta * secConf * 0.30   // both available
+      : delta   ? delta * conf                             // asset only
+      : secDelta ? secDelta * secConf * 0.30               // sector only
+      : 0;
+
+    if (!blended) return entry.i;
+    return Math.max(0.5, Math.min(10.0, entry.i + blended));
   }
 
   /* ── REGION EXTRACTION MAP ─────────────────────────────────────────────── */
@@ -9681,11 +9795,17 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── HELPERS ───────────────────────────────────────────────────────────── */
   function gel(id) { return document.getElementById(id); }
   function hhmm() { return new Date().toTimeString().slice(0,5); }
-  function dedupeKey(t) { return t.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,48); }
+  /* dedupeKey: title-based dedup + 12-char desc suffix to prevent false merges
+     of same-headline events with different detail (e.g. different casualty counts). */
+  function dedupeKey(t, d) {
+    var base = t.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,48);
+    var suffix = d ? d.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) : '';
+    return base + (suffix ? '_' + suffix : '');
+  }
 
   /* M5 — Polymarket minimum YES probability required to trigger a PM signal boost.
      Tunable: lower = more boosts (more sensitive), higher = fewer/stronger boosts. */
-  var IC_PM_MIN_PROB = 0.45;
+  var IC_PM_MIN_PROB = 0.35;   /* lowered from 0.45 — captures more Polymarket-confirmed events */
 
   function scoreEvent(evt) {
     var text = (evt.title + ' ' + (evt.desc||'')).toLowerCase();
@@ -9748,9 +9868,10 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── INGESTION BUS ─────────────────────────────────────────────────────── */
   function ingest(title, desc, source, extras) {
     if (!title || title.length < 8) return;
-    var id = dedupeKey(title);
+    var id = dedupeKey(title, desc);
     if (IC.eventIds.has(id)) return;
     IC.eventIds.add(id);
+    IC._eventTimes[id] = Date.now();   // track for 48h dedup pruner
 
     var evt = {
       title   : title.slice(0, 90),
@@ -10163,6 +10284,19 @@ document.addEventListener('DOMContentLoaded', function() {
         _learnCounts[k].total++;
         if (trade.close_reason === 'TAKE_PROFIT') _learnCounts[k].tp++;
         else _learnCounts[k].sl++;
+
+        /* Sector-level learning: smaller shift (×0.5), broader generalisation */
+        var sector = SECTOR_MAP[asset];
+        if (sector) {
+          var sk = sector + '_' + dir;
+          var secCur = _sectorWeights[sk] || 0;
+          var secNew = Math.max(-LEARN_MAX, Math.min(LEARN_MAX, secCur + shift * 0.5));
+          _sectorWeights[sk] = parseFloat(secNew.toFixed(3));
+          if (!_sectorCounts[sk]) _sectorCounts[sk] = { total: 0, tp: 0, sl: 0 };
+          _sectorCounts[sk].total++;
+          if (trade.close_reason === 'TAKE_PROFIT') _sectorCounts[sk].tp++;
+          else _sectorCounts[sk].sl++;
+        }
       });
     });
 
@@ -10263,6 +10397,8 @@ document.addEventListener('DOMContentLoaded', function() {
     _learnedWeights = {};
     _learnCounts    = {};
     _learnStats     = { tp: 0, sl: 0, lastTs: null };
+    _sectorWeights  = {};
+    _sectorCounts   = {};
     saveLearnedWeights();
     renderLearning();
   };
@@ -12534,7 +12670,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=10"></script>
+<script src="executionEngine.js?v=13"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
@@ -12571,9 +12707,9 @@ function _modalKeyHandler(e) {
 <script src="agents/gii-optimizer.js?v=1"></script>
 <script src="agents/gii-smartmoney.js?v=1"></script>
 <script src="agents/gii-marketstructure.js?v=1"></script>
-<script src="gii-core.js?v=9"></script>
+<script src="gii-core.js?v=11"></script>
 <script src="gii-meta.js?v=1"></script>
-<script src="gii-ui.js?v=1"></script>
+<script src="gii-ui.js?v=2"></script>
 <script src="gii-debug.js?v=1"></script>
 </body>
 </html>

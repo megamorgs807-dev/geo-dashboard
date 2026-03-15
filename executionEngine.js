@@ -45,11 +45,27 @@
     take_profit_ratio:     2,            // R:R multiplier (TP = SL distance × ratio)
     max_open_trades:       8,            // max concurrent open trades
     max_per_region:        3,            // max open trades per geopolitical region
+    max_per_sector:        2,            // max open trades per asset sector (energy, crypto, etc.)
     max_exposure_pct:      30,           // max % of balance in open positions
     cooldown_ms:           120000,       // 2 min cooldown between same-asset signals
     broker:                'SIMULATION', // future: 'BINANCE' | 'ALPACA' | 'POLYMARKET'
     auto_start:            true,         // if false, auto-execution stays OFF on page load
     max_siglog:            200           // max entries kept in signal log
+  };
+
+  /* ── Sector map — used for max_per_sector concentration cap ──────────────── */
+  var EE_SECTOR_MAP = {
+    'WTI':'energy',   'BRENT':'energy', 'XLE':'energy',  'XOM':'energy',   'GAS':'energy',
+    'XAU':'precious', 'GLD':'precious', 'SLV':'precious',
+    'XAR':'defense',  'LMT':'defense',  'RTX':'defense',  'NOC':'defense',
+    'BTC':'crypto',   'ETH':'crypto',   'SOL':'crypto',   'BNB':'crypto',   'ADA':'crypto',
+    'SPY':'equity',   'QQQ':'equity',   'VIX':'equity',   'EEM':'equity',   'FXI':'equity',
+    'SMH':'semis',    'TSM':'semis',    'NVDA':'semis',   'ASML':'semis',
+    'WHT':'agri',     'CORN':'agri',    'SOYB':'agri',
+    'DAL':'airlines', 'UAL':'airlines',
+    'LIT':'battery',  'COPX':'metals',  'XME':'metals',
+    'JPY':'forex',    'CHF':'forex',    'NOK':'forex',    'GBP':'forex',
+    'INDA':'em',      'TSLA':'ev'
   };
 
   /* ── Correlation groups — assets within each group are treated as equivalent
@@ -296,7 +312,10 @@
 
   /* ── API startup: check online, load DB trades, migrate localStorage ──────── */
 
-  function _apiInit() {
+  function _apiInit(retryCount) {
+    retryCount = retryCount || 0;
+    var RETRY_DELAYS = [2000, 4000, 8000];   // backoff: 2s, 4s, 8s then give up
+
     _apiFetch('/api/status')
       .then(function (r) {
         if (!r.ok) throw new Error('status ' + r.status);
@@ -342,7 +361,13 @@
       })
       .catch(function (err) {
         _apiOnline = false;
-        log('SYSTEM', 'SQLite backend offline — using localStorage only', 'dim');
+        if (retryCount < RETRY_DELAYS.length) {
+          var delay = RETRY_DELAYS[retryCount];
+          log('SYSTEM', 'Backend unreachable — retrying in ' + (delay / 1000) + 's (attempt ' + (retryCount + 1) + '/' + RETRY_DELAYS.length + ')', 'dim');
+          setTimeout(function () { _apiInit(retryCount + 1); }, delay);
+        } else {
+          log('SYSTEM', 'SQLite backend offline — using localStorage only', 'dim');
+        }
       });
   }
 
@@ -351,8 +376,10 @@
      step-0 source that avoids corsproxy.io for all backend-tracked symbols.     */
   function _pollBackendPrices() {
     if (!_apiOnline) return;
-    _apiFetch('/api/market')
-      .then(function (r) { return r.json(); })
+    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var tid = controller ? setTimeout(function () { controller.abort(); }, 5000) : null;
+    _apiFetch('/api/market', controller ? { signal: controller.signal } : {})
+      .then(function (r) { clearTimeout(tid); return r.json(); })
       .then(function (data) {
         Object.keys(data).forEach(function (sym) {
           var entry = data[sym];
@@ -361,7 +388,7 @@
           }
         });
       })
-      .catch(function () {});   // silent — fetchPrice falls through to other sources
+      .catch(function () { clearTimeout(tid); });   // silent — fetchPrice falls through to other sources
   }
 
   /* Record one signal event — action: 'TRADED' | 'SKIPPED' | 'WATCH' */
@@ -404,7 +431,14 @@
          Frankfurter           = CORS-open     ✓
      ══════════════════════════════════════════════════════════════════════════════ */
 
-  var _CORS_PROXY = 'https://corsproxy.io/?';
+  /* CORS proxy list — tried in order if primary fails.
+     corsproxy.io: fast, reliable, but single point of failure.
+     allorigins.win/raw: independent backup, same raw-content interface. */
+  var _CORS_PROXIES = [
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url='
+  ];
+  var _CORS_PROXY = _CORS_PROXIES[0];   // kept for any other usages
 
   function normaliseAsset(asset) {
     // "WTI Crude Oil"→"WTI",  "BTC/USD"→"BTC",  "GDX (Gold Miners)"→"GDX"
@@ -424,7 +458,7 @@
      when external APIs (Yahoo/CoinGecko) fail due to CORS or rate limits.
      Handles aliases: GLD→GOLD, XAG→SILVER, OIL→WTI so tickers with
      different names are still matched. */
-  var _TICKER_ALIASES = { 'GLD':'GOLD', 'XAU':'GOLD', 'XAG':'SILVER', 'OIL':'WTI', 'CRUDE':'WTI' };
+  var _TICKER_ALIASES = { 'GLD':'GOLD', 'XAU':'GOLD', 'XAG':'SILVER', 'SLV':'SILVER', 'OIL':'WTI', 'CRUDE':'WTI', 'BRENT':'OIL', 'GAS':'NATGAS' };
   function _tickerPrice(token) {
     var searches = [token];
     if (_TICKER_ALIASES[token]) searches.push(_TICKER_ALIASES[token]);
@@ -467,29 +501,48 @@
       });
   }
 
-  /* Yahoo Finance chart API routed through corsproxy.io (CORS-open) */
+  /* Yahoo Finance chart API — tries each CORS proxy in sequence on failure */
   function _fetchYahoo(token, sym, cb) {
     if (_cacheFresh(token)) { cb(_priceCache[token] || null); return; }
     var yahooUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' +
                    encodeURIComponent(sym) + '?interval=1m&range=1d';
-    fetch(_CORS_PROXY + encodeURIComponent(yahooUrl))
-      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
-      .then(function (data) {
-        var meta  = data && data.chart && data.chart.result &&
-                    data.chart.result[0] && data.chart.result[0].meta;
-        var price = meta ? parseFloat(meta.regularMarketPrice) : NaN;
-        if (!isNaN(price) && price > 0) {
-          var isFirst = !_priceCache[token];
-          _cacheSet(token, price);
-          if (isFirst) log('PRICE', 'Yahoo → ' + sym + ' $' + price.toFixed(2), 'dim');
-        }
-        cb(!isNaN(price) && price > 0 ? price : (_priceCache[token] || null));
-      })
-      .catch(function () {
+    var proxyIdx = 0;
+
+    function tryProxy() {
+      if (proxyIdx >= _CORS_PROXIES.length) {
+        // All proxies failed — fall back to on-page ticker then cache
         var tp = _tickerPrice(token);
-        if (tp) { _cacheSet(token, tp); cb(tp); return; }
+        if (tp) {
+          _cacheSet(token, tp);
+          log('PRICE', 'Ticker fallback → ' + token + ' $' + tp.toFixed(2) + ' (Yahoo unavailable)', 'dim');
+          cb(tp);
+          return;
+        }
+        if (_priceCache[token]) {
+          log('PRICE', 'Cache fallback → ' + token + ' $' + _priceCache[token].toFixed(2) + ' (stale)', 'dim');
+        }
         cb(_priceCache[token] || null);
-      });
+        return;
+      }
+      var proxy = _CORS_PROXIES[proxyIdx++];
+      fetch(proxy + encodeURIComponent(yahooUrl))
+        .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+        .then(function (data) {
+          var meta  = data && data.chart && data.chart.result &&
+                      data.chart.result[0] && data.chart.result[0].meta;
+          var price = meta ? parseFloat(meta.regularMarketPrice) : NaN;
+          if (!isNaN(price) && price > 0) {
+            var isFirst = !_priceCache[token];
+            _cacheSet(token, price);
+            if (isFirst) log('PRICE', 'Yahoo → ' + sym + ' $' + price.toFixed(2), 'dim');
+            cb(price);
+          } else {
+            tryProxy();   // try next proxy — bad data
+          }
+        })
+        .catch(function () { tryProxy(); });   // try next proxy — network error
+    }
+    tryProxy();
   }
 
   /* Frankfurter API — ECB-sourced forex spot rates, no API key needed */
@@ -580,6 +633,14 @@
     if (regionOpen >= _cfg.max_per_region)
       return { ok: false, reason: 'Max per region (' + _cfg.max_per_region + ') reached for ' + sig.region };
 
+    // Sector concentration cap: prevent overloading a single sector (energy, crypto, etc.)
+    var sector = EE_SECTOR_MAP[normaliseAsset(sig.asset)];
+    if (sector && _cfg.max_per_sector) {
+      var sectorOpen = open.filter(function (t) { return EE_SECTOR_MAP[normaliseAsset(t.asset)] === sector; }).length;
+      if (sectorOpen >= _cfg.max_per_sector)
+        return { ok: false, reason: 'Max per sector (' + _cfg.max_per_sector + ') reached for ' + sector };
+    }
+
     if (open.some(function (t) { return t.asset === sig.asset; }))
       return { ok: false, reason: 'Already have open trade for ' + sig.asset };
 
@@ -606,6 +667,17 @@
     if (exposure >= maxExp)
       return { ok: false, reason: 'Max exposure ' + _cfg.max_exposure_pct + '% reached' };
 
+    // Daily loss limit: pause auto-trading if we've lost >10% of balance today
+    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    var todayPnL = _trades
+      .filter(function (t) {
+        return t.status === 'CLOSED' && t.timestamp_close &&
+               new Date(t.timestamp_close) >= todayStart;
+      })
+      .reduce(function (s, t) { return s + (t.pnl_usd || 0); }, 0);
+    if (todayPnL / _cfg.virtual_balance < -0.10)
+      return { ok: false, reason: 'Daily loss limit reached (' + todayPnL.toFixed(0) + ' USD) — auto-trading paused until tomorrow' };
+
     return { ok: true, reason: 'All risk checks passed' };
   }
 
@@ -614,7 +686,9 @@
      ══════════════════════════════════════════════════════════════════════════════ */
 
   function makeId(prefix) {
-    return prefix + '-' + Date.now().toString(36).toUpperCase() + '-' + (++_seq).toString(36).toUpperCase();
+    // timestamp(base36) + sequence(base36) + 4-char random hex → collision-safe unique IDs
+    var r = ('000' + Math.floor(Math.random() * 0xFFFF).toString(16)).slice(-4).toUpperCase();
+    return prefix + '-' + Date.now().toString(36).toUpperCase() + '-' + (++_seq).toString(36).toUpperCase() + '-' + r;
   }
 
   /* Build a complete trade object from a signal + entry price */
@@ -641,9 +715,51 @@
     var impactMult = (sig.impactMult && isFinite(sig.impactMult))
       ? Math.max(0.5, Math.min(2.0, sig.impactMult))
       : 1.0;
-    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult;
+
+    // EV/Kelly adjustment: if self-learning has a win rate on this asset+direction,
+    // scale size by a simplified Kelly fraction (capped to 0.5× – 1.5× of base risk).
+    // Kelly f* = (W * R - L) / R  where W=winRate, L=1-W, R=TP:SL ratio
+    // We use a half-Kelly approach (×0.5) for safety, and require ≥5 trades of history.
+    var kellyMult = 1.0;
+    if (window.GII && typeof GII.agentReputations === 'function') {
+      var reps = GII.agentReputations();
+      var assetKey = normaliseAsset(sig.asset);
+      var biasKey  = dir === 'LONG' ? 'long' : 'short';
+      // Find any feedback entry matching this asset+direction
+      var repEntry = null;
+      Object.keys(reps).forEach(function (k) {
+        if (k.indexOf(assetKey) !== -1 && k.indexOf(biasKey) !== -1 && reps[k].total >= 5) {
+          repEntry = reps[k];
+        }
+      });
+      if (repEntry && typeof repEntry.winRate === 'number') {
+        var W = repEntry.winRate;
+        var R = _cfg.take_profit_ratio;   // reward:risk ratio
+        var kelly = (W * R - (1 - W)) / R;
+        if (kelly > 0) {
+          // Half-Kelly, clamped between 0.5 and 1.5
+          kellyMult = Math.max(0.5, Math.min(1.5, kelly * 0.5 / 0.25));   // normalise: base kelly ~0.25 = mult 1.0
+        } else {
+          kellyMult = 0.5;   // negative EV → halve position size
+        }
+      }
+    }
+
+    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult * kellyMult;
     var slDist   = Math.abs(entryPrice - stopLoss);
-    var units    = slDist > 0 ? riskAmt / slDist : 0;
+
+    // Risk-of-ruin guard: scale down so total max drawdown stays ≤ 20% of balance
+    var maxRiskBudget = _cfg.virtual_balance * 0.20;
+    var currentMaxLoss = openTrades().reduce(function (s, t) {
+      var td = Math.abs(t.entry_price - t.stop_loss);
+      return s + (td > 0 ? t.units * td : 0);
+    }, 0);
+    var remainingBudget = maxRiskBudget - currentMaxLoss;
+    if (remainingBudget < riskAmt) {
+      riskAmt = Math.max(0, remainingBudget);   // scale down rather than reject outright
+    }
+
+    var units    = (slDist > 0 && riskAmt > 0) ? riskAmt / slDist : 0;
     var sizeUsd  = units * entryPrice;
 
     return {
@@ -668,6 +784,7 @@
       region:           sig.region           || 'GLOBAL',
       reason:           sig.reason           || '',
       matched_keywords: sig.matchedKeywords  || [],  // learning loop: keywords that triggered this trade
+      kelly_mult:       +kellyMult.toFixed(2),       // EV sizing multiplier applied (for display/audit)
       broker:           _cfg.mode === 'LIVE' ? _cfg.broker : 'SIMULATION',
       // Broker integration stubs — set by adapter on live execution
       broker_order_id:  null,
@@ -736,10 +853,18 @@
     if (window.HRS && typeof HRS.signals !== 'undefined') {
       var hrsSig = HRS.signals.find(function (s) { return s.signal_id === trade.signal_id; });
       if (hrsSig) {
-        // TP/SL are unambiguous; manual closes resolve by actual P&L so win rates match SA
-        var outcome = reason === 'TAKE_PROFIT' ? 'hit'
-                    : reason === 'STOP_LOSS'   ? 'miss'
-                    : trade.pnl_usd >= 0       ? 'hit' : 'miss';
+        // TP/SL are unambiguous; manual closes within ±$5 of breakeven are neutral
+        // (avoids inflating win rate from near-zero P&L manual exits)
+        var outcome;
+        if (reason === 'TAKE_PROFIT') {
+          outcome = 'hit';
+        } else if (reason === 'STOP_LOSS') {
+          outcome = 'miss';
+        } else {
+          var pnlAbs = Math.abs(trade.pnl_usd || 0);
+          outcome = pnlAbs < 5 ? 'neutral'
+                  : (trade.pnl_usd >= 0) ? 'hit' : 'miss';
+        }
         HRS.evaluate(hrsSig.signal_id, outcome, closePrice);
       }
     }
@@ -775,11 +900,33 @@
      sigs: Array<{ asset, dir, conf, reason, region }>
      ══════════════════════════════════════════════════════════════════════════════ */
 
+  /* Validate a signal object before it enters the execution pipeline.
+     Returns { ok: true } or { ok: false, reason: string }.
+     Rejects malformed/incomplete signals before they hit canExecute. */
+  function validateSignal(sig) {
+    if (!sig || typeof sig !== 'object')
+      return { ok: false, reason: 'Signal is not an object' };
+    if (!sig.asset || typeof sig.asset !== 'string' || sig.asset.trim().length < 1)
+      return { ok: false, reason: 'Signal missing valid asset' };
+    if (!sig.dir || ['LONG', 'SHORT', 'WATCH'].indexOf(sig.dir) === -1)
+      return { ok: false, reason: 'Signal dir must be LONG/SHORT/WATCH, got: ' + sig.dir };
+    if (typeof sig.conf !== 'number' || isNaN(sig.conf) || sig.conf < 0 || sig.conf > 100)
+      return { ok: false, reason: 'Signal conf must be 0–100, got: ' + sig.conf };
+    return { ok: true };
+  }
+
   function onSignals(sigs) {
     if (!sigs || !sigs.length) return;
     _lastSignals = sigs;                 // always cache — re-scan loop needs these
 
     sigs.forEach(function (sig) {
+      // Pre-validate signal shape before any further processing
+      var valid = validateSignal(sig);
+      if (!valid.ok) {
+        log('SYSTEM', 'Invalid signal dropped: ' + valid.reason, 'dim');
+        return;
+      }
+
       // WATCH signals: log but never execute
       if (sig.dir === 'WATCH') {
         _logSignal(sig, 'WATCH', null);
@@ -947,7 +1094,7 @@
 
   function renderConfigFields() {
     var fields = ['min_confidence','risk_per_trade_pct','stop_loss_pct',
-                  'take_profit_ratio','max_open_trades','max_per_region','virtual_balance'];
+                  'take_profit_ratio','max_open_trades','max_per_region','max_per_sector','virtual_balance'];
     fields.forEach(function (f) {
       var el = document.getElementById('eeCfg_' + f);
       if (el && document.activeElement !== el) el.value = _cfg[f];
@@ -1789,6 +1936,7 @@
         take_profit_ratio:  { min: 0.5, max: 10,      int: false },
         max_open_trades:    { min: 1,   max: 20,      int: true  },
         max_per_region:     { min: 1,   max: 5,       int: true  },
+        max_per_sector:     { min: 1,   max: 5,       int: true  },
         virtual_balance:    { min: 100, max: 10000000, int: false }
       };
       Object.keys(rules).forEach(function (f) {

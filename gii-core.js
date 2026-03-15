@@ -47,7 +47,8 @@
 
   // ── private state ──────────────────────────────────────────────────────────
 
-  var _posteriors  = {};   // { region: { prior, posterior, ci, contributing } }
+  var _posteriors        = {};   // { region: { prior, posterior, ci, contributing } }
+  var _posteriorHistory  = {};   // { region: [{ ts, prior, posterior, trigger }] } — capped at 50 per region
   var _convergence = {};   // { region: { level, boost, confBonus, agentCount } }
   var _gti         = 0;
   var _gtiLevel    = 'NORMAL';
@@ -275,6 +276,7 @@
       _clamp(posterior + 0.15, 0.02, 0.97)
     ];
 
+    var prev = _posteriors[region] ? _posteriors[region].posterior : null;
     _posteriors[region] = {
       region: region,
       prior: prior,
@@ -282,6 +284,20 @@
       confidence_interval: ci,
       contributing_signals: contributing
     };
+
+    // Audit trail: record significant changes (>0.03 delta or first entry)
+    if (prev === null || Math.abs(posterior - prev) > 0.03) {
+      if (!_posteriorHistory[region]) _posteriorHistory[region] = [];
+      _posteriorHistory[region].unshift({
+        ts:        new Date().toISOString(),
+        prior:     prior,
+        posterior: posterior,
+        prev:      prev,
+        delta:     prev !== null ? parseFloat((posterior - prev).toFixed(3)) : null,
+        trigger:   contributing.length ? contributing[0].source : 'cycle'
+      });
+      if (_posteriorHistory[region].length > 50) _posteriorHistory[region].length = 50;
+    }
 
     return _posteriors[region];
   }
@@ -580,6 +596,9 @@
   function _cycle() {
     _lastCycleTs = Date.now();
 
+    // 0. Apply feedback decay (4-week half-life) — runs once per cycle
+    _applyFeedbackDecay();
+
     // 1. Poll all agents — log errors but never crash the cycle
     AGENTS.forEach(function (def) {
       var agent = _getAgent(def);
@@ -634,6 +653,39 @@
     }
   }
 
+  // ── feedback decay (4-week half-life) ─────────────────────────────────────
+
+  /* Exponential decay applied to stored correct/total counts so that old trades
+     have diminishing influence over time.  Half-life = 4 weeks.
+     Called once per orchestration cycle (not per trade) to keep it cheap.        */
+  function _applyFeedbackDecay() {
+    var HALF_LIFE_MS = 4 * 7 * 24 * 60 * 60 * 1000;   // 4 weeks in ms
+    var now = Date.now();
+    var changed = false;
+    Object.keys(_feedback).forEach(function (key) {
+      var fb = _feedback[key];
+      if (!fb || !fb.lastTs) return;
+      var elapsed = now - new Date(fb.lastTs).getTime();
+      if (elapsed < 86400000) return;   // skip if updated within 24h
+      var decayFactor = Math.pow(0.5, elapsed / HALF_LIFE_MS);
+      if (decayFactor > 0.99) return;   // negligible decay
+      fb.correct = (fb.correct || 0) * decayFactor;
+      fb.fp      = (fb.fp      || 0) * decayFactor;
+      fb.total   = (fb.total   || 0) * decayFactor;
+      if (fb.total < 0.5) {
+        // so few effective samples left — reset to neutral
+        delete _feedback[key];
+        changed = true;
+        return;
+      }
+      fb.winRate   = fb.correct / fb.total;
+      fb.fpr       = fb.fp / fb.total;
+      fb.reputation = _clamp(fb.winRate * (1 - fb.fpr * 0.5), 0.10, 1.0);
+      changed = true;
+    });
+    if (changed) _saveFeedback();
+  }
+
   // ── feedback / self-learning ───────────────────────────────────────────────
 
   function _onTradeResult(trade) {
@@ -669,9 +721,13 @@
       if (!region) return null;
       return _posteriors[region.toUpperCase()] || null;
     },
-    signals:       function () { return _lastSignals.slice(); },
-    feedback:      function () { return Object.assign({}, _feedback); },
-    gtiHistory:    function () { return _gtiHistory.slice(); },
+    signals:          function () { return _lastSignals.slice(); },
+    feedback:         function () { return Object.assign({}, _feedback); },
+    gtiHistory:       function () { return _gtiHistory.slice(); },
+    posteriorHistory: function (region) {
+      if (region) return (_posteriorHistory[region.toUpperCase()] || []).slice();
+      return Object.assign({}, _posteriorHistory);
+    },
     onTradeResult: _onTradeResult,
     // Module 3: agent reputation scores
     agentReputations: function () {

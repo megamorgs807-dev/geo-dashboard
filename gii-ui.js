@@ -334,6 +334,48 @@
       '</div>';
     html += '</div>';
 
+    // ── Row 6: Per-agent performance breakdown ──
+    html += '<p class="gii-section-title">Agent Performance (Self-Learning)</p>';
+    html += '<div class="gii-card">';
+    var reps = (typeof GII.agentReputations === 'function') ? GII.agentReputations() : {};
+    var repKeys = Object.keys(reps);
+    if (!repKeys.length) {
+      html += '<div style="color:rgba(255,255,255,0.4);font-size:10px">No agent performance data yet — close trades to build history.</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:10px">' +
+        '<thead><tr style="color:rgba(255,255,255,0.45);font-size:9px;text-align:left">' +
+        '<th style="padding:3px 8px">Agent / Asset</th>' +
+        '<th style="padding:3px 8px">Trades</th>' +
+        '<th style="padding:3px 8px">Win Rate</th>' +
+        '<th style="padding:3px 8px">FP Rate</th>' +
+        '<th style="padding:3px 8px">Reputation</th>' +
+        '</tr></thead><tbody>';
+      // Sort by reputation desc
+      repKeys.sort(function (a, b) {
+        return ((reps[b].reputation || 0) - (reps[a].reputation || 0));
+      });
+      repKeys.slice(0, 20).forEach(function (key) {
+        var r = reps[key];
+        var wr = r.winRate !== null ? (r.winRate * 100).toFixed(0) + '%' : '—';
+        var fpr = typeof r.fpr === 'number' ? (r.fpr * 100).toFixed(0) + '%' : '—';
+        var rep = typeof r.reputation === 'number' ? (r.reputation * 100).toFixed(0) + '%' : '—';
+        var wrCls = (r.winRate || 0) >= 0.6 ? 'gii-long' : (r.winRate || 0) < 0.4 ? 'gii-short' : '';
+        var repCls = (r.reputation || 0) >= 0.6 ? 'gii-long' : (r.reputation || 0) < 0.4 ? 'gii-short' : '';
+        // Format key: agentName_asset_bias
+        var parts = key.split('_');
+        var label = parts[0] + (parts.length > 2 ? ' / ' + parts[1] + ' ' + parts[2] : '');
+        html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+          '<td style="padding:4px 8px">' + label + '</td>' +
+          '<td style="padding:4px 8px">' + (r.total || 0).toFixed(1) + '</td>' +
+          '<td style="padding:4px 8px" class="' + wrCls + '">' + wr + '</td>' +
+          '<td style="padding:4px 8px">' + fpr + '</td>' +
+          '<td style="padding:4px 8px" class="' + repCls + '">' + rep + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+
     // Inject
     content.innerHTML = html;
 
