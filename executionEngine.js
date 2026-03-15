@@ -2093,7 +2093,10 @@
           'gii_marketstructure_feedback_v1',
           'gii_macro_feedback_v1',
           'gii_polymarket_feedback_v1',
-          'gii_meta_feedback_v1'
+          'gii_meta_feedback_v1',
+          // HRS — hit rate tracker (was the missing one)
+          'geodash_hitrate_v1',
+          'geodash_hitrate_v0'
         ];
         ANALYTICS_KEYS.forEach(function (k) {
           try { localStorage.removeItem(k); } catch (e) {}
