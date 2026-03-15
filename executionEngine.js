@@ -598,16 +598,19 @@
   /* Build a complete trade object from a signal + entry price */
   function buildTrade(sig, entryPrice) {
     var dir     = sig.dir === 'SHORT' ? 'SHORT' : 'LONG';
-    var slPct   = _cfg.stop_loss_pct / 100;
-    var tpPct   = slPct * _cfg.take_profit_ratio;
+    // ATR-based stop/target: prefer per-signal values from gii-technicals
+    // over the global fixed-percentage config (backward-compatible fallback)
+    var defaultSlDist = entryPrice * (_cfg.stop_loss_pct / 100);
+    var slDist_ = (sig.atrStop  && isFinite(sig.atrStop)  && sig.atrStop  > 0) ? sig.atrStop  : defaultSlDist;
+    var tpDist_ = (sig.atrTarget && isFinite(sig.atrTarget) && sig.atrTarget > 0) ? sig.atrTarget : slDist_ * _cfg.take_profit_ratio;
 
     var stopLoss, takeProfit;
     if (dir === 'LONG') {
-      stopLoss   = entryPrice * (1 - slPct);
-      takeProfit = entryPrice * (1 + tpPct);
+      stopLoss   = entryPrice - slDist_;
+      takeProfit = entryPrice + tpDist_;
     } else {
-      stopLoss   = entryPrice * (1 + slPct);
-      takeProfit = entryPrice * (1 - tpPct);
+      stopLoss   = entryPrice + slDist_;
+      takeProfit = entryPrice - tpDist_;
     }
 
     // Position sizing: base risk scaled by signal impact strength
