@@ -12405,9 +12405,20 @@ function _modalKeyHandler(e) {
         return all.filter(function(s){ return new Date(s.timestamp).getTime() >= cutoff; });
       }
 
+      /* "Today active" = opened today OR still open from a previous day.
+         This fixes the blank "today" panel when all open trades were opened
+         before today's midnight — they are still active and should show. */
+      function _todayActive() {
+        return all.filter(function(s) {
+          if (new Date(s.timestamp).getTime() >= dayTs) return true;  // opened today
+          if (s.outcome === 'open') return true;                       // still open from before
+          return false;
+        });
+      }
+
       return {
-        // Today: signals opened today (incl. still-open); P&L sums only the ones that have closed
-        day:  _periodStats(_byOpen(dayTs),  _byOpen(dayTs)),
+        // Today: active = opened today + any still-open from before; P&L = only closed today
+        day:  _periodStats(_todayActive(), _byClose(dayTs)),
         // 7-day: signals opened this week (incl. still-open); P&L sums only closed ones
         week: _periodStats(_byOpen(wkTs),   _byOpen(wkTs)),
         all:  this._stats(all),
