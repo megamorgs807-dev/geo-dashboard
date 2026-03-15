@@ -2023,6 +2023,23 @@
       renderUI();
     },
 
+    /* ── Full reset — wipes everything and starts fresh ── */
+    fullReset: function () {
+      if (!confirm('Full reset: close ALL open trades, clear all history and reset balance to $10,000?\n\nThis cannot be undone.')) return;
+      _trades       = [];
+      _livePrice    = {};
+      _cooldown     = {};
+      _pendingOpen  = {};
+      _lastSignals  = [];
+      _cfg.virtual_balance = DEFAULTS.virtual_balance;
+      try { localStorage.removeItem('ee_trades_v2'); } catch (e) {}
+      try { localStorage.removeItem('ee_trades_v1'); } catch (e) {}
+      saveTrades();
+      saveCfg();
+      log('CONFIG', 'Full reset complete — balance $10,000, all trades cleared', 'amber');
+      renderUI();
+    },
+
     /* ── Future broker integration (stubs) ── */
     connectBroker: connectBroker,
 

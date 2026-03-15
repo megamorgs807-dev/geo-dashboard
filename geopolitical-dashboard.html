@@ -4930,6 +4930,7 @@
         <button class="ee-cfg-save"  onclick="EE.updateConfig()">&#9654; SAVE PARAMETERS</button>
         <button class="ee-cfg-ghost" onclick="EE.resetBalance()">Reset Balance</button>
         <button class="ee-cfg-ghost" onclick="EE.clearHistory()">Clear History</button>
+        <button class="ee-cfg-ghost" style="color:#ff4444;border-color:rgba(255,68,68,0.4)" onclick="EE.fullReset()">&#9888; Full Reset</button>
         <button class="ee-cfg-ghost" onclick="EE.exportJSON()">&#8595; Export JSON</button>
       </div>
     </div>
@@ -12681,7 +12682,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=17"></script>
+<script src="executionEngine.js?v=18"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
