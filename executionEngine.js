@@ -39,7 +39,7 @@
     mode:                  'SIMULATION', // 'SIMULATION' | 'LIVE'
     enabled:               true,         // auto-execution always on by default
     min_confidence:        50,           // minimum IC confidence % to auto-execute
-    virtual_balance:       10000,        // starting virtual balance (USD)
+    virtual_balance:       1000,         // starting virtual balance (USD)
     risk_per_trade_pct:    3,            // % of balance risked per trade
     stop_loss_pct:         3,            // % distance from entry for stop-loss
     take_profit_ratio:     2,            // R:R multiplier (TP = SL distance × ratio)
@@ -2007,10 +2007,10 @@
 
     /* ── Reset virtual balance to $10,000 ── */
     resetBalance: function () {
-      if (!confirm('Reset virtual balance to $10,000? This will not affect trade history.')) return;
-      _cfg.virtual_balance = 10000;
+      if (!confirm('Reset virtual balance to $1,000? This will not affect trade history.')) return;
+      _cfg.virtual_balance = DEFAULTS.virtual_balance;
       saveCfg();
-      log('CONFIG', 'Virtual balance reset to $10,000', 'amber');
+      log('CONFIG', 'Virtual balance reset to $' + DEFAULTS.virtual_balance, 'amber');
       renderUI();
     },
 
@@ -2036,7 +2036,7 @@
       try { localStorage.removeItem('ee_trades_v1'); } catch (e) {}
       saveTrades();
       saveCfg();
-      log('CONFIG', 'Full reset complete — balance $10,000, all trades cleared', 'amber');
+      log('CONFIG', 'Full reset complete — balance $' + DEFAULTS.virtual_balance + ', all trades cleared', 'amber');
       renderUI();
     },
 
