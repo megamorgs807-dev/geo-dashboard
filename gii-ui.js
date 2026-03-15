@@ -234,7 +234,7 @@
     if (posteriorRegions.length) {
       posteriorRegions.forEach(function (r) {
         var pClass = _posteriorClass(r.posterior);
-        var ciWidth = Math.round((r.ci[1] - r.ci[0]) * 100);
+        var ciWidth = (r.ci && r.ci.length >= 2) ? Math.round((r.ci[1] - r.ci[0]) * 100) : 0;
         html += '<tr><td>' + _esc(r.region.substring(0, 18)) + '</td>' +
           '<td>' + _pct(r.prior) + '</td>' +
           '<td class="' + pClass + '"><b>' + _pct(r.posterior) + '</b></td>' +
