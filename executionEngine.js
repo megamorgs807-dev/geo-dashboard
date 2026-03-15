@@ -184,8 +184,22 @@
     'UAL':     'UAL',    // United Airlines
     'LMT':     'LMT',    // Lockheed Martin
     'RTX':     'RTX',    // Raytheon Technologies
+    'NOC':     'NOC',    // Northrop Grumman
+    'GD':      'GD',     // General Dynamics
     'BA':      'BA',     // Boeing
+    'XAR':     'XAR',    // iShares Aerospace & Defense ETF (emitted by gii-macro)
+    'ITA':     'ITA',    // iShares U.S. Aerospace & Defense ETF
     'XOM':     'XOM',    // ExxonMobil
+    'CVX':     'CVX',    // Chevron
+    'TSM':     'TSM',    // Taiwan Semiconductor
+    'NVDA':    'NVDA',
+    'AMD':     'AMD',
+    'TLT':     'TLT',    // iShares 20+ Year Treasury Bond
+    'IEF':     'IEF',    // iShares 7-10 Year Treasury Bond
+    'HYG':     'HYG',    // iShares High Yield Corporate Bond
+    'DXY':     'DX-Y.NYB', // US Dollar Index
+    'WEAT':    'WEAT',   // Teucrium Wheat Fund
+    'CORN':    'CORN',   // Teucrium Corn Fund
     'VIX':     '^VIX'
   };
 
@@ -1117,10 +1131,11 @@
     }
     el.innerHTML = open.map(function (t) {
       var dirCls  = t.direction === 'LONG' ? 'ee-dir-long' : 'ee-dir-short';
-      // Prefer freshly-polled price; fall back to price cache so P&L always shows
-      var livePx  = _livePrice[t.trade_id] || _priceCache[normaliseAsset(t.asset)] || null;
+      // Prefer freshly-polled price → price cache → on-page ticker scrape
+      var _tok = normaliseAsset(t.asset);
+      var livePx = _livePrice[t.trade_id] || _priceCache[_tok] || _tickerPrice(_tok) || null;
 
-      // Unrealised P&L row (only if we have a live price)
+      // Unrealised P&L row — always rendered; shows placeholder if price unavailable
       var liveRow = '';
       if (livePx) {
         var uPct = t.direction === 'LONG'
@@ -1141,6 +1156,11 @@
             '</b>' +
             '&nbsp;&nbsp;<span style="color:var(--dim)">SL&nbsp;' + slDist.toFixed(1) + '% away' +
             '&nbsp;·&nbsp;TP&nbsp;' + tpDist.toFixed(1) + '% away</span>' +
+          '</div>';
+      } else {
+        liveRow =
+          '<div style="font-size:9px;margin:5px 0 0 0;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07);color:var(--dim)">' +
+            'Unrealised P&amp;L: <span style="color:#888">awaiting price feed&hellip;</span>' +
           '</div>';
       }
 
