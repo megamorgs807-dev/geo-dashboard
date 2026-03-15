@@ -662,7 +662,13 @@
     if (lastTs && (Date.now() - lastTs) < _cfg.cooldown_ms)
       return { ok: false, reason: 'Cooldown active for ' + sig.asset };
 
-    var exposure = open.reduce(function (s, t) { return s + (t.size_usd || 0); }, 0);
+    // Exposure = total risk dollars at stake (units × |entry−stop| per trade).
+    // Using notional size_usd here would falsely block every trade because
+    // position sizing math produces size_usd ≈ full balance per trade.
+    var exposure = open.reduce(function (s, t) {
+      var slDist = Math.abs((t.entry_price || 0) - (t.stop_loss || 0));
+      return s + (slDist > 0 ? (t.units || 0) * slDist : 0);
+    }, 0);
     var maxExp   = _cfg.virtual_balance * _cfg.max_exposure_pct / 100;
     if (exposure >= maxExp)
       return { ok: false, reason: 'Max exposure ' + _cfg.max_exposure_pct + '% reached' };
