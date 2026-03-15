@@ -12270,11 +12270,10 @@ function _modalKeyHandler(e) {
       }
 
       return {
-        // Today: count/rate uses open time (show all signals from today, incl. still-open ones)
-        //        P&L uses open time too — pnl_pct is null on open trades so only realized P&L sums
+        // Today: signals opened today (incl. still-open); P&L sums only the ones that have closed
         day:  _periodStats(_byOpen(dayTs),  _byOpen(dayTs)),
-        // 7-day: both use close time so count and P&L always refer to the same completed trades
-        week: _periodStats(_byClose(wkTs),  _byClose(wkTs)),
+        // 7-day: signals opened this week (incl. still-open); P&L sums only closed ones
+        week: _periodStats(_byOpen(wkTs),   _byOpen(wkTs)),
         all:  this._stats(all),
         open: all.filter(function(s) { return s.outcome === 'open'; }).length
       };
@@ -12535,7 +12534,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=9"></script>
+<script src="executionEngine.js?v=10"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>

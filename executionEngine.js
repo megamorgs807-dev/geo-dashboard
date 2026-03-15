@@ -420,6 +420,29 @@
     return _priceCacheTs[token] && (Date.now() - _priceCacheTs[token]) < _CACHE_TTL;
   }
 
+  /* Scrape the on-page live ticker for a price — used as a reliable fallback
+     when external APIs (Yahoo/CoinGecko) fail due to CORS or rate limits.
+     Handles aliases: GLD→GOLD, XAG→SILVER, OIL→WTI so tickers with
+     different names are still matched. */
+  var _TICKER_ALIASES = { 'GLD':'GOLD', 'XAU':'GOLD', 'XAG':'SILVER', 'OIL':'WTI', 'CRUDE':'WTI' };
+  function _tickerPrice(token) {
+    var searches = [token];
+    if (_TICKER_ALIASES[token]) searches.push(_TICKER_ALIASES[token]);
+    var found = null;
+    var els = document.querySelectorAll('.tick-item');
+    els.forEach(function (el) {
+      if (found) return;
+      var txt = (el.textContent || '').toUpperCase();
+      for (var i = 0; i < searches.length; i++) {
+        if (txt.indexOf(searches[i]) !== -1) {
+          var m = txt.match(/\$([\d,]+\.?\d*)/);
+          if (m) { found = parseFloat(m[1].replace(/,/g, '')); break; }
+        }
+      }
+    });
+    return found;
+  }
+
   /* Gold via CoinGecko PAX Gold (1 PAXG = 1 troy oz, price tracks spot) */
   function _fetchCoinGecko(token, coinId, cb) {
     if (_cacheFresh(token)) { cb(_priceCache[token] || null); return; }
@@ -437,7 +460,11 @@
         }
         cb(!isNaN(price) && price > 0 ? price : (_priceCache[token] || null));
       })
-      .catch(function () { cb(_priceCache[token] || null); });
+      .catch(function () {
+        var tp = _tickerPrice(token);
+        if (tp) { _cacheSet(token, tp); cb(tp); return; }
+        cb(_priceCache[token] || null);
+      });
   }
 
   /* Yahoo Finance chart API routed through corsproxy.io (CORS-open) */
@@ -458,7 +485,11 @@
         }
         cb(!isNaN(price) && price > 0 ? price : (_priceCache[token] || null));
       })
-      .catch(function () { cb(_priceCache[token] || null); });
+      .catch(function () {
+        var tp = _tickerPrice(token);
+        if (tp) { _cacheSet(token, tp); cb(tp); return; }
+        cb(_priceCache[token] || null);
+      });
   }
 
   /* Frankfurter API — ECB-sourced forex spot rates, no API key needed */
@@ -512,17 +543,8 @@
     // 4. Frankfurter — major forex spot rates (ECB data)
     if (FRANKFURTER_SOURCES[token]) { _fetchFrankfurter(token, FRANKFURTER_SOURCES[token], cb); return; }
 
-    // 5. Dashboard live ticker (prices already shown on-page)
-    var tickEls = document.querySelectorAll('.tick-item');
-    var found   = null;
-    tickEls.forEach(function (el) {
-      if (found) return;
-      var txt = (el.textContent || '').toUpperCase();
-      if (txt.indexOf(token) !== -1) {
-        var m = txt.match(/\$([\d,]+\.?\d*)/);
-        if (m) found = parseFloat(m[1].replace(/,/g, ''));
-      }
-    });
+    // 5. Dashboard live ticker (prices already shown on-page, handles aliases GLD→GOLD etc.)
+    var found = _tickerPrice(token);
     if (found) { _cacheSet(token, found); cb(found); return; }
 
     // 6. Last-known price from any prior source
