@@ -694,7 +694,7 @@
   // ── GII Context Integration ────────────────────────────────────────────────
   function _integrateGII(taComp, assetId, regime) {
     var gtiVal = 30, escalMax = 0, vixVal = 18;
-    try { var g = window.GII && window.GII.gti && window.GII.gti(); gtiVal = (g && g.value) ? g.value : 30; } catch (e) {}
+    try { var g = window.GII && window.GII.gti && window.GII.gti(); gtiVal = (g && typeof g.value === 'number') ? g.value : 30; } catch (e) {}
     try {
       var lad = window.GII_AGENT_ESCALATION && window.GII_AGENT_ESCALATION.ladderStatus && window.GII_AGENT_ESCALATION.ladderStatus();
       if (lad) Object.values(lad).forEach(function (r) { if (r.level > escalMax) escalMax = r.level; });
