@@ -264,6 +264,93 @@
     return _lastReport;
   }
 
+  // ── continuous monitoring heartbeat ──────────────────────────────────────
+
+  var HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;   // every 5 minutes
+  var _heartbeatCount = 0;
+
+  function _heartbeat() {
+    _heartbeatCount++;
+
+    // Collect all current signals from every known agent
+    var known = [
+      'GII_AGENT_ENERGY','GII_AGENT_CONFLICT','GII_AGENT_MACRO','GII_AGENT_SANCTIONS',
+      'GII_AGENT_MARITIME','GII_AGENT_SOCIAL','GII_AGENT_POLYMARKET','GII_AGENT_REGIME',
+      'GII_AGENT_SATELLITE','GII_AGENT_HISTORICAL','GII_AGENT_LIQUIDITY','GII_AGENT_CALENDAR',
+      'GII_AGENT_CHOKEPOINT','GII_AGENT_NARRATIVE','GII_AGENT_ESCALATION',
+      'GII_AGENT_SCENARIO','GII_AGENT_TECHNICALS',
+      'GII_AGENT_SCALPER','GII_AGENT_OPTIMIZER',
+      'GII_AGENT_SMARTMONEY','GII_AGENT_MARKETSTRUCTURE'
+    ];
+
+    var allSignals = [];
+    var agentHealthSummary = [];
+    var now = Date.now();
+
+    known.forEach(function (globalName) {
+      var agent = window[globalName];
+      if (!agent) return;
+      var name = globalName.replace('GII_AGENT_', '').toLowerCase();
+
+      // Collect signals
+      try {
+        var sigs = agent.signals() || [];
+        sigs.forEach(function (s) { s._agentName = s._agentName || name; });
+        allSignals = allSignals.concat(sigs);
+      } catch (e) {}
+
+      // Health check
+      var health = { name: name, ok: true, notes: [] };
+      try {
+        var st = agent.status();
+        if (st) {
+          var lastPoll = st.lastPoll || st.last_poll || 0;
+          var ageMin   = lastPoll ? Math.round((now - lastPoll) / 60000) : 999;
+          health.lastPollMinAgo = ageMin;
+          if (ageMin > 10) {
+            health.ok = false;
+            health.notes.push('stale: last poll ' + ageMin + 'min ago');
+          }
+          if (st.error) {
+            health.ok = false;
+            health.notes.push('error: ' + st.error);
+          }
+          if (st.pmWarning) health.notes.push('warn: ' + st.pmWarning);
+        }
+      } catch (e) { health.ok = false; health.notes.push('status() threw: ' + e.message); }
+
+      agentHealthSummary.push(health);
+    });
+
+    // Run full coordination analysis with fresh signals
+    var report = coordinate(allSignals);
+
+    // Attach health data to report
+    report.agentHealth       = agentHealthSummary;
+    report.unhealthyAgents   = agentHealthSummary.filter(function (h) { return !h.ok; });
+    report.heartbeatCount    = _heartbeatCount;
+
+    // Log summary to console
+    var unhealthy = report.unhealthyAgents.length;
+    var logFn = unhealthy > 0 ? console.warn : console.info;
+    logFn('[GII-META-HB #' + _heartbeatCount + '] ' +
+          allSignals.length + ' signals | ' +
+          agentHealthSummary.filter(function (h) { return h.ok; }).length + '/' + agentHealthSummary.length + ' agents OK' +
+          (report.coordinationScore !== undefined ? ' | coord=' + report.coordinationScore.toFixed(2) : '') +
+          (unhealthy > 0 ? ' | UNHEALTHY: ' + report.unhealthyAgents.map(function (h) { return h.name; }).join(', ') : ''));
+
+    // Warn on high-severity conflicts
+    if (report.conflicts) {
+      report.conflicts.forEach(function (c) {
+        if (c.severity === 'high') {
+          console.warn('[GII-META-HB] HIGH conflict: ' + c.msg);
+        }
+      });
+    }
+
+    return report;
+  }
+
   // ── public API ────────────────────────────────────────────────────────────
 
   window.GII_META = {
@@ -271,7 +358,21 @@
     status:      function () { return _lastReport ? Object.assign({}, _lastReport) : null; },
     conflicts:   function () { return _lastReport ? _lastReport.conflicts.slice() : []; },
     consensus:   function () { return _lastReport ? _lastReport.consensusClusters.slice() : []; },
-    history:     function () { return _history.slice(); }
+    history:     function () { return _history.slice(); },
+    heartbeat:   _heartbeat,
+    agentHealth: function () {
+      return _lastReport && _lastReport.agentHealth ? _lastReport.agentHealth.slice() : [];
+    }
   };
+
+  // ── init: start heartbeat after all agents have loaded ────────────────────
+
+  window.addEventListener('load', function () {
+    // 15s delay — after all GII agents (last one loads at ~11.5s)
+    setTimeout(function () {
+      _heartbeat();                                          // first check immediately
+      setInterval(_heartbeat, HEARTBEAT_INTERVAL_MS);       // then every 5 minutes
+    }, 15000);
+  });
 
 })();

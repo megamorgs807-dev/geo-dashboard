@@ -175,17 +175,35 @@
 
   function poll() {
     _status.lastPoll = Date.now();
+    if (!window.PM) {
+      _status.pmWarning = 'window.PM unavailable — polymarket.js not yet loaded';
+      console.warn('[GII-PM] window.PM not found. Ensure polymarket.js is loaded before gii-polymarket.js.');
+      return;
+    }
+    _status.pmWarning = null;
     _analyseMarkets();
+  }
+
+  // ── trade result feedback ───────────────────────────────────────────────────
+
+  function onTradeResult(trade) {
+    var asset = (trade.asset || '').toUpperCase();
+    var dir   = (trade.dir  || '').toLowerCase();
+    if (!asset || !dir) return;
+    _accuracy.total += 1;
+    if ((trade.pnl_usd || 0) > 0) _accuracy.correct += 1;
+    _accuracy.winRate = _accuracy.total > 0 ? _accuracy.correct / _accuracy.total : null;
   }
 
   // ── public API ─────────────────────────────────────────────────────────────
 
   window.GII_AGENT_POLYMARKET = {
-    poll: poll,
-    signals: function () { return _signals.slice(); },
-    status: function () { return Object.assign({}, _status); },
-    accuracy: function () { return Object.assign({}, _accuracy); },
-    mispricings: function () { return _mispricings.slice(); }
+    poll:          poll,
+    signals:       function () { return _signals.slice(); },
+    status:        function () { return Object.assign({}, _status); },
+    accuracy:      function () { return Object.assign({}, _accuracy); },
+    onTradeResult: onTradeResult,
+    mispricings:   function () { return _mispricings.slice(); }
   };
 
   window.addEventListener('load', function () {

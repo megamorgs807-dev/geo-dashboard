@@ -690,25 +690,48 @@
 
   function _onTradeResult(trade) {
     if (!trade || !trade.asset) return;
+
+    // Normalise dir — EE uses 'LONG'/'SHORT' strings; legacy callers may use +1/-1
+    var tradeDir = (trade.dir || '');
+    var isLong  = (tradeDir === 'LONG'  || tradeDir === 'long'  || (typeof tradeDir === 'number' && tradeDir > 0));
+    var isShort = (tradeDir === 'SHORT' || tradeDir === 'short' || (typeof tradeDir === 'number' && tradeDir < 0));
+
     var closed = _lastSignals.filter(function (s) {
       return s.asset === trade.asset &&
-        ((s.bias === 'long' && trade.dir > 0) || (s.bias === 'short' && trade.dir < 0));
+        ((s.bias === 'long'  && isLong) ||
+         (s.bias === 'short' && isShort));
     });
     if (!closed.length) return;
 
-    var winner  = trade.pnl > 0;
-    var stopped = trade.exitReason === 'stop_loss' || (!winner && trade.pnl < 0);
+    // Normalise P&L — EE stores as pnl_usd; accept either field
+    var pnl     = (trade.pnl_usd !== undefined) ? trade.pnl_usd : (trade.pnl || 0);
+    var winner  = pnl > 0;
+    var stopped = trade.exitReason === 'stop_loss' || (!winner && pnl < 0);
+
+    var notifiedAgents = [];
     closed.forEach(function (s) {
       var key = s._agentName + '_' + s.asset + '_' + (s.bias || 'long');
       if (!_feedback[key]) _feedback[key] = { total: 0, correct: 0, fp: 0, winRate: null, fpr: null, reputation: null, lastTs: null };
       _feedback[key].total++;
       if (winner)  _feedback[key].correct++;
       if (stopped) _feedback[key].fp = (_feedback[key].fp || 0) + 1;
-      _feedback[key].winRate   = _feedback[key].correct / _feedback[key].total;
-      _feedback[key].fpr       = (_feedback[key].fp || 0) / _feedback[key].total;
+      _feedback[key].winRate    = _feedback[key].correct / _feedback[key].total;
+      _feedback[key].fpr        = (_feedback[key].fp || 0) / _feedback[key].total;
       // Module 3: composite reputation = winRate penalised by false positive rate
       _feedback[key].reputation = _clamp(_feedback[key].winRate * (1 - (_feedback[key].fpr || 0) * 0.5), 0.10, 1.0);
-      _feedback[key].lastTs    = new Date().toISOString();
+      _feedback[key].lastTs     = new Date().toISOString();
+
+      // Dispatch to individual agent so it can update its own per-asset feedback
+      var agentGlobal = 'GII_AGENT_' + (s._agentName || '').toUpperCase();
+      if (notifiedAgents.indexOf(agentGlobal) === -1) {
+        try {
+          var agent = window[agentGlobal];
+          if (agent && typeof agent.onTradeResult === 'function') {
+            agent.onTradeResult(trade);
+            notifiedAgents.push(agentGlobal);
+          }
+        } catch (e) {}
+      }
     });
     _saveFeedback();
   }

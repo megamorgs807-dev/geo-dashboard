@@ -31,6 +31,7 @@
   var PM_EDGE_STRONG   = 0.18;         // strong edge threshold
   var FUNDING_LONG_TRIG  = -0.0001;   // < -0.01%/8h → short squeeze risk
   var FUNDING_SHORT_TRIG =  0.0003;   // > +0.03%/8h → crowd overly long
+  var FEEDBACK_KEY       = 'gii_optimizer_feedback_v1';
 
   // Region → Polymarket keyword matching
   var REGION_PM_MAP = {
@@ -68,6 +69,8 @@
   var _funding    = {};    // { 'BTC': { rate8h, annualized, markPx }, ... }
   var _pmEdges    = [];    // latest detected edges (for UI)
   var _lastPollTs = 0;
+  var _feedback   = {};    // { 'BTC_long': { total, correct, winRate, lastTs } }
+  var _accuracy   = {};    // mirror of _feedback for public API
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -76,6 +79,29 @@
 
   function _objValues(obj) {
     return Object.keys(obj).map(function (k) { return obj[k]; });
+  }
+
+  function _loadFeedback() {
+    try { var r = localStorage.getItem(FEEDBACK_KEY); _feedback = r ? JSON.parse(r) : {}; } catch (e) {}
+    _accuracy = Object.assign({}, _feedback);
+  }
+
+  function _saveFeedback() {
+    try { localStorage.setItem(FEEDBACK_KEY, JSON.stringify(_feedback)); } catch (e) {}
+  }
+
+  function onTradeResult(trade) {
+    var asset = (trade.asset || '').toUpperCase();
+    var dir   = (trade.dir  || '').toLowerCase();
+    if (!asset || !dir) return;
+    var fbKey = asset + '_' + dir;
+    if (!_feedback[fbKey]) _feedback[fbKey] = { total: 0, correct: 0, winRate: null, lastTs: null };
+    _feedback[fbKey].total  += 1;
+    if ((trade.pnl_usd || 0) > 0) _feedback[fbKey].correct += 1;
+    _feedback[fbKey].winRate = _feedback[fbKey].correct / _feedback[fbKey].total;
+    _feedback[fbKey].lastTs  = new Date().toISOString();
+    _accuracy = Object.assign({}, _feedback);
+    _saveFeedback();
   }
 
   // ── Module 1: Hyperliquid funding rates ───────────────────────────────────
@@ -360,17 +386,19 @@
   // ── public API ────────────────────────────────────────────────────────────
 
   window.GII_AGENT_OPTIMIZER = {
-    poll:     poll,
-    signals:  function () { return _signals.slice(); },
-    status:   function () { return Object.assign({ lastPoll: _lastPollTs }, _status); },
-    accuracy: function () { return {}; },   // optimizer accuracy tracked via GII main feedback
-    pmEdges:  function () { return _pmEdges.slice(); },
-    funding:  function () { return Object.assign({}, _funding); }
+    poll:          poll,
+    signals:       function () { return _signals.slice(); },
+    status:        function () { return Object.assign({ lastPoll: _lastPollTs }, _status); },
+    accuracy:      function () { return Object.assign({}, _accuracy); },
+    onTradeResult: onTradeResult,
+    pmEdges:       function () { return _pmEdges.slice(); },
+    funding:       function () { return Object.assign({}, _funding); }
   };
 
   // ── init ──────────────────────────────────────────────────────────────────
 
   window.addEventListener('load', function () {
+    _loadFeedback();
     setTimeout(function () {
       poll();
       setInterval(poll, POLL_INTERVAL_MS);

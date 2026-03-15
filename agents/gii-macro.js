@@ -165,6 +165,43 @@
         evidenceKeys: ['dxy', 'dollar', 'emerging markets']
       });
     }
+
+    // GTI cross-reference: geopolitical tension confirms macro risk signals
+    try {
+      var gtiData = window.GII && typeof window.GII.gti === 'function' ? window.GII.gti() : null;
+      if (gtiData && typeof gtiData.value === 'number') {
+        var gtiVal = gtiData.value;
+        _status.gti = gtiVal;
+
+        // HIGH geopolitical risk (GTI ≥ 60) + RISK_OFF regime = double-confirmed safe haven
+        if (gtiVal >= 60 && riskOff) {
+          var gtiConf = _clamp((gtiVal - 60) / 40 * 0.30 + 0.40, 0.40, 0.78);
+          _pushSignal({
+            source: 'macro',
+            asset: 'XAR',
+            bias: 'long',
+            confidence: gtiConf,
+            reasoning: 'GTI ' + Math.round(gtiVal) + ' (HIGH) + RISK_OFF regime → defense ETF long',
+            region: 'GLOBAL',
+            evidenceKeys: ['gti', 'defense', 'geopolitical risk', 'risk off']
+          });
+        }
+
+        // EXTREME geopolitical risk (GTI ≥ 75): energy and gold amplification
+        if (gtiVal >= 75) {
+          var extConf = _clamp((gtiVal - 75) / 25 * 0.25 + 0.45, 0.45, 0.72);
+          _pushSignal({
+            source: 'macro',
+            asset: 'WTI',
+            bias: 'long',
+            confidence: extConf,
+            reasoning: 'GTI ' + Math.round(gtiVal) + ' (EXTREME) → supply disruption risk, WTI long',
+            region: 'GLOBAL',
+            evidenceKeys: ['gti', 'oil', 'geopolitical risk', 'extreme']
+          });
+        }
+      }
+    } catch (e) {}
   }
 
   // ── public poll ────────────────────────────────────────────────────────────

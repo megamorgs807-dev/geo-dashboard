@@ -41,6 +41,9 @@
   var FETCH_GAP_MS   = 2500;      // ms between individual API requests (rate limiting)
   var CACHE_KEY      = 'gii_ta_candles_v1';
   var FEEDBACK_KEY   = 'gii_ta_feedback_v1';
+  var QUOTA_KEY      = 'gii_ta_quota_v1';
+  // Free tier daily limits — skip non-essential fetches when near ceiling
+  var QUOTA_LIMITS   = { twelvedata: 750, alphavantage: 22 };   // leave 50/3 buffer
 
   // ── Asset definitions ──────────────────────────────────────────────────────
   // type:  'equity' | 'crypto' | 'commodity'
@@ -82,6 +85,8 @@
   var _accuracy = { total:0, correct:0, winRate:null };
   var _feedback = {};
   var _fetchSeq = Promise.resolve();   // serialised fetch queue
+  // Daily API quota tracker: { date:'YYYY-MM-DD', twelvedata:N, alphavantage:N }
+  var _quota    = { date: '', twelvedata: 0, alphavantage: 0 };
 
   // ── Persistence ────────────────────────────────────────────────────────────
   (function _boot() {
@@ -110,6 +115,42 @@
       });
       localStorage.setItem(CACHE_KEY, JSON.stringify(out));
     } catch (e) {}
+  }
+
+  // ── API quota tracking ───────────────────────────────────────────────────────
+  function _quotaToday() {
+    var today = new Date().toISOString().slice(0, 10);
+    if (_quota.date !== today) {
+      // New day — reset counters
+      _quota = { date: today, twelvedata: 0, alphavantage: 0 };
+      try { localStorage.setItem(QUOTA_KEY, JSON.stringify(_quota)); } catch (e) {}
+    }
+    // Load persisted count for today
+    try {
+      var stored = JSON.parse(localStorage.getItem(QUOTA_KEY) || '{}');
+      if (stored.date === today) { _quota.twelvedata = stored.twelvedata || 0; _quota.alphavantage = stored.alphavantage || 0; }
+    } catch (e) {}
+    return _quota;
+  }
+
+  function _quotaIncrement(api) {
+    _quotaToday();
+    if (_quota[api] !== undefined) {
+      _quota[api]++;
+      _status.apiQuota = Object.assign({}, _quota);
+      try { localStorage.setItem(QUOTA_KEY, JSON.stringify(_quota)); } catch (e) {}
+    }
+  }
+
+  function _quotaExceeded(api) {
+    _quotaToday();
+    var limit = QUOTA_LIMITS[api];
+    if (!limit) return false;
+    if (_quota[api] >= limit) {
+      console.warn('[GII-TA] Daily quota reached for ' + api + ' (' + _quota[api] + '/' + limit + ') — using cached data only');
+      return true;
+    }
+    return false;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -775,6 +816,8 @@
   function _td(symbol, interval, size) {
     var k = window.GII_TA_KEYS && window.GII_TA_KEYS.twelvedata;
     if (!k) return Promise.resolve(null);
+    if (_quotaExceeded('twelvedata')) return Promise.resolve(null);
+    _quotaIncrement('twelvedata');
     return fetch('https://api.twelvedata.com/time_series?symbol=' + encodeURIComponent(symbol) +
                  '&interval=' + interval + '&outputsize=' + (size || 200) + '&apikey=' + k)
       .then(function (r) { return r.json(); })
@@ -791,6 +834,8 @@
   function _av(func) {
     var k = window.GII_TA_KEYS && window.GII_TA_KEYS.alphavantage;
     if (!k) return Promise.resolve(null);
+    if (_quotaExceeded('alphavantage')) return Promise.resolve(null);
+    _quotaIncrement('alphavantage');
     return fetch('https://www.alphavantage.co/query?function=' + func + '&interval=daily&apikey=' + k)
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -940,12 +985,29 @@
     });
   }
 
+  // ── trade result feedback ───────────────────────────────────────────────────
+
+  function onTradeResult(trade) {
+    var asset = (trade.asset || '').toUpperCase();
+    var dir   = (trade.dir  || '').toLowerCase();
+    if (!asset || !dir) return;
+    var fbKey = asset + '_' + dir;
+    if (!_feedback[fbKey]) _feedback[fbKey] = { total: 0, correct: 0, winRate: null, lastTs: null };
+    _feedback[fbKey].total  += 1;
+    if ((trade.pnl_usd || 0) > 0) _feedback[fbKey].correct += 1;
+    _feedback[fbKey].winRate = _feedback[fbKey].correct / _feedback[fbKey].total;
+    _feedback[fbKey].lastTs  = new Date().toISOString();
+    _accuracy = Object.assign({}, _feedback);
+    try { localStorage.setItem(FEEDBACK_KEY, JSON.stringify(_feedback)); } catch (e) {}
+  }
+
   // ── Public API ─────────────────────────────────────────────────────────────
   window.GII_AGENT_TECHNICALS = {
-    poll:     poll,
-    signals:  function () { return _signals.slice(); },
-    status:   function () { return Object.assign({}, _status); },
-    accuracy: function () { return Object.assign({}, _accuracy); },
+    poll:          poll,
+    signals:       function () { return _signals.slice(); },
+    status:        function () { return Object.assign({}, _status); },
+    accuracy:      function () { return Object.assign({}, _accuracy); },
+    onTradeResult: onTradeResult,
     // Diagnostic helpers
     regime:   function (assetId) {
       var c = (_cache[assetId + '_daily'] || {}).candles;
@@ -957,7 +1019,8 @@
         info[k] = { count: _cache[k].candles.length, ageMin: Math.round((Date.now() - _cache[k].fetchedAt) / 60000), source: _cache[k].source };
       });
       return info;
-    }
+    },
+    apiQuota:  function () { _quotaToday(); return Object.assign({}, _quota, { limits: QUOTA_LIMITS }); }
   };
 
   // ── Init ───────────────────────────────────────────────────────────────────

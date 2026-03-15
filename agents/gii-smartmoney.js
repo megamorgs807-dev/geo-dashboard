@@ -226,6 +226,18 @@
         else if (fb.winRate >= 0.65) conf = _clamp(conf * 1.08, 0, 0.82);
       }
 
+      // GTI cross-reference: smart money SHORT in elevated geopolitical tension = aligned signal
+      try {
+        var gtiData = window.GII && typeof window.GII.gti === 'function' ? window.GII.gti() : null;
+        if (gtiData && typeof gtiData.value === 'number') {
+          if (gtiData.value >= 70 && dominant === 'short') {
+            conf = _clamp(conf * 1.10, 0, 0.82);   // risk-off alignment bonus
+          } else if (gtiData.value >= 85 && dominant === 'long') {
+            conf = _clamp(conf * 0.90, 0, 0.82);   // going long in EXTREME tension = caution
+          }
+        }
+      } catch (e) {}
+
       sigs.push({
         source:       'smartmoney',
         asset:        asset,
@@ -301,15 +313,31 @@
       });
   }
 
+  // ── trade result feedback ───────────────────────────────────────────────────
+
+  function onTradeResult(trade) {
+    var asset = (trade.asset || '').toUpperCase();
+    var dir   = (trade.dir  || '').toLowerCase();
+    if (!asset || !dir) return;
+    var fbKey = asset + '_' + dir;
+    if (!_feedback[fbKey]) _feedback[fbKey] = { total: 0, correct: 0, winRate: null, lastTs: null };
+    _feedback[fbKey].total  += 1;
+    if ((trade.pnl_usd || 0) > 0) _feedback[fbKey].correct += 1;
+    _feedback[fbKey].winRate = _feedback[fbKey].correct / _feedback[fbKey].total;
+    _feedback[fbKey].lastTs  = new Date().toISOString();
+    _saveFeedback();
+  }
+
   // ── public API ────────────────────────────────────────────────────────────
 
   window.GII_AGENT_SMARTMONEY = {
-    poll:      poll,
-    signals:   function () { return _signals.slice(); },
-    status:    function () { return Object.assign({ lastPoll: _lastPollTs }, _status); },
-    accuracy:  function () { return Object.assign({}, _feedback); },
-    snapshot:  function () { return Object.assign({}, _lastSnapshot); },
-    traders:   function () { return _traderCache.slice(); }
+    poll:          poll,
+    signals:       function () { return _signals.slice(); },
+    status:        function () { return Object.assign({ lastPoll: _lastPollTs }, _status); },
+    accuracy:      function () { return Object.assign({}, _feedback); },
+    onTradeResult: onTradeResult,
+    snapshot:      function () { return Object.assign({}, _lastSnapshot); },
+    traders:       function () { return _traderCache.slice(); }
   };
 
   // ── init ──────────────────────────────────────────────────────────────────
