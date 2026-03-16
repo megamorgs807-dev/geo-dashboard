@@ -10173,6 +10173,10 @@ document.addEventListener('DOMContentLoaded', function() {
               → compute impactMult for position sizing (0.5×–2.0×)
      Stage 4: rank by final conf, deduplicate, render + emit to EE
      ─────────────────────────────────────────────────────────────────────── */
+  /* Per-asset last-emit timestamp — prevents re-signalling the same asset
+     within 6 hours (stops runaway escalation chains hammering EE) */
+  var _rtLastEmit = {};
+
   function renderTrades() {
     var el = gel('intelTrades'); if (!el) return;
 
@@ -10321,7 +10325,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }).join('');
 
     /* ── EE signal bus: emit ranked signals to Execution Engine ── */
-    if (window.EE && typeof EE.onSignals === 'function') EE.onSignals(sigs);
+    if (window.EE && typeof EE.onSignals === 'function') {
+      var _now = Date.now();
+
+      /* Guard 1 — skip assets that already have an open position */
+      var _openAssets = {};
+      try {
+        var _allTrades = JSON.parse(localStorage.getItem('geodash_ee_trades_v1') || '[]');
+        _allTrades.forEach(function(t){ if (t.status === 'OPEN') _openAssets[t.asset] = true; });
+      } catch(e) {}
+
+      /* Guard 2 — 6-hour per-asset cooldown (stops escalation chain spam) */
+      var _SIX_HOURS = 6 * 3600 * 1000;
+      var filtered = sigs.filter(function(s) {
+        if (_openAssets[s.asset]) return false;
+        if (_now - (_rtLastEmit[s.asset] || 0) < _SIX_HOURS) return false;
+        return true;
+      });
+
+      /* Stamp emission time for every signal we're about to send */
+      filtered.forEach(function(s){ _rtLastEmit[s.asset] = _now; });
+
+      if (filtered.length) EE.onSignals(filtered);
+    }
   }
 
   /* ── RENDER: STATS ─────────────────────────────────────────────────────── */
@@ -10356,6 +10382,11 @@ document.addEventListener('DOMContentLoaded', function() {
   /* Called by executionEngine.js closeTrade() after every trade closes.
      Adjusts IMPACT_MAP weights based on outcome, saves, re-renders panel. */
   window.onTradeClose = function(trade) {
+    /* Always notify GII self-learning first — before any early-exit guards */
+    if (window.GII && typeof GII.onTradeResult === 'function') GII.onTradeResult(trade);
+    if (window.GII_AGENT_SCALPER && typeof GII_AGENT_SCALPER.onTradeResult === 'function') GII_AGENT_SCALPER.onTradeResult(trade);
+    if (window.GII_AGENT_SCALPER_SESSION && typeof GII_AGENT_SCALPER_SESSION.onTradeResult === 'function') GII_AGENT_SCALPER_SESSION.onTradeResult(trade);
+
     var kws = trade.matched_keywords;
     if (!kws || !kws.length) return;
     if (trade.close_reason !== 'TAKE_PROFIT' && trade.close_reason !== 'STOP_LOSS') return;
@@ -10416,8 +10447,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     renderLearning();
-    if (window.GII && typeof GII.onTradeResult === 'function') GII.onTradeResult(trade);
-    if (window.GII_AGENT_SCALPER && typeof GII_AGENT_SCALPER.onTradeResult === 'function') GII_AGENT_SCALPER.onTradeResult(trade);
   };
 
   /* Renders the learning panel showing all adjusted weights */
