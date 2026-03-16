@@ -32,7 +32,8 @@
   /* Agents that should always have signals when the backend is online */
   var WARN_ON_ZERO = [
     'GII_AGENT_ENERGY', 'GII_AGENT_CONFLICT',
-    'GII_AGENT_SANCTIONS', 'GII_AGENT_MARITIME'
+    'GII_AGENT_SANCTIONS'
+    // Maritime removed: legitimately returns 0 when no maritime events in IC feed
   ];
 
   var AGENT_NAMES = Object.keys(STALE_MS);

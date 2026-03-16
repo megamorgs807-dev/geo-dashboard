@@ -135,11 +135,12 @@
     var cutoff = now - 24 * 60 * 60 * 1000;
 
     // Get maritime/aircraft events — either sbFeed tagged or keyword match
+    // Include e.desc so standard IC pipeline events are caught even without sbFeed tag
     var maritimeEvents = IC.events.filter(function (e) {
       if (e.ts <= cutoff) return false;
       if (e.sbFeed === 'maritime' || e.sbFeed === 'aircraft') return true;
-      var text = e.headline || e.text || e.title || '';
-      return _matchesKeywords(text, MARITIME_KEYWORDS);
+      var text = (e.headline || e.text || e.title || '') + ' ' + (e.desc || '');
+      return _matchesKeywords(text.trim(), MARITIME_KEYWORDS);
     });
 
     _status.maritimeEventCount = maritimeEvents.length;
@@ -206,8 +207,8 @@
       });
     }
 
-    // Full Hormuz pattern triggered
-    if (hPattern.totalScore >= 3) {
+    // Full Hormuz pattern triggered (lowered threshold 3→2: one component is enough)
+    if (hPattern.totalScore >= 2) {
       _pushSignal({
         source: 'maritime',
         asset: 'XLE',
@@ -228,7 +229,7 @@
       var text = (e.headline || e.text || e.region || '').toLowerCase();
       return text.indexOf('red sea') !== -1 || text.indexOf('bab al') !== -1 || text.indexOf('houthi') !== -1;
     });
-    if (redSeaEvents.length >= 2) {
+    if (redSeaEvents.length >= 1) {
       _pushSignal({
         source: 'maritime',
         asset: 'WTI',

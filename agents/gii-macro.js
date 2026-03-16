@@ -46,10 +46,26 @@
   function _analyseMarket(market, regime) {
     if (!market) return;
 
-    // Extract VIX
+    // Extract VIX — try all known field name variants
     var vix = null;
-    if (market.VIX !== undefined) vix = parseFloat(market.VIX) || null;
-    else if (market['VIX.Close'] !== undefined) vix = parseFloat(market['VIX.Close']) || null;
+    var vixSource = null;
+    var _vixTry = ['VIX', 'VIX.Close', 'VIX.close', 'vix', 'VIX_close', 'volatility', 'vol'];
+    for (var _vi = 0; _vi < _vixTry.length; _vi++) {
+      var _v = parseFloat(market[_vixTry[_vi]]);
+      if (_v > 0) { vix = _v; vixSource = _vixTry[_vi]; break; }
+    }
+    // Fallback: estimate VIX from GII GTI (available locally, no API needed)
+    if (vix === null && window.GII && typeof GII.gti === 'function') {
+      try {
+        var _gti = GII.gti();
+        if (_gti && _gti.value != null) {
+          // GTI 80+ ≈ VIX 35+, GTI 60 ≈ VIX 25, GTI 40 ≈ VIX 18
+          vix = Math.round(10 + _gti.value * 0.35);
+          vixSource = 'gti-estimate';
+        }
+      } catch (e) {}
+    }
+    _status.vixSource = vixSource || 'unavailable';
 
     // Extract DXY
     var dxy = null;
@@ -73,11 +89,18 @@
     _status.regime = regimeName;
     _status.regimeScore = regimeScore;
 
-    // Determine risk mode
+    // Determine risk mode — check all high-stress regime names, not just 'RISK_OFF'
     var riskOff = false;
-    if (regimeName && regimeName.toUpperCase().indexOf('RISK_OFF') !== -1) riskOff = true;
-    if (regimeName && regimeName.toUpperCase().indexOf('RISK OFF') !== -1) riskOff = true;
-    if (vix !== null && vix > 25) riskOff = true;
+    var _riskOffNames = ['RISK_OFF', 'RISK OFF', 'CRISIS', 'EXTREME', 'HIGH_RISK',
+                         'HIGH RISK', 'STRESS', 'SEVERE', 'DANGER', 'DEFCON'];
+    if (regimeName) {
+      var _rn = regimeName.toUpperCase();
+      for (var _ri = 0; _ri < _riskOffNames.length; _ri++) {
+        if (_rn.indexOf(_riskOffNames[_ri]) !== -1) { riskOff = true; break; }
+      }
+    }
+    if (regimeScore >= 70) riskOff = true;        // high regime stress score → risk-off
+    if (vix !== null && vix > 25) riskOff = true; // elevated VIX → risk-off
     _status.riskMode = riskOff ? 'RISK_OFF' : 'RISK_ON';
 
     var prior = _clamp(regimeScore / 100, 0.10, 0.90);
