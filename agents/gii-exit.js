@@ -395,8 +395,9 @@
     var asset   = trade.asset;
     var source  = trade.source || (trade.thesis && trade.thesis.source) || 'ic';
 
-    /* Noise filter: never exit within MIN_HOLD_MS of opening */
-    var ageMs = Date.now() - (trade.opened_at || 0);
+    /* Noise filter: never exit within MIN_HOLD_MS of opening.
+       EE stores the open timestamp as trade.timestamp_open (ISO string). */
+    var ageMs = Date.now() - new Date(trade.timestamp_open || 0).getTime();
     if (ageMs < MIN_HOLD_MS) { _stats.skipped++; return; }
 
     /* 1. Emergency checks (highest priority, all trade types) */

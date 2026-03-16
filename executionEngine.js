@@ -46,7 +46,7 @@
   var DEFAULTS = {
     mode:                  'SIMULATION', // 'SIMULATION' | 'LIVE'
     enabled:               true,         // auto-execution always on by default
-    min_confidence:        50,           // minimum IC confidence % to auto-execute
+    min_confidence:        65,           // minimum IC confidence % to auto-execute
     virtual_balance:       1000,         // starting virtual balance (USD)
     risk_per_trade_pct:    3,            // % of balance risked per trade
     stop_loss_pct:         3,            // % distance from entry for stop-loss
@@ -805,10 +805,14 @@
   function buildTrade(sig, entryPrice) {
     var dir     = sig.dir === 'SHORT' ? 'SHORT' : 'LONG';
     // ATR-based stop/target: prefer per-signal values from gii-technicals
-    // over the global fixed-percentage config (backward-compatible fallback)
-    var defaultSlDist = entryPrice * (_cfg.stop_loss_pct / 100);
+    // over the global fixed-percentage config (backward-compatible fallback).
+    // Also accepts sig.stopPct / sig.tpRatio for volatility-adjusted sizing
+    // from gii-entry (asset-specific percentage stops, e.g. BTC=6%, GLD=2%).
+    var sigStopPct = (sig.stopPct  && isFinite(sig.stopPct)  && sig.stopPct  > 0) ? sig.stopPct  : _cfg.stop_loss_pct;
+    var sigTpRatio = (sig.tpRatio  && isFinite(sig.tpRatio)  && sig.tpRatio  > 0) ? sig.tpRatio  : _cfg.take_profit_ratio;
+    var defaultSlDist = entryPrice * (sigStopPct / 100);
     var slDist_ = (sig.atrStop  && isFinite(sig.atrStop)  && sig.atrStop  > 0) ? sig.atrStop  : defaultSlDist;
-    var tpDist_ = (sig.atrTarget && isFinite(sig.atrTarget) && sig.atrTarget > 0) ? sig.atrTarget : slDist_ * _cfg.take_profit_ratio;
+    var tpDist_ = (sig.atrTarget && isFinite(sig.atrTarget) && sig.atrTarget > 0) ? sig.atrTarget : slDist_ * sigTpRatio;
 
     var stopLoss, takeProfit;
     if (dir === 'LONG') {
@@ -2697,6 +2701,14 @@
         closeTrade(tradeId, price || trade.entry_price, reason || 'GII-EXIT');
       });
       return true;
+    },
+
+    /* ── gii-exit: get last known price for an asset from the price cache ── */
+    getLastPrice: function (asset) {
+      if (!asset) return null;
+      var token = _normaliseToken(asset);
+      var price = _priceCache[token];
+      return (price && isFinite(price)) ? price : null;
     },
 
     /* ── Reset virtual balance to $10,000 ── */

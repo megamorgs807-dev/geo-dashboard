@@ -36,6 +36,35 @@
   /* Risk assets — vetoed for LONG in extreme regimes */
   var RISK_ASSETS = ['BTC', 'SPY', 'QQQ', 'TSM', 'NVDA', 'TSLA', 'SMH', 'FXI'];
 
+  /* ── PER-ASSET VOLATILITY STOPS ─────────────────────────────────────────
+   * Flat 3% stops get hit by normal noise on high-vol assets (BTC moves 3%
+   * in hours on a quiet day). These stopPct / tpRatio values are attached to
+   * every approved signal — EE.buildTrade() reads them instead of the flat
+   * config. tpRatio 2.5 on all assets (vs default 2.0) improves expectancy. */
+  var VOL_STOPS = {
+    'BTC':   { stopPct: 6.0, tpRatio: 2.5 },  /* Crypto — widest */
+    'ETH':   { stopPct: 7.0, tpRatio: 2.5 },
+    'TSLA':  { stopPct: 5.5, tpRatio: 2.5 },  /* High-vol equities */
+    'NVDA':  { stopPct: 5.0, tpRatio: 2.5 },
+    'SMH':   { stopPct: 4.0, tpRatio: 2.5 },
+    'TSM':   { stopPct: 4.0, tpRatio: 2.5 },
+    'FXI':   { stopPct: 4.0, tpRatio: 2.5 },
+    'WTI':   { stopPct: 3.5, tpRatio: 2.5 },  /* Energy */
+    'BRENT': { stopPct: 3.5, tpRatio: 2.5 },
+    'XLE':   { stopPct: 3.0, tpRatio: 2.5 },
+    'GAS':   { stopPct: 4.5, tpRatio: 2.5 },
+    'SPY':   { stopPct: 2.5, tpRatio: 2.5 },  /* Broad market */
+    'QQQ':   { stopPct: 2.5, tpRatio: 2.5 },
+    'GLD':   { stopPct: 2.0, tpRatio: 2.5 },  /* Safe-haven / low-vol */
+    'XAU':   { stopPct: 2.0, tpRatio: 2.5 },
+    'SLV':   { stopPct: 2.5, tpRatio: 2.5 },
+    'TLT':   { stopPct: 1.5, tpRatio: 2.5 },
+    'JPY':   { stopPct: 1.5, tpRatio: 2.5 },
+    'CHF':   { stopPct: 1.5, tpRatio: 2.5 },
+    'VIX':   { stopPct: 8.0, tpRatio: 2.0 }   /* VIX is extremely volatile */
+  };
+  var VOL_STOP_DEFAULT = { stopPct: 3.0, tpRatio: 2.5 };
+
   /* ── STATE ──────────────────────────────────────────────────────────────── */
   var _queue      = [];   // pending signals awaiting scoring
   var _approved   = [];   // last 50 approved signals (audit log)
@@ -385,11 +414,14 @@
         return;
       }
 
-      /* Approved — enrich signal with thesis fingerprint */
+      /* Approved — enrich signal with thesis fingerprint + volatility stops */
+      var volStop  = VOL_STOPS[sig.asset] || VOL_STOP_DEFAULT;
       var enriched = Object.assign({}, sig, {
         thesis:          _buildThesis(item, result),
         confluenceScore: result.score,
-        source:          item.source
+        source:          item.source,
+        stopPct:         sig.stopPct  || volStop.stopPct,   /* per-asset stop % — EE overrides flat 3% */
+        tpRatio:         sig.tpRatio  || volStop.tpRatio    /* per-asset R:R  — EE overrides flat 2.0 */
       });
 
       /* Boost confidence by confluence (up to +8 points) */
