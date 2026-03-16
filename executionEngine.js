@@ -184,13 +184,22 @@
   }
 
   /* Check position notional against liquidity cap; log warning if exceeded */
+  // Returns true if position is within liquidity limits, false if it should be rejected.
+  // Hard cap: reject if position > 2× the liquidity cap (would cause serious market impact).
+  // Soft warning: log if position > 1× cap (oversized but may fill with extra slippage).
   function _checkLiquidity(asset, sizeUsd) {
     var sector = EE_SECTOR_MAP[normaliseAsset(asset)] || 'def';
     var cap    = LIQUIDITY_CAPS[sector] || LIQUIDITY_CAPS.def;
+    if (sizeUsd > cap * 2) {
+      log('AUDIT', '⛔ LIQUIDITY REJECT: ' + asset + ' position $' + _num(sizeUsd) +
+        ' exceeds hard cap $' + _num(cap * 2) + ' — trade blocked (would move market)', 'red');
+      return false;
+    }
     if (sizeUsd > cap) {
       log('AUDIT', '⚠ LIQUIDITY: ' + asset + ' position $' + _num(sizeUsd) +
-        ' exceeds cap $' + _num(cap) + ' — real fill would move market', 'amber');
+        ' exceeds soft cap $' + _num(cap) + ' — expect extra slippage on real exchange', 'amber');
     }
+    return true;
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════
@@ -602,7 +611,10 @@
      when external APIs (Yahoo/CoinGecko) fail due to CORS or rate limits.
      Handles aliases: GLD→GOLD, XAG→SILVER, OIL→WTI so tickers with
      different names are still matched. */
-  var _TICKER_ALIASES = { 'GLD':'GOLD', 'XAU':'GOLD', 'XAG':'SILVER', 'SLV':'SILVER', 'OIL':'WTI', 'CRUDE':'WTI', 'BRENT':'OIL', 'GAS':'NATGAS' };
+  // Note: GLD is intentionally excluded — GLD is the SPDR ETF (~1/10 oz gold), NOT spot gold.
+  // If Yahoo Finance fails, returning the dashboard's spot GOLD price (10× higher) would corrupt
+  // position sizing. Better to return null (skip trade) than trade at 10× the wrong price.
+  var _TICKER_ALIASES = { 'XAU':'GOLD', 'XAG':'SILVER', 'SLV':'SILVER', 'OIL':'WTI', 'CRUDE':'WTI', 'BRENT':'OIL', 'GAS':'NATGAS' };
   function _tickerPrice(token) {
     var searches = [token];
     if (_TICKER_ALIASES[token]) searches.push(_TICKER_ALIASES[token]);
@@ -1071,8 +1083,8 @@
     trade.raw_entry_price    = +entryPrice.toFixed(6);
     trade.entry_slippage_pct = +((adjustedEntry / entryPrice - 1) * 100).toFixed(4);
 
-    // Reality check 3 — liquidity: warn if position too large for this market
-    _checkLiquidity(sig.asset, trade.size_usd);
+    // Reality check 3 — liquidity: block if position would move the market
+    if (!_checkLiquidity(sig.asset, trade.size_usd)) return;
 
     // Reality check 5 — open commission: deduct immediately so it cannot compound
     var openComm = trade.size_usd * _getCosts(sig.asset).commission;
@@ -1154,6 +1166,13 @@
     trade.pnl_usd  = +(trade.pnl_usd - closeComm).toFixed(2);
     trade.costs_usd = +((trade.costs_usd || 0) + closeComm).toFixed(4);
 
+    // Deduct any accumulated funding cost so final pnl_usd is truly net.
+    // Funding was already charged to virtual_balance in real-time; here we just
+    // make sure the stored trade P&L matches what actually hit the balance.
+    if (trade.funding_cost_usd && trade.funding_cost_usd > 0) {
+      trade.pnl_usd = +(trade.pnl_usd - trade.funding_cost_usd).toFixed(2);
+    }
+
     // Reality check 8 — plausibility: detect wrong-side close prices (price corruption)
     // and cap P&L at theoretical max. Two-tier check:
     //   Tier A (hard): close price moved in wrong direction vs. entry for the given reason.
@@ -1189,7 +1208,10 @@
     } else {
       // Tier B: warn (but don't correct) if P&L still > 10× theoretical max after passing side check
       // (trailing stop can legitimately exceed 2× by riding past original TP, so threshold is 10×)
-      var theoreticalMax = Math.abs(trade.units * (trade.take_profit - trade.entry_price));
+      // Use original full units (×2 if partial TP has already halved them) for the theoretical max
+      // so the check isn't artificially loosened on partial-close trades.
+      var fullUnits = trade.partial_tp_taken ? trade.units * 2 : trade.units;
+      var theoreticalMax = Math.abs(fullUnits * (trade.take_profit - trade.entry_price));
       if (theoreticalMax > 0 && Math.abs(trade.pnl_usd) > theoreticalMax * 10) {
         log('AUDIT',
           '⚠ PLAUSIBILITY: ' + trade.asset + ' P&L $' + trade.pnl_usd +
@@ -1517,6 +1539,9 @@
             var fundingCost = trade.size_usd * tradeCosts.funding8h * (fundingDue - fundingPaid);
             trade.funding_periods_paid = fundingDue;
             trade.costs_usd = +((trade.costs_usd || 0) + fundingCost).toFixed(4);
+            // Track running funding deduction on the trade itself so win/loss stats
+            // reflect actual net P&L (not just price movement minus entry commission).
+            trade.funding_cost_usd = +((trade.funding_cost_usd || 0) + fundingCost).toFixed(4);
             _cfg.virtual_balance -= fundingCost;
             saveCfg();
             saved = true;
@@ -2237,6 +2262,29 @@
       }
     });
 
+    /* Sharpe ratio — per-trade return (pnl / size_usd), annualised
+       Uses avg trade duration to estimate trades-per-year.
+       Formula: mean(r) / stdev(r) × sqrt(tradesPerYear)
+       Returns null if < 3 trades (not meaningful). */
+    var sharpeRatio = null;
+    if (closed.length >= 3) {
+      var returns = closed.map(function (t) {
+        var sz = t.size_usd || 1;
+        return (t.pnl_usd || 0) / sz;
+      });
+      var meanR = returns.reduce(function (s, r) { return s + r; }, 0) / returns.length;
+      var variance = returns.reduce(function (s, r) {
+        return s + (r - meanR) * (r - meanR);
+      }, 0) / (returns.length - 1);          // sample variance
+      var stdR = Math.sqrt(variance);
+      if (stdR > 0) {
+        // Estimate annualisation factor: if avgDur is known use it, else assume 24h per trade
+        var avgDurHrs = (avgDur !== null) ? avgDur : 24;
+        var tradesPerYear = 8760 / Math.max(avgDurHrs, 0.25);  // cap at 4× per hour
+        sharpeRatio = +(meanR / stdR * Math.sqrt(tradesPerYear)).toFixed(2);
+      }
+    }
+
     /* Averages */
     function avg(arr, key) {
       return arr.length ? arr.reduce(function (s, t) { return s + (t[key] || 0); }, 0) / arr.length : 0;
@@ -2343,7 +2391,8 @@
       wrDay: wrDay, wrWeek: wrWeek, wrAll: wrAll,
       avgDur: avgDur, minDur: minDur, maxDur: maxDur,
       assetMap: assetMap, regionMap: regionMap, buckets: buckets,
-      scalperStats: scalperStats, openScalpers: openScalpers
+      scalperStats: scalperStats, openScalpers: openScalpers,
+      sharpeRatio: sharpeRatio
     };
   }
 
@@ -2619,6 +2668,25 @@
         exEl.textContent = (a.expectancy >= 0 ? '+$' : '-$') + _num(Math.abs(a.expectancy));
         exEl.className = 'ee-an-kpi-val ' + (a.expectancy > 0 ? 'green' : 'red');
       }
+    }
+
+    /* ── Sharpe Ratio & Max DD USD ── */
+    var srEl = document.getElementById('eeAnSharpe');
+    if (srEl) {
+      if (a.sharpeRatio === null) {
+        srEl.textContent = '—';
+        srEl.className = 'ee-an-kpi-val dim';
+      } else {
+        srEl.textContent = a.sharpeRatio.toFixed(2);
+        srEl.className = 'ee-an-kpi-val ' +
+          (a.sharpeRatio >= 1.5 ? 'green' : a.sharpeRatio < 0 ? 'red' : '');
+      }
+    }
+
+    /* Max DD in USD (already have pct; also show dollar amount) */
+    var ddUsdEl = document.getElementById('eeAnMaxDDUsd');
+    if (ddUsdEl) {
+      ddUsdEl.textContent = a.closed && a.maxDDUsd > 0 ? '-$' + _num(a.maxDDUsd) : '—';
     }
 
     /* ── Duration stats ── */

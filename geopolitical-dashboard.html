@@ -5103,7 +5103,7 @@
         <div class="ee-an-kpi">
           <div class="ee-an-kpi-lbl">Max Drawdown</div>
           <div class="ee-an-kpi-val red" id="eeAnMaxDD">—</div>
-          <div class="ee-an-kpi-sub">Peak-to-trough decline</div>
+          <div class="ee-an-kpi-sub" id="eeAnMaxDDUsd" style="color:var(--red)">—</div>
         </div>
         <div class="ee-an-kpi">
           <div class="ee-an-kpi-lbl">Avg Win</div>
@@ -5124,6 +5124,11 @@
           <div class="ee-an-kpi-lbl">Expectancy</div>
           <div class="ee-an-kpi-val" id="eeAnExpect">—</div>
           <div class="ee-an-kpi-sub">Avg outcome per trade</div>
+        </div>
+        <div class="ee-an-kpi">
+          <div class="ee-an-kpi-lbl">Sharpe Ratio</div>
+          <div class="ee-an-kpi-val dim" id="eeAnSharpe">—</div>
+          <div class="ee-an-kpi-sub">Risk-adj return (annualised)</div>
         </div>
       </div>
 
@@ -12851,7 +12856,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=46"></script>
+<script src="executionEngine.js?v=47"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
