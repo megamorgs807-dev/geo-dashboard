@@ -37,7 +37,7 @@
       var saved = localStorage.getItem(_BACKEND_URL_KEY);
       if (saved && saved.length > 4) return saved.replace(/\/$/, '');
     } catch (e) {}
-    return (typeof window !== 'undefined' && window.GEO_API_BASE) || 'http://localhost:8765';
+    return (typeof window !== 'undefined' && window.GEO_API_BASE) || 'https://geo-dashboard-2okm.onrender.com';
   })();
   var _apiOnline    = false;   // set true after first successful /api/status ping
   var _backendChecked = false; // set true after first ping attempt resolves (ok or fail)
@@ -2865,13 +2865,13 @@
       if (!input) return;
       var url = input.value.trim().replace(/\/$/, '');
       if (!url) {
-        // Clear saved URL — revert to localhost
+        // Clear saved URL — revert to Render default
         try { localStorage.removeItem(_BACKEND_URL_KEY); } catch (e) {}
-        _API_BASE = 'http://localhost:8765';
+        _API_BASE = 'https://geo-dashboard-2okm.onrender.com';
         _apiOnline = false;
         _backendChecked = false;
         input.style.borderColor = 'var(--border)';
-        if (status) { status.textContent = 'Cleared — using localhost'; status.style.color = 'var(--dim)'; }
+        if (status) { status.textContent = 'Cleared — using Render default'; status.style.color = 'var(--dim)'; }
         return;
       }
       if (!/^https?:\/\//.test(url)) url = 'https://' + url;
