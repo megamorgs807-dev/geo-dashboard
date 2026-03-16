@@ -184,10 +184,11 @@
       if (closed.length >= 10) {
         var wins = closed.filter(function (t) { return (t.pnl_pct || 0) > 0; }).length;
         var wr   = wins / closed.length;
+        // At 2.5 R:R breakeven = 28.6% — warn at 33% (buffer above breakeven)
         if (wr < 0.28) {
           _addAlert('ee_winrate', 'error', 'EE',
             'Win rate critically low: ' + Math.round(wr * 100) + '% on last ' + closed.length + ' trades');
-        } else if (wr < 0.40) {
+        } else if (wr < 0.33) {
           _addAlert('ee_winrate', 'warn', 'EE',
             'Win rate below target: ' + Math.round(wr * 100) + '% on last ' + closed.length + ' trades');
         } else {

@@ -1122,6 +1122,13 @@
           log('TRADE', sig.asset + ' skipped: no price feed. Re-scan will retry.', 'amber');
           return;
         }
+        // Re-validate after async gap — another signal for same asset may have
+        // opened while price was being fetched (fixes duplicate-position race condition)
+        var recheck = canExecute(sig);
+        if (!recheck.ok) {
+          _logSignal(sig, 'SKIPPED', 'post-fetch recheck: ' + recheck.reason);
+          return;
+        }
         _logSignal(sig, 'TRADED', null);
         openTrade(sig, price);
       });

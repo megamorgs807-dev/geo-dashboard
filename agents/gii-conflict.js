@@ -8,7 +8,7 @@
 
   var MAX_SIGNALS = 20;
   var POLL_INTERVAL = 67000;
-  var MIN_SEVERITY = 65;
+  var MIN_SEVERITY = 55;  // lowered from 65 — avoids double-filtering with keyword check
 
   var SEV_KEYWORDS = [
     'airstrike', 'missile', 'attack', 'invasion', 'offensive', 'combat', 'troops',
@@ -84,10 +84,16 @@
     var cutoff = now - 24 * 60 * 60 * 1000;
 
     // Filter to high-severity conflict events
+    // - Include sbFeed='conflict'/'military' tagged events unconditionally
+    // - Include e.desc in text scan (IC pipeline events use title+desc)
+    // - MIN_SEVERITY lowered 65→55 so borderline events aren't double-filtered out
     var conflictEvents = IC.events.filter(function (e) {
+      if (e.ts <= cutoff) return false;
       var sig = e.signal || e.severity || 0;
-      var text = e.headline || e.text || e.title || '';
-      return sig >= MIN_SEVERITY && e.ts > cutoff && _matchesSev(text);
+      if (sig < MIN_SEVERITY) return false;
+      if (e.sbFeed === 'conflict' || e.sbFeed === 'military') return true;
+      var text = (e.headline || e.text || e.title || '') + ' ' + (e.desc || '');
+      return _matchesSev(text.trim());
     });
 
     _status.conflictEventCount = conflictEvents.length;

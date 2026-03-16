@@ -44,7 +44,8 @@
   // ── analysis ───────────────────────────────────────────────────────────────
 
   function _analyseMarket(market, regime) {
-    if (!market) return;
+    if (!market && !regime) return;  // only skip when both are null
+    market = market || {};           // treat missing market as empty — regime still processed
 
     // Extract VIX — try all known field name variants
     var vix = null;
@@ -233,11 +234,22 @@
 
   function poll() {
     _status.lastPoll = Date.now();
+    // Always fetch both endpoints independently — don't abandon on market error.
+    // _analyseMarket handles null market; GTI fallback runs regardless of backend.
     _fetchJSON(_API + '/api/market', function (err, market) {
-      if (err) { _status.online = false; return; }
-      _status.online = true;
+      _status.online = !err;
       _fetchJSON(_API + '/api/regime', function (err2, regime) {
-        _analyseMarket(market, err2 ? null : regime);
+        _analyseMarket(market || null, err2 ? null : regime);
+        // GTI-based VIX estimate — runs even when backend is fully offline
+        if (!_status.vix && window.GII && typeof GII.gti === 'function') {
+          try {
+            var _gti = GII.gti();
+            if (_gti && _gti.value != null) {
+              _status.vix       = Math.round(10 + _gti.value * 0.35);
+              _status.vixSource = 'gti-estimate';
+            }
+          } catch (e) {}
+        }
       });
     });
   }
