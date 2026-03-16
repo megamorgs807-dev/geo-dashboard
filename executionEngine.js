@@ -76,13 +76,22 @@
     'XAU':'precious', 'GLD':'precious', 'SLV':'precious',
     'XAR':'defense',  'LMT':'defense',  'RTX':'defense',  'NOC':'defense',
     'BTC':'crypto',   'ETH':'crypto',   'SOL':'crypto',   'BNB':'crypto',   'ADA':'crypto',
-    'SPY':'equity',   'QQQ':'equity',   'VIX':'equity',   'EEM':'equity',   'FXI':'equity',
+    'SPY':'equity',   'QQQ':'equity',   'VIX':'equity',   'VXX':'equity',   'EEM':'equity',   'FXI':'equity',
     'SMH':'semis',    'TSM':'semis',    'NVDA':'semis',   'ASML':'semis',
     'WHT':'agri',     'CORN':'agri',    'SOYB':'agri',
     'DAL':'airlines', 'UAL':'airlines',
     'LIT':'battery',  'COPX':'metals',  'XME':'metals',
     'JPY':'forex',    'CHF':'forex',    'NOK':'forex',    'GBP':'forex',
     'INDA':'em',      'TSLA':'ev'
+  };
+
+  /* ── Asset remap table ─────────────────────────────────────────────────────
+     Maps signal asset names that are not directly tradeable to their real-market
+     proxies. Applied in onSignals() before any execution logic runs.
+     VIX (CBOE Volatility Index) is a spot index — cannot be bought/sold directly.
+     VXX (iPath S&P 500 VIX Short-Term Futures ETN) is the standard retail proxy.  */
+  var ASSET_REMAP = {
+    'VIX':  'VXX'   // volatility index → tradeable VIX ETN
   };
 
   /* ── Correlation groups — assets within each group are treated as equivalent
@@ -317,7 +326,8 @@
     'COPX':    'COPX',   // Global X Copper Miners ETF
     'URA':     'URA',    // Global X Uranium ETF
     'URBN':    'URBN',
-    'VIX':     '^VIX'
+    'VIX':     '^VIX',   // kept for price reference only — trades remap to VXX
+    'VXX':     'VXX'    // iPath Series B S&P 500 VIX Short-Term Futures ETN (actual tradeable proxy)
   };
 
   // 4. Frankfurter API: ECB forex rates (CORS-open, no key)
@@ -1049,6 +1059,14 @@
 
     var trade = buildTrade(sig, adjustedEntry);
 
+    // Zero-size guard: risk-of-ruin budget can be exhausted by existing open trades,
+    // leaving riskAmt=0 for the next signal. Opening a 0-unit trade is pointless —
+    // it costs commission, clutters the log, and never closes. Skip it cleanly.
+    if (!trade || trade.units < 0.001) {
+      log('TRADE', sig.asset + ' ' + dir + ' skipped — risk budget exhausted by open positions (0 units available)', 'amber');
+      return;
+    }
+
     // Store raw (pre-slippage) price for audit display
     trade.raw_entry_price    = +entryPrice.toFixed(6);
     trade.entry_slippage_pct = +((adjustedEntry / entryPrice - 1) * 100).toFixed(4);
@@ -1254,6 +1272,14 @@
     _lastSignals = sigs;                 // always cache — re-scan loop needs these
 
     sigs.forEach(function (sig) {
+      // Asset remap: replace untradeable index/spot assets with their tradeable proxies.
+      // Mutates a shallow copy so the original signal object is not modified.
+      if (sig.asset && ASSET_REMAP[normaliseAsset(sig.asset)]) {
+        var remapped = ASSET_REMAP[normaliseAsset(sig.asset)];
+        log('SYSTEM', sig.asset + ' remapped → ' + remapped + ' (untradeable asset replaced with proxy)', 'dim');
+        sig = Object.assign({}, sig, { asset: remapped });
+      }
+
       // Pre-validate signal shape before any further processing
       var valid = validateSignal(sig);
       if (!valid.ok) {
