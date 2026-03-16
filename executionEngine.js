@@ -108,6 +108,83 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════
+     EXECUTION REALITY CHECKS — cost model, slippage, liquidity, hold-time guard
+     All values are conservative estimates based on retail CFD / futures brokers.
+     ══════════════════════════════════════════════════════════════════════════════ */
+
+  /* Per-asset-class cost model
+     spread:     one-way half-spread as fraction of price (e.g. 0.0002 = 0.02%)
+     slippage:   extra fill degradation on market orders (entries + SL exits)
+     commission: per-side rate; round-trip = 2× (e.g. 0.0007 = 0.07% per side)
+     funding8h:  crypto perpetual funding rate per 8-hour period                */
+  var TRADING_COSTS = {
+    crypto:   { spread: 0.0008, slippage: 0.0005, commission: 0.0010, funding8h: 0.0001 },
+    energy:   { spread: 0.0004, slippage: 0.0003, commission: 0.0007, funding8h: 0      },
+    precious: { spread: 0.0002, slippage: 0.0002, commission: 0.0007, funding8h: 0      },
+    equity:   { spread: 0.0001, slippage: 0.0001, commission: 0.0005, funding8h: 0      },
+    forex:    { spread: 0.0003, slippage: 0.0002, commission: 0.0006, funding8h: 0      },
+    def:      { spread: 0.0006, slippage: 0.0004, commission: 0.0008, funding8h: 0      }
+  };
+
+  /* Max realistic position notional per asset class (prevents market-moving sizes) */
+  var LIQUIDITY_CAPS = {
+    crypto:   500000,
+    energy:   200000,
+    precious:  50000,
+    equity:   100000,
+    def:       25000
+  };
+
+  /* Minimum time a trade must be open before TP/SL can trigger (ms).
+     Prevents instant open→close in a single 30s monitor cycle. */
+  var MIN_HOLD_MS = 90000;   // 1.5 minutes
+
+  /* Maximum realistic leverage (notional / balance).
+     Standard retail CFD/futures cap — resets to this if exceeded. */
+  var MAX_LEVERAGE = 20;
+
+  /* Look up cost profile for an asset */
+  function _getCosts(asset) {
+    var sector = EE_SECTOR_MAP[normaliseAsset(asset)] || '';
+    if (sector === 'crypto')   return TRADING_COSTS.crypto;
+    if (sector === 'energy')   return TRADING_COSTS.energy;
+    if (sector === 'precious') return TRADING_COSTS.precious;
+    if (sector === 'forex')    return TRADING_COSTS.forex;
+    if (['equity','defense','semis','airlines','em','ev','battery','metals'].indexOf(sector) !== -1)
+      return TRADING_COSTS.equity;
+    return TRADING_COSTS.def;
+  }
+
+  /* Adjust entry price for spread (half) + slippage (market order fill degradation).
+     LONG buys at ask (higher); SHORT sells at bid (lower). */
+  function _adjustedEntryPrice(asset, price, dir) {
+    var c   = _getCosts(asset);
+    var adj = c.spread / 2 + c.slippage;
+    return dir === 'LONG' ? price * (1 + adj) : price * (1 - adj);
+  }
+
+  /* Adjust exit price for spread (half) and, for market orders, slippage.
+     TP = limit order (spread only — guaranteed fill at limit);
+     SL / manual = market order (spread + extra slippage — can gap through).
+     LONG sells at bid (lower); SHORT buys back at ask (higher). */
+  function _adjustedExitPrice(asset, price, dir, reason) {
+    var c          = _getCosts(asset);
+    var marketOrder = (reason !== 'TAKE_PROFIT');
+    var adj         = c.spread / 2 + (marketOrder ? c.slippage : 0);
+    return dir === 'LONG' ? price * (1 - adj) : price * (1 + adj);
+  }
+
+  /* Check position notional against liquidity cap; log warning if exceeded */
+  function _checkLiquidity(asset, sizeUsd) {
+    var sector = EE_SECTOR_MAP[normaliseAsset(asset)] || 'def';
+    var cap    = LIQUIDITY_CAPS[sector] || LIQUIDITY_CAPS.def;
+    if (sizeUsd > cap) {
+      log('AUDIT', '⚠ LIQUIDITY: ' + asset + ' position $' + _num(sizeUsd) +
+        ' exceeds cap $' + _num(cap) + ' — real fill would move market', 'amber');
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════════
      TRADE OBJECT SCHEMA
      Each trade stored in _trades[] follows this exact structure — designed to be
      read directly by a future bot / broker adapter without transformation.
@@ -900,6 +977,14 @@
     var units    = (slDist > 0 && riskAmt > 0) ? riskAmt / slDist : 0;
     var sizeUsd  = units * entryPrice;
 
+    // Reality check 6 — leverage validation: if notional exceeds MAX_LEVERAGE × balance,
+    // scale units down to the cap. Prevents positions a retail broker would reject.
+    if (_cfg.virtual_balance > 0 && sizeUsd / _cfg.virtual_balance > MAX_LEVERAGE) {
+      units   = (_cfg.virtual_balance * MAX_LEVERAGE) / entryPrice;
+      sizeUsd = units * entryPrice;
+      log('AUDIT', '⚠ LEVERAGE: ' + sig.asset + ' capped at ' + MAX_LEVERAGE + '× — units reduced to ' + units.toFixed(4), 'amber');
+    }
+
     return {
       trade_id:        makeId('TRD'),
       signal_id:       makeId('IC-' + normaliseAsset(sig.asset)),
@@ -939,7 +1024,14 @@
       broker_order_id:  null,
       broker_status:    null,
       // Entry thesis fingerprint — stored by gii-entry for exit validation
-      thesis:           sig.thesis || null
+      thesis:           sig.thesis || null,
+      // ── Execution Reality Check audit fields ────────────────────────────────
+      raw_entry_price:      null,    // pre-slippage mid price (set by openTrade)
+      entry_slippage_pct:   null,    // % degradation applied at entry
+      open_commission:      0,       // fee deducted at open
+      costs_usd:            0,       // total round-trip cost (open + partial + close)
+      funding_periods_paid: 0,       // crypto: 8h funding periods already charged
+      raw_close_price:      null     // pre-slippage exit price (TP/SL level)
     };
   }
 
@@ -951,7 +1043,26 @@
       log('TRADE', sig.asset + ' openTrade blocked — position already open (final guard)', 'amber');
       return;
     }
-    var trade = buildTrade(sig, entryPrice);
+    // Reality check 1+2 — realistic fill: adjust raw mid-price for spread + slippage
+    var dir = sig.dir === 'SHORT' ? 'SHORT' : 'LONG';
+    var adjustedEntry = _adjustedEntryPrice(sig.asset, entryPrice, dir);
+
+    var trade = buildTrade(sig, adjustedEntry);
+
+    // Store raw (pre-slippage) price for audit display
+    trade.raw_entry_price    = +entryPrice.toFixed(6);
+    trade.entry_slippage_pct = +((adjustedEntry / entryPrice - 1) * 100).toFixed(4);
+
+    // Reality check 3 — liquidity: warn if position too large for this market
+    _checkLiquidity(sig.asset, trade.size_usd);
+
+    // Reality check 5 — open commission: deduct immediately so it cannot compound
+    var openComm = trade.size_usd * _getCosts(sig.asset).commission;
+    trade.open_commission = +openComm.toFixed(4);
+    trade.costs_usd       = trade.open_commission;
+    _cfg.virtual_balance -= openComm;
+    saveCfg();
+
     _trades.unshift(trade);
     _cooldown[sig.asset] = Date.now();
     saveTrades();
@@ -976,9 +1087,11 @@
     log('OPENED',
       trade.asset + ' ' + trade.direction +
       ' @ ' + _num(trade.entry_price) +
+      '  (mid ' + _num(trade.raw_entry_price) + '  slip ' + (trade.entry_slippage_pct > 0 ? '+' : '') + trade.entry_slippage_pct + '%)' +
       '  SL:' + _num(trade.stop_loss) +
       '  TP:' + _num(trade.take_profit) +
       '  Conf:' + trade.confidence + '%' +
+      '  comm:-$' + _num(trade.open_commission) +
       (trade.streak_mult < 1 ? '  ⚠ streak×' + trade.streak_mult : ''),
       'green');
 
@@ -992,9 +1105,15 @@
     if (!trade || trade.status !== 'OPEN') return;
 
     trade.status          = 'CLOSED';
-    trade.close_price     = +parseFloat(closePrice).toFixed(6);
     trade.timestamp_close = new Date().toISOString();
     trade.close_reason    = reason;
+
+    // Reality check 2 — exit slippage: adjust fill price for spread + market-order slippage.
+    // TP = limit order (spread only); SL / manual = market order (spread + slippage gap risk).
+    var rawClosePrice = parseFloat(closePrice);
+    var adjClosePrice = _adjustedExitPrice(trade.asset, rawClosePrice, trade.direction, reason);
+    trade.raw_close_price = +rawClosePrice.toFixed(6);
+    trade.close_price     = +adjClosePrice.toFixed(6);
 
     // Guard: invalid entry_price (0, null, NaN) would cause division-by-zero or
     // sign-flip in P&L. Set P&L to 0 and log rather than corrupt the balance.
@@ -1003,15 +1122,31 @@
       trade.pnl_pct = 0;
       trade.pnl_usd = 0;
     } else {
+      var effClose  = adjClosePrice;
       var rawPnlPct = trade.direction === 'LONG'
-        ? (closePrice - trade.entry_price) / trade.entry_price * 100
-        : (trade.entry_price - closePrice) / trade.entry_price * 100;
+        ? (effClose - trade.entry_price) / trade.entry_price * 100
+        : (trade.entry_price - effClose) / trade.entry_price * 100;
 
       trade.pnl_pct = +rawPnlPct.toFixed(2);
-      trade.pnl_usd = +(trade.units * Math.abs(closePrice - trade.entry_price) * (rawPnlPct >= 0 ? 1 : -1)).toFixed(2);
+      trade.pnl_usd = +(trade.units * Math.abs(effClose - trade.entry_price) * (rawPnlPct >= 0 ? 1 : -1)).toFixed(2);
     }
 
-    // Update virtual balance
+    // Reality check 5 — close commission: deducted from gross P&L
+    var closeComm = (trade.units * adjClosePrice) * _getCosts(trade.asset).commission;
+    trade.pnl_usd  = +(trade.pnl_usd - closeComm).toFixed(2);
+    trade.costs_usd = +((trade.costs_usd || 0) + closeComm).toFixed(4);
+
+    // Reality check 8 — plausibility: flag if net P&L exceeds 2× theoretical max
+    // (units × full TP distance). Can indicate a price source bug.
+    var theoreticalMax = Math.abs(trade.units * (trade.take_profit - trade.entry_price));
+    if (theoreticalMax > 0 && Math.abs(trade.pnl_usd) > theoreticalMax * 2) {
+      log('AUDIT',
+        '⚠ PLAUSIBILITY: ' + trade.asset + ' P&L $' + trade.pnl_usd +
+        ' exceeds 2× theoretical max $' + theoreticalMax.toFixed(2) +
+        ' — check price sources', 'amber');
+    }
+
+    // Update virtual balance (pnl_usd is net of close commission; open commission already deducted at open)
     _cfg.virtual_balance += trade.pnl_usd;
     saveCfg();
 
@@ -1049,9 +1184,11 @@
     log('CLOSED',
       trade.asset + ' ' + trade.direction +
       ' → ' + reason +
-      ' @ ' + _num(closePrice) +
+      ' @ ' + _num(trade.close_price) +
+      '  (raw ' + _num(trade.raw_close_price) + ')' +
       '  P&L: ' + (trade.pnl_pct >= 0 ? '+' : '') + trade.pnl_pct + '%' +
-      '  (' + (trade.pnl_usd >= 0 ? '+$' : '-$') + _num(Math.abs(trade.pnl_usd)) + ')',
+      '  (' + (trade.pnl_usd >= 0 ? '+$' : '-$') + _num(Math.abs(trade.pnl_usd)) + ' net)' +
+      '  costs:-$' + _num(trade.costs_usd),
       trade.pnl_pct >= 0 ? 'green' : 'red');
 
     // Browser notification for TP/SL hits (only when tab is not visible)
@@ -1209,14 +1346,18 @@
           if (hitTP1) {
             var closedUnits  = trade.units * 0.5;
             // Use tp1 price (not current price) so partial P&L is always capped at 1×R.
-            // Bug: using `price` inflates partial P&L when price gaps straight to TP2 in one
-            // monitor cycle — would bank 1×R here and 1×R on final close = 2×R total instead of 1.5×R.
             var partialClosePrice = isLong ? Math.min(price, tp1) : Math.max(price, tp1);
-            var pnlPerUnit   = isLong ? (partialClosePrice - trade.entry_price) : (trade.entry_price - partialClosePrice);
+            // Reality check 2 — apply limit-order exit slippage (spread only, no market slippage)
+            var adjPartialClose = _adjustedExitPrice(trade.asset, partialClosePrice, trade.direction, 'TAKE_PROFIT');
+            var pnlPerUnit   = isLong ? (adjPartialClose - trade.entry_price) : (trade.entry_price - adjPartialClose);
             var partialPnl   = +(closedUnits * pnlPerUnit).toFixed(2);
+            // Reality check 5 — deduct commission on partial close
+            var partialComm = (closedUnits * adjPartialClose) * _getCosts(trade.asset).commission;
+            partialPnl = +(partialPnl - partialComm).toFixed(2);
             trade.partial_tp_taken  = true;
-            trade.partial_tp_price  = +partialClosePrice.toFixed(6);
+            trade.partial_tp_price  = +adjPartialClose.toFixed(6);
             trade.partial_pnl_usd   = partialPnl;
+            trade.costs_usd         = +((trade.costs_usd || 0) + partialComm).toFixed(4);
             trade.units             = +(trade.units * 0.5).toFixed(6);
             trade.size_usd          = +(trade.units * price).toFixed(2);
             // Move stop to entry ± tiny buffer (break-even)
@@ -1226,15 +1367,17 @@
             trade.stop_loss        = beStop;
             trade.break_even_done  = true;
             trade.trailing_stop_active = true;
-            // Bank partial P&L into balance
+            // Bank partial P&L into balance (net of commission)
             _cfg.virtual_balance  += partialPnl;
             saveCfg();
             saved = true;
             log('PARTIAL',
-              trade.asset + ' 50% TP @ ' + _num(price) +
-              '  Banked: +$' + _num(partialPnl) + '  SL→breakeven', 'green');
+              trade.asset + ' 50% TP @ ' + _num(adjPartialClose) +
+              '  Banked: ' + (partialPnl >= 0 ? '+' : '') + '$' + _num(partialPnl) +
+              '  comm:-$' + _num(partialComm) +
+              '  SL→breakeven', 'green');
             _notify('🎯 Partial TP — ' + trade.asset,
-              '50% closed @ ' + _num(price) + ' (+$' + _num(partialPnl) + ')\nStop moved to break-even.',
+              '50% closed @ ' + _num(adjPartialClose) + ' (+$' + _num(partialPnl) + ' net)\nStop moved to break-even.',
               'ee-partial-' + trade.trade_id);
           }
         }
@@ -1289,6 +1432,33 @@
         }
 
         if (saved) saveTrades();
+
+        // Reality check 4 — minimum hold time: trades cannot open and close within
+        // the same monitor cycle. Prevents unrealistic instant fills in fast moves.
+        var tradeAgeMs = Date.now() - new Date(trade.timestamp_open).getTime();
+        if (tradeAgeMs < MIN_HOLD_MS) {
+          renderUI();
+          return;
+        }
+
+        // Reality check 5 — crypto funding rate: deducted every 8 hours.
+        // Simulates perpetual swap funding charged on leveraged crypto positions.
+        var tradeCosts = _getCosts(trade.asset);
+        if (tradeCosts.funding8h > 0) {
+          var ageHours        = tradeAgeMs / 3600000;
+          var fundingDue      = Math.floor(ageHours / 8);
+          var fundingPaid     = trade.funding_periods_paid || 0;
+          if (fundingDue > fundingPaid) {
+            var fundingCost = trade.size_usd * tradeCosts.funding8h * (fundingDue - fundingPaid);
+            trade.funding_periods_paid = fundingDue;
+            trade.costs_usd = +((trade.costs_usd || 0) + fundingCost).toFixed(4);
+            _cfg.virtual_balance -= fundingCost;
+            saveCfg();
+            saved = true;
+            log('COST', trade.asset + ' funding ×' + (fundingDue - fundingPaid) +
+              ' periods  -$' + _num(fundingCost), 'dim');
+          }
+        }
 
         // ── TP / SL checks (with updated stop) ──────────────────────────────
         var hitTP, hitSL;
