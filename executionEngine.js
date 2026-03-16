@@ -824,6 +824,20 @@
       takeProfit = entryPrice - tpDist_;
     }
 
+    // Sanity check: stop must be on correct side of entry, and slDist must be
+    // reasonable (≤ 20% of entry). Catches GLD spot/ETF price mix-ups and
+    // wrong-direction stops from GII signals that reference a different price source.
+    var rawSlDist = Math.abs(entryPrice - stopLoss);
+    var maxSlDist  = entryPrice * 0.20;
+    var stopOnWrongSide = (dir === 'LONG' && stopLoss >= entryPrice) ||
+                          (dir === 'SHORT' && stopLoss <= entryPrice);
+    if (stopOnWrongSide || rawSlDist > maxSlDist) {
+      slDist_ = entryPrice * (_cfg.stop_loss_pct / 100);
+      tpDist_ = slDist_ * sigTpRatio;
+      stopLoss   = dir === 'LONG' ? entryPrice - slDist_ : entryPrice + slDist_;
+      takeProfit = dir === 'LONG' ? entryPrice + tpDist_ : entryPrice - tpDist_;
+    }
+
     // Position sizing: base risk scaled by signal impact strength
     // sig.impactMult (0.5–2.0) comes from the IMPACT_MAP scorer in renderTrades()
     // Minor event → 0.5× normal size; major event → up to 2× normal size
