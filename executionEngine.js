@@ -152,8 +152,16 @@
      Standard retail CFD/futures cap — resets to this if exceeded. */
   var MAX_LEVERAGE = 20;
 
-  /* Look up cost profile for an asset */
+  /* Look up cost profile for an asset.
+     HL-covered assets use HL perpetual fees (0.05% taker, tighter spreads).
+     Non-HL assets fall back to the existing sector-based CFD/futures model.  */
   function _getCosts(asset) {
+    // HL fee override: if this asset trades on Hyperliquid, use HL cost model
+    // regardless of whether the WS is currently connected (intent is HL trading).
+    if (window.HLFeed && typeof HLFeed.costs === 'function') {
+      var _hlCosts = HLFeed.costs(normaliseAsset(asset));
+      if (_hlCosts) return _hlCosts;
+    }
     var sector = EE_SECTOR_MAP[normaliseAsset(asset)] || '';
     if (sector === 'crypto')   return TRADING_COSTS.crypto;
     if (sector === 'energy')   return TRADING_COSTS.energy;
@@ -225,7 +233,8 @@
        timestamp_close: ISO8601|null
        pnl_pct:         number|null  — % P&L from entry
        pnl_usd:         number|null  — USD P&L
-       close_reason:    string|null  — "TAKE_PROFIT"|"STOP_LOSS"|"MANUAL"|"EXPIRED"
+       close_reason:    string|null  — "TAKE_PROFIT"|"STOP_LOSS"|"TRAILING_STOP"|"MANUAL"|"EXPIRED"
+       price_source:    string   — "HYPERLIQUID" (HL WS live at open) | "SIMULATED" (HTTP fallback)
        region:          string   — geopolitical region that triggered signal
        reason:          string   — human-readable signal reason from IC
        broker:          string   — "SIMULATION" | future broker name
@@ -725,6 +734,27 @@
     function _feedOk(src)   { _priceFeedHealth[src] = { ok: true,  lastOk:   Date.now(), lastFail: (_priceFeedHealth[src]||{}).lastFail||null }; }
     function _feedFail(src) { _priceFeedHealth[src] = { ok: false, lastOk:   (_priceFeedHealth[src]||{}).lastOk||null, lastFail: Date.now() }; }
 
+    // -1. Hyperliquid WebSocket — real-time prices, highest priority when connected.
+    //     HL streams allMids for 300+ pairs incl. WTI, Brent, Gold, BTC, equities.
+    //     Only used when the price is fresh (< 30s), meaning the WS is actively streaming.
+    //     Falls through to the backend/HTTP chain if WS is down or asset not on HL.
+    if (window.HLFeed && typeof HLFeed.getPrice === 'function') {
+      var _hlr = HLFeed.getPrice(token);
+      if (_hlr && _hlr.fresh) {
+        _cacheSet(token, _hlr.price);
+        _priceFeedHealth['hl'] = { ok: true, lastOk: Date.now(),
+          lastFail: (_priceFeedHealth['hl'] || {}).lastFail || null };
+        cb(_hlr.price);
+        return;
+      }
+      // HL covers this asset but price is stale (WS briefly disconnected) —
+      // mark feed as degraded and fall through to backup sources.
+      if (_hlr && !_hlr.fresh && window.HLFeed.covers(token)) {
+        _priceFeedHealth['hl'] = { ok: false, lastOk: (_priceFeedHealth['hl'] || {}).lastOk || null,
+          lastFail: Date.now() };
+      }
+    }
+
     // 0. Backend market cache — privacy-safe, no corsproxy needed (H4)
     //    Covers WTI, BRENT, GLD, LMT, TSM, SPY, BTC, ETH, etc.
     if (_apiOnline && _backendPrices[token] !== undefined) {
@@ -1053,7 +1083,12 @@
       open_commission:      0,       // fee deducted at open
       costs_usd:            0,       // total round-trip cost (open + partial + close)
       funding_periods_paid: 0,       // crypto: 8h funding periods already charged
-      raw_close_price:      null     // pre-slippage exit price (TP/SL level)
+      raw_close_price:      null,    // pre-slippage exit price (TP/SL level)
+      // Price source: HYPERLIQUID when HL WS was live at open; SIMULATED when
+      // prices came from backend cache / Yahoo / Binance / etc.
+      price_source: (window.HLFeed && typeof HLFeed.isAvailable === 'function' &&
+                     HLFeed.isAvailable(normaliseAsset(sig.asset)))
+                    ? 'HYPERLIQUID' : 'SIMULATED'
     };
   }
 
@@ -1122,7 +1157,8 @@
       '  TP:' + _num(trade.take_profit) +
       '  Conf:' + trade.confidence + '%' +
       '  comm:-$' + _num(trade.open_commission) +
-      (trade.streak_mult < 1 ? '  ⚠ streak×' + trade.streak_mult : ''),
+      (trade.streak_mult < 1 ? '  ⚠ streak×' + trade.streak_mult : '') +
+      '  [' + (trade.price_source === 'HYPERLIQUID' ? '🟣 HL' : 'SIM') + ']',
       'green');
 
     renderUI();
@@ -1767,6 +1803,7 @@
     var el = document.getElementById('eePriceFeedHealth');
     if (!el) return;
     var sources = [
+      { name: 'Hyperliquid',key: 'hl'         },   // highest-priority WS feed
       { name: 'Backend',    key: 'backend'    },
       { name: 'Binance',    key: 'binance'    },
       { name: 'Yahoo',      key: 'yahoo'      },
