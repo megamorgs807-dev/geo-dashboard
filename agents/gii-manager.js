@@ -22,7 +22,9 @@
     GII_AGENT_POLYMARKET:      8  * 60 * 1000,
     GII_AGENT_REGIME:          8  * 60 * 1000,
     GII_AGENT_SCALPER:         12 * 60 * 1000,
-    GII_AGENT_SCALPER_SESSION: 12 * 60 * 1000
+    GII_AGENT_SCALPER_SESSION: 12 * 60 * 1000,
+    GII_AGENT_ENTRY:           4  * 60 * 1000,
+    GII_AGENT_EXIT:            4  * 60 * 1000
   };
 
   /* Agents that should always have signals when the backend is online */

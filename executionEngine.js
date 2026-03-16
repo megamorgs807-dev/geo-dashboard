@@ -915,7 +915,9 @@
       broker:           _cfg.mode === 'LIVE' ? _cfg.broker : 'SIMULATION',
       // Broker integration stubs — set by adapter on live execution
       broker_order_id:  null,
-      broker_status:    null
+      broker_status:    null,
+      // Entry thesis fingerprint — stored by gii-entry for exit validation
+      thesis:           sig.thesis || null
     };
   }
 
@@ -2668,6 +2670,33 @@
       fetchPrice(trade.asset, function (price) {
         closeTrade(tradeId, price || trade.entry_price, 'MANUAL');
       });
+    },
+
+    /* ── gii-exit: update stop/TP on an open trade without closing it ──
+       changes = { stop_loss, take_profit }  (either or both)               */
+    updateOpenTrade: function (tradeId, changes) {
+      var trade = _trades.find(function (t) {
+        return t.trade_id === tradeId && t.status === 'OPEN';
+      });
+      if (!trade) return false;
+      if (changes.stop_loss   !== undefined) trade.stop_loss   = +changes.stop_loss;
+      if (changes.take_profit !== undefined) trade.take_profit = +changes.take_profit;
+      saveTrades();
+      renderUI();
+      return true;
+    },
+
+    /* ── gii-exit: force-close an open trade at current market price ──
+       reason should be prefixed 'GII-EXIT: ...' for log clarity           */
+    forceCloseTrade: function (tradeId, reason) {
+      var trade = _trades.find(function (t) {
+        return t.trade_id === tradeId && t.status === 'OPEN';
+      });
+      if (!trade) return false;
+      fetchPrice(trade.asset, function (price) {
+        closeTrade(tradeId, price || trade.entry_price, reason || 'GII-EXIT');
+      });
+      return true;
     },
 
     /* ── Reset virtual balance to $10,000 ── */

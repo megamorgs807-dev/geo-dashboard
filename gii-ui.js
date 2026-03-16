@@ -656,6 +656,34 @@
               'No active alerts</div>';
     }
 
+    /* Entry / Exit agent stats row */
+    var entrySt = window.GII_AGENT_ENTRY ? (function(){try{return GII_AGENT_ENTRY.status();}catch(e){return null;}})() : null;
+    var exitSt  = window.GII_AGENT_EXIT  ? (function(){try{return GII_AGENT_EXIT.status();}catch(e){return null;}})()  : null;
+    if (entrySt || exitSt) {
+      html += '<div style="display:flex;gap:16px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;margin-top:6px;flex-wrap:wrap">';
+      if (entrySt) {
+        var eStats = entrySt.stats || {};
+        var approvalRate = eStats.submitted > 0 ? Math.round((eStats.approved / eStats.submitted) * 100) : 0;
+        html += '<div style="font-size:10px">' +
+                '<span style="color:rgba(255,255,255,0.4)">ENTRY</span> ' +
+                '<span style="color:var(--green)">' + (eStats.approved||0) + ' approved</span> · ' +
+                '<span style="color:rgba(255,255,255,0.4)">' + (eStats.rejected||0) + ' filtered</span> · ' +
+                '<span style="color:rgba(255,255,255,0.4)">' + (eStats.vetoed||0) + ' vetoed</span> · ' +
+                '<span style="color:var(--amber)">' + approvalRate + '% pass rate</span>' +
+                '</div>';
+      }
+      if (exitSt) {
+        var xStats = exitSt.stats || {};
+        html += '<div style="font-size:10px">' +
+                '<span style="color:rgba(255,255,255,0.4)">EXIT</span> ' +
+                '<span style="color:var(--red)">' + (xStats.closed||0) + ' closed</span> · ' +
+                '<span style="color:var(--amber)">' + (xStats.tightened||0) + ' trailing</span> · ' +
+                '<span style="color:var(--green)">' + (xStats.extended||0) + ' TP extended</span>' +
+                '</div>';
+      }
+      html += '</div>';
+    }
+
     html += '</div>';
     return html;
   }

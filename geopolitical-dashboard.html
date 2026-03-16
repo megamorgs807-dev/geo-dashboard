@@ -10346,7 +10346,14 @@ document.addEventListener('DOMContentLoaded', function() {
       /* Stamp emission time for every signal we're about to send */
       filtered.forEach(function(s){ _rtLastEmit[s.asset] = _now; });
 
-      if (filtered.length) EE.onSignals(filtered);
+      if (filtered.length) {
+        /* Route through entry agent (confluence check) if available; fall back to EE directly */
+        if (window.GII_AGENT_ENTRY && typeof GII_AGENT_ENTRY.submit === 'function') {
+          GII_AGENT_ENTRY.submit(filtered, 'ic');
+        } else {
+          EE.onSignals(filtered);
+        }
+      }
     }
   }
 
@@ -12818,7 +12825,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=32"></script>
+<script src="executionEngine.js?v=33"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
@@ -12856,10 +12863,12 @@ function _modalKeyHandler(e) {
 <script src="agents/gii-optimizer.js?v=1"></script>
 <script src="agents/gii-smartmoney.js?v=1"></script>
 <script src="agents/gii-marketstructure.js?v=1"></script>
-<script src="agents/gii-manager.js?v=1"></script>
+<script src="agents/gii-manager.js?v=2"></script>
+<script src="agents/gii-entry.js?v=1"></script>
+<script src="agents/gii-exit.js?v=1"></script>
 <script src="gii-core.js?v=12"></script>
 <script src="gii-meta.js?v=1"></script>
-<script src="gii-ui.js?v=5"></script>
+<script src="gii-ui.js?v=6"></script>
 <script src="gii-debug.js?v=1"></script>
 </body>
 </html>

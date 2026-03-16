@@ -528,7 +528,9 @@
 
   function _portfolioDecision(signals) {
     var EE = window.EE;
-    if (!EE || typeof EE.onSignals !== 'function') return;
+    if (!EE || typeof EE.onSignals !== 'function') {
+      if (!window.GII_AGENT_ENTRY) return;
+    }
 
     // Dedup signals by asset — keep highest-confidence per asset
     var byAsset = {};
@@ -573,7 +575,14 @@
     });
 
     if (toEmit.length) {
-      try { EE.onSignals(toEmit); } catch (e) {}
+      try {
+        /* Route through entry agent (confluence check) if available */
+        if (window.GII_AGENT_ENTRY && typeof GII_AGENT_ENTRY.submit === 'function') {
+          GII_AGENT_ENTRY.submit(toEmit, 'gii');
+        } else if (window.EE && typeof EE.onSignals === 'function') {
+          EE.onSignals(toEmit);
+        }
+      } catch (e) {}
     }
   }
 
