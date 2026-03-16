@@ -70,7 +70,7 @@
   var _approved   = [];   // last 50 approved signals (audit log)
   var _rejected   = [];   // last 50 rejected signals (audit log)
   var _lastPoll   = 0;
-  var _stats      = { submitted: 0, approved: 0, rejected: 0, vetoed: 0 };
+  var _stats      = { submitted: 0, approved: 0, rejected: 0, vetoed: 0, rotated: 0 };
 
   /* ── QUEUE ──────────────────────────────────────────────────────────────── */
   function _submit(signals, sourceTag) {
@@ -414,39 +414,72 @@
         return;
       }
 
-      /* Pre-check EE region/sector caps — avoid silent rejections downstream */
+      /* Smart region/sector rotation — if cap is full, replace weakest trade when new signal scores higher.
+         Always keep the highest-conviction opportunities open rather than blocking good signals. */
+      var ENTRY_SECTOR_MAP = {
+        'WTI':'energy','BRENT':'energy','XLE':'energy','GAS':'energy',
+        'XAU':'precious','GLD':'precious','SLV':'precious',
+        'BTC':'crypto','ETH':'crypto',
+        'SPY':'equity','QQQ':'equity','NVDA':'equity',
+        'TSLA':'equity','SMH':'equity','TSM':'equity','FXI':'equity'
+      };
       if (window.EE && typeof EE.getOpenTrades === 'function' && typeof EE.getConfig === 'function') {
         try {
-          var eeOpen = EE.getOpenTrades();
-          var eeCfg  = EE.getConfig();
-          /* Region cap check */
-          var regionOpen = eeOpen.filter(function (t) { return t.region === sig.region; }).length;
-          if (eeCfg.max_per_region && regionOpen >= eeCfg.max_per_region) {
-            _stats.rejected++;
-            _rejected.unshift({ asset: sig.asset, dir: sig.dir,
-              reason: 'EE region cap: ' + sig.region + ' (' + regionOpen + '/' + eeCfg.max_per_region + ')', ts: now });
-            if (_rejected.length > 50) _rejected.pop();
-            return;
+          var eeOpen  = EE.getOpenTrades();
+          var eeCfg   = EE.getConfig();
+          var newScore = result.score;
+
+          /* Score proxy for comparing open trades:
+             uses stored confluenceScore from thesis, falls back to conf/15
+             (conf=65 → 4.3, conf=95 → 6.3 — comparable to confluence range 4.5–7) */
+          function _tradeScore(t) {
+            return (t.thesis && t.thesis.confluenceScore) ? t.thesis.confluenceScore : (t.conf || 50) / 15;
           }
-          /* Sector cap check */
-          var ENTRY_SECTOR_MAP = {
-            'WTI':'energy','BRENT':'energy','XLE':'energy','GAS':'energy',
-            'XAU':'precious','GLD':'precious','SLV':'precious',
-            'BTC':'crypto','ETH':'crypto',
-            'SPY':'equity','QQQ':'equity','NVDA':'equity',
-            'TSLA':'equity','SMH':'equity','TSM':'equity','FXI':'equity'
-          };
-          var assetSector = ENTRY_SECTOR_MAP[sig.asset];
-          if (assetSector && eeCfg.max_per_sector) {
-            var sectorOpen = eeOpen.filter(function (t) {
-              return ENTRY_SECTOR_MAP[t.asset] === assetSector;
-            }).length;
-            if (sectorOpen >= eeCfg.max_per_sector) {
+
+          /* Region rotation */
+          var regionTrades = eeOpen.filter(function (t) { return t.region === sig.region; });
+          if (eeCfg.max_per_region && regionTrades.length >= eeCfg.max_per_region) {
+            var weakestRegion = regionTrades.slice().sort(function (a, b) {
+              return _tradeScore(a) - _tradeScore(b);
+            })[0];
+            if (weakestRegion && newScore > _tradeScore(weakestRegion)) {
+              /* New signal beats weakest — rotate it out */
+              try { EE.forceCloseTrade(weakestRegion.trade_id,
+                'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + _tradeScore(weakestRegion).toFixed(2) + ')'); } catch (e) {}
+              _stats.rotated++;
+            } else {
+              /* All existing trades score higher — keep them */
               _stats.rejected++;
               _rejected.unshift({ asset: sig.asset, dir: sig.dir,
-                reason: 'EE sector cap: ' + assetSector + ' (' + sectorOpen + '/' + eeCfg.max_per_sector + ')', ts: now });
+                reason: 'region cap: ' + sig.region + ' trades score higher (' +
+                  (weakestRegion ? _tradeScore(weakestRegion).toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ')', ts: now });
               if (_rejected.length > 50) _rejected.pop();
               return;
+            }
+          }
+
+          /* Sector rotation */
+          var assetSector = ENTRY_SECTOR_MAP[sig.asset];
+          if (assetSector && eeCfg.max_per_sector) {
+            var sectorTrades = eeOpen.filter(function (t) {
+              return ENTRY_SECTOR_MAP[t.asset] === assetSector;
+            });
+            if (sectorTrades.length >= eeCfg.max_per_sector) {
+              var weakestSector = sectorTrades.slice().sort(function (a, b) {
+                return _tradeScore(a) - _tradeScore(b);
+              })[0];
+              if (weakestSector && newScore > _tradeScore(weakestSector)) {
+                try { EE.forceCloseTrade(weakestSector.trade_id,
+                  'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + _tradeScore(weakestSector).toFixed(2) + ')'); } catch (e) {}
+                _stats.rotated++;
+              } else {
+                _stats.rejected++;
+                _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+                  reason: 'sector cap: ' + assetSector + ' trades score higher (' +
+                    (weakestSector ? _tradeScore(weakestSector).toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ')', ts: now });
+                if (_rejected.length > 50) _rejected.pop();
+                return;
+              }
             }
           }
         } catch (e) {}
