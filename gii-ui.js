@@ -1,6 +1,6 @@
-/* GII UI — gii-ui.js v4
+/* GII UI — gii-ui.js v5
  * GII panel renderer — injects #giiWrap after #eeWrap
- * Depends on: window.GII, window.GII_AGENT_*
+ * Depends on: window.GII, window.GII_AGENT_*, window.GII_SCRAPER_MANAGER
  * Exposes: window.GII_UI
  */
 (function () {
@@ -516,6 +516,9 @@
     // ── System Health panel (from GII_AGENT_MANAGER) ──
     html += _renderHealthPanel();
 
+    // ── Scraper Manager panel ──
+    html += _renderScraperManager();
+
     // Inject
     content.innerHTML = html;
 
@@ -594,6 +597,145 @@
   };
 
   // ── init ───────────────────────────────────────────────────────────────────
+
+  // ── Scraper Manager panel ───────────────────────────────────────────────
+
+  function _renderScraperManager() {
+    var sm = window.GII_SCRAPER_MANAGER;
+    var html = '<p class="gii-section-title">Dynamic Scraper Manager</p>';
+    html += '<div class="gii-card">';
+
+    if (!sm) {
+      html += '<span style="color:rgba(255,255,255,0.3)">Scraper manager not loaded yet…</span></div>';
+      return html;
+    }
+
+    var st, volt, scr;
+    try { st   = sm.status()     || {}; } catch (e) { st = {}; }
+    try { volt = sm.volatility() || {}; } catch (e) { volt = {}; }
+    try { scr  = sm.scrapers()   || []; } catch (e) { scr = []; }
+
+    var active   = scr.filter(function (s) { return !s.retired; });
+    var retired  = scr.filter(function (s) { return  s.retired; });
+    var lastPoll = st.lastPoll || 0;
+    var ageText  = lastPoll
+      ? (function () {
+          var sec = Math.round((Date.now() - lastPoll) / 1000);
+          if (sec < 5)    return 'just now';
+          if (sec < 60)   return sec + 's ago';
+          if (sec < 3600) return Math.round(sec / 60) + 'm ago';
+          return Math.round(sec / 3600) + 'h ago';
+        })()
+      : 'pending first scan';
+
+    // Summary bar
+    html += '<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:10px;align-items:center">';
+    html += '<div><span style="color:rgba(255,255,255,0.45)">Active scrapers:</span> ' +
+            '<b style="color:var(--green,' + (active.length > 0 ? '#00e676' : '#666') + ')">' +
+            active.length + ' / ' + (st.maxActive || 5) + '</b></div>';
+    html += '<div><span style="color:rgba(255,255,255,0.45)">Watchlist:</span> ' +
+            '<b>' + (st.watchlist || 9) + ' assets</b></div>';
+    html += '<div><span style="color:rgba(255,255,255,0.45)">Total spawned:</span> ' +
+            '<b>' + (st.totalSpawned || 0) + '</b></div>';
+    html += '<div><span style="color:rgba(255,255,255,0.45)">Total signals:</span> ' +
+            '<b>' + (st.totalSignals || 0) + '</b></div>';
+    html += '<div><span style="color:rgba(255,255,255,0.45)">Scan:</span> ' +
+            '<b style="color:rgba(255,255,255,0.7)">' + ageText + '</b></div>';
+    html += '</div>';
+
+    // Volatility bar chart
+    var voltKeys = Object.keys(volt);
+    if (voltKeys.length) {
+      html += '<div style="margin-bottom:10px">';
+      html += '<div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Volatility (15-min Δ%)</div>';
+      html += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">';
+      var watchThresholds = {
+        XAU: 0.4, WTI: 0.5, SILVER: 0.5, ETH: 1.0,
+        SOL: 1.2, XRP: 1.2, NVDA: 0.6, TSLA: 0.8, SPY: 0.3
+      };
+      voltKeys.forEach(function (asset) {
+        var v = volt[asset] || 0;
+        var thresh = watchThresholds[asset] || 0.5;
+        var spiking = v >= thresh;
+        var barPct  = Math.min(100, Math.round((v / (thresh * 3)) * 100));
+        var barCol  = spiking ? 'var(--red,#ff1744)' : v > thresh * 0.6 ? 'var(--amber,#ffc107)' : 'rgba(255,255,255,0.25)';
+        var hasInst = active.some(function (s) { return s.asset === asset; });
+        html += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:36px">';
+        // Bar
+        html += '<div style="width:28px;height:40px;background:rgba(255,255,255,0.06);' +
+                'border-radius:3px;position:relative;overflow:hidden">';
+        html += '<div style="position:absolute;bottom:0;left:0;right:0;height:' + barPct + '%;' +
+                'background:' + barCol + ';border-radius:2px;transition:height 0.4s"></div>';
+        html += '</div>';
+        // Value label
+        html += '<div style="font-size:9px;color:' + (spiking ? 'var(--red,#ff1744)' : 'rgba(255,255,255,0.5)') + ';font-weight:' + (spiking ? '700' : '400') + '">' +
+                v.toFixed(2) + '%</div>';
+        // Ticker + optional ⚡
+        html += '<div style="font-size:9px;color:' + (hasInst ? 'var(--gii)' : 'rgba(255,255,255,0.45)') + ';font-weight:700">' +
+                (hasInst ? '⚡' : '') + asset + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:4px">⚡ = active scraper running · bars turn red when spike threshold met</div>';
+      html += '</div>';
+    } else {
+      html += '<div style="color:rgba(255,255,255,0.35);font-size:10px;margin-bottom:10px">Volatility data pending first scan (≈2 min after page load)…</div>';
+    }
+
+    // Active instances table
+    if (active.length) {
+      html += '<div style="margin-bottom:8px">';
+      html += '<div style="color:rgba(255,255,255,0.45);font-size:10px;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Active Scraper Instances</div>';
+      html += '<table class="gii-table" style="font-size:10px"><thead><tr>' +
+              '<th>Asset</th><th>Sector</th><th>Spawn Reason</th><th>Signals</th>' +
+              '<th>Last Poll</th><th>Score</th><th>Slot</th>' +
+              '</tr></thead><tbody>';
+      active.forEach(function (inst) {
+        var age = inst.lastPollAt
+          ? (function () {
+              var s = Math.round((Date.now() - inst.lastPollAt) / 1000);
+              if (s < 60) return s + 's';
+              return Math.round(s / 60) + 'm';
+            })()
+          : '—';
+        var scoreCol = (inst.score || 0) >= 0.6 ? 'var(--green,#00e676)'
+                     : (inst.score || 0) >= 0.35 ? 'var(--amber,#ffc107)' : 'var(--red,#ff1744)';
+        var slotBadge = inst._activeScalp
+          ? '<span style="color:var(--amber,#ffc107)">⚡ LIVE</span>'
+          : '<span style="color:rgba(255,255,255,0.3)">free</span>';
+        html += '<tr>' +
+          '<td style="color:var(--gii);font-weight:700">' + _esc(inst.asset) + '</td>' +
+          '<td style="color:rgba(255,255,255,0.6)">' + _esc(inst.sector || '—') + '</td>' +
+          '<td style="color:rgba(255,255,255,0.5);max-width:140px;overflow:hidden">' + _esc((inst.spawnReason || '').substring(0, 30)) + '</td>' +
+          '<td style="text-align:center">' + (inst.signalCount > 0 ? '<b style="color:var(--green,#00e676)">' + inst.signalCount + '</b>' : '<span style="color:rgba(255,255,255,0.3)">0</span>') + '</td>' +
+          '<td style="color:rgba(255,255,255,0.5)">' + age + ' ago</td>' +
+          '<td style="color:' + scoreCol + ';font-weight:700">' + ((inst.score || 0) * 100).toFixed(0) + '</td>' +
+          '<td>' + slotBadge + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+    } else if (lastPoll) {
+      html += '<div style="color:rgba(255,255,255,0.35);font-size:10px;margin-bottom:8px">' +
+              'No active scrapers — waiting for a volatility spike on any watched asset.</div>';
+    }
+
+    // Retired instances (compact summary)
+    if (retired.length) {
+      html += '<div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;margin-top:4px">';
+      html += '<div style="color:rgba(255,255,255,0.3);font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Recently Retired</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+      retired.slice(-8).reverse().forEach(function (inst) {
+        var col = (inst.score || 0) >= 0.5 ? 'rgba(255,255,255,0.4)' : 'var(--red,#ff1744)';
+        html += '<span style="font-size:9px;color:' + col + ';background:rgba(255,255,255,0.04);' +
+                'border-radius:3px;padding:1px 5px" title="' + _esc(inst.retiredReason || '') + '">' +
+                _esc(inst.asset) + ' · ' + (inst.signalCount || 0) + ' sigs</span>';
+      });
+      html += '</div></div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
 
   // ── Health panel renderer ───────────────────────────────────────────────
 
