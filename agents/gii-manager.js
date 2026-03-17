@@ -23,6 +23,7 @@
     GII_AGENT_REGIME:          8  * 60 * 1000,
     GII_AGENT_SCALPER:         12 * 60 * 1000,
     GII_AGENT_SCALPER_SESSION: 12 * 60 * 1000,
+    GII_SCRAPER_MANAGER:        4 * 60 * 1000,  // scans every 2 min; 4 min = stale
     GII_AGENT_ENTRY:           4  * 60 * 1000,
     GII_AGENT_EXIT:            4  * 60 * 1000,
     GII_AGENT_DEESCALATION:    3  * 60 * 1000,

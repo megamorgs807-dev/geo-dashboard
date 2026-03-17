@@ -10424,6 +10424,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.GII && typeof GII.onTradeResult === 'function') GII.onTradeResult(trade);
     if (window.GII_AGENT_SCALPER && typeof GII_AGENT_SCALPER.onTradeResult === 'function') GII_AGENT_SCALPER.onTradeResult(trade);
     if (window.GII_AGENT_SCALPER_SESSION && typeof GII_AGENT_SCALPER_SESSION.onTradeResult === 'function') GII_AGENT_SCALPER_SESSION.onTradeResult(trade);
+    if (window.GII_SCRAPER_MANAGER && typeof GII_SCRAPER_MANAGER.onTradeResult === 'function') GII_SCRAPER_MANAGER.onTradeResult(trade);
 
     var kws = trade.matched_keywords;
     if (!kws || !kws.length) return;
@@ -12856,7 +12857,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=54"></script>
+<script src="executionEngine.js?v=55"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
@@ -12891,6 +12892,7 @@ function _modalKeyHandler(e) {
 <script src="agents/gii-technicals.js?v=2"></script>
 <script src="agents/gii-scalper.js?v=5"></script>
 <script src="agents/gii-scalper-session.js?v=1"></script>
+<script src="agents/gii-scraper-manager.js?v=1"></script>
 <script src="agents/gii-optimizer.js?v=1"></script>
 <script src="agents/gii-smartmoney.js?v=1"></script>
 <script src="agents/gii-marketstructure.js?v=1"></script>
