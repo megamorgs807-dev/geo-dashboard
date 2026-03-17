@@ -61,8 +61,11 @@
     'TLT':   { stopPct: 1.5, tpRatio: 2.5 },
     'JPY':   { stopPct: 1.5, tpRatio: 2.5 },
     'CHF':   { stopPct: 1.5, tpRatio: 2.5 },
-    'VIX':   { stopPct: 8.0, tpRatio: 2.0 },  /* VIX is extremely volatile */
-    'VXX':   { stopPct: 6.0, tpRatio: 2.0 }   /* VXX ETF — same signal, lower raw vol than VIX index */
+    'VIX':    { stopPct: 8.0, tpRatio: 2.0 },  /* VIX is extremely volatile */
+    'VXX':    { stopPct: 6.0, tpRatio: 2.0 },  /* VXX ETF — same signal, lower raw vol than VIX index */
+    'SILVER': { stopPct: 2.5, tpRatio: 2.5 },  /* v54: was missing — fell through to 3% default */
+    'CRUDE':  { stopPct: 3.5, tpRatio: 2.5 },  /* v54: alias for WTI */
+    'OIL':    { stopPct: 3.5, tpRatio: 2.5 }   /* v54: alias for WTI */
   };
   var VOL_STOP_DEFAULT = { stopPct: 3.0, tpRatio: 2.5 };
 

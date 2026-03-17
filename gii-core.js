@@ -782,6 +782,14 @@
     // Clear map entry now that feedback is recorded
     delete _giiTradeMap[mapKey];
     _saveFeedback();
+
+    // v54: invalidate routing win-rate cache so the closed trade is reflected
+    // immediately on the next route() call instead of waiting up to 5 min
+    try {
+      if (window.GII_ROUTING && typeof GII_ROUTING.invalidateWinRateCache === 'function') {
+        GII_ROUTING.invalidateWinRateCache();
+      }
+    } catch (e) {}
   }
 
   // ── public API ─────────────────────────────────────────────────────────────

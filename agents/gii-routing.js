@@ -516,6 +516,10 @@
       };
     },
 
+    /* v54: force a cache rebuild on the next route() call so a freshly-closed
+       trade is reflected immediately rather than waiting up to 5 min */
+    invalidateWinRateCache: function () { _winRateCache.ts = 0; },
+
     decisions: function () { return _decisions.slice(); },
 
     status: function () {

@@ -158,10 +158,12 @@
   function _getCosts(asset) {
     // HL fee override: if this asset trades on Hyperliquid, use HL cost model
     // regardless of whether the WS is currently connected (intent is HL trading).
-    if (window.HLFeed && typeof HLFeed.costs === 'function') {
-      var _hlCosts = HLFeed.costs(normaliseAsset(asset));
-      if (_hlCosts) return _hlCosts;
-    }
+    try {
+      if (window.HLFeed && typeof HLFeed.costs === 'function') {
+        var _hlCosts = HLFeed.costs(normaliseAsset(asset));
+        if (_hlCosts) return _hlCosts;
+      }
+    } catch (e) { /* HLFeed mid-reconnect — fall through to sector model */ }
     var sector = EE_SECTOR_MAP[normaliseAsset(asset)] || '';
     if (sector === 'crypto')   return TRADING_COSTS.crypto;
     if (sector === 'energy')   return TRADING_COSTS.energy;
@@ -993,16 +995,20 @@
       if (repEntry && typeof repEntry.winRate === 'number') {
         var W = repEntry.winRate;
         var R = _cfg.take_profit_ratio;   // reward:risk ratio
-        var kelly = (W * R - (1 - W)) / R;
-        if (kelly > 0) {
-          // Half-Kelly normalised so that the break-even Kelly for this R = mult 1.0.
-          // Previously used a fixed 0.25 baseline (calibrated for W=0.5, R=2.5 only).
-          // Now derives the baseline from R dynamically: baseKelly = (0.5*R - 0.5) / R
-          // so mult=1.0 always represents a 50% win rate at whatever R is configured.
-          var baseKelly = Math.max(0.01, (0.5 * R - 0.5) / R);
-          kellyMult = Math.max(0.5, Math.min(1.5, kelly * 0.5 / baseKelly));
+        if (R <= 1.0) {
+          kellyMult = 1.0;  // v54: degenerate config — Kelly undefined at R≤1, use neutral sizing
         } else {
-          kellyMult = 0.5;   // negative EV → halve position size
+          var kelly = (W * R - (1 - W)) / R;
+          if (kelly > 0) {
+            // Half-Kelly normalised so that the break-even Kelly for this R = mult 1.0.
+            // Previously used a fixed 0.25 baseline (calibrated for W=0.5, R=2.5 only).
+            // Now derives the baseline from R dynamically: baseKelly = (0.5*R - 0.5) / R
+            // so mult=1.0 always represents a 50% win rate at whatever R is configured.
+            var baseKelly = Math.max(0.01, (0.5 * R - 0.5) / R);
+            kellyMult = Math.max(0.5, Math.min(1.5, kelly * 0.5 / baseKelly));
+          } else {
+            kellyMult = 0.5;   // negative EV → halve position size
+          }
         }
       }
     }
