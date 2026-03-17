@@ -1,4 +1,4 @@
-/* GII Scraper Manager — gii-scraper-manager.js v2
+/* GII Scraper Manager — gii-scraper-manager.js v3
  *
  * Watches all HL-covered non-BTC assets for volatility spikes and dynamically
  * spawns a technical scraper instance for whichever asset is moving.
@@ -177,6 +177,100 @@
     return avg20 > 0 ? last / avg20 : 1.0;
   }
 
+  // ADX — Average Directional Index (Wilder's smoothing)
+  function _adx(candles, period) {
+    if (!candles || candles.length < period * 2 + 1) return null;
+    var dmP = [], dmM = [], trs = [];
+    for (var i = 1; i < candles.length; i++) {
+      var up   = candles[i].high - candles[i - 1].high;
+      var down = candles[i - 1].low - candles[i].low;
+      dmP.push((up > down && up > 0)   ? up   : 0);
+      dmM.push((down > up && down > 0) ? down : 0);
+      trs.push(Math.max(
+        candles[i].high - candles[i].low,
+        Math.abs(candles[i].high - candles[i - 1].close),
+        Math.abs(candles[i].low  - candles[i - 1].close)
+      ));
+    }
+    var smTr = 0, smP = 0, smM = 0;
+    for (var j = 0; j < period; j++) { smTr += trs[j]; smP += dmP[j]; smM += dmM[j]; }
+    var dxSum = 0, dxCount = 0, diP = 0, diM = 0;
+    for (var k = period; k < trs.length; k++) {
+      smTr = smTr - smTr / period + trs[k];
+      smP  = smP  - smP  / period + dmP[k];
+      smM  = smM  - smM  / period + dmM[k];
+      diP  = smTr > 0 ? smP / smTr * 100 : 0;
+      diM  = smTr > 0 ? smM / smTr * 100 : 0;
+      var diSum = diP + diM;
+      dxSum += diSum > 0 ? Math.abs(diP - diM) / diSum * 100 : 0;
+      dxCount++;
+    }
+    var adx = dxCount > 0 ? dxSum / dxCount : 0;
+    return { adx: adx, plusDI: diP, minusDI: diM, trending: adx > 25, ranging: adx < 20 };
+  }
+
+  // EMA slope — rate of change of EMA over last `lookback` bars (as %)
+  function _emaSlope(closes, period, lookback) {
+    if (!closes || closes.length < period + lookback) return null;
+    var emaFull = _ema(closes, period);
+    var emaOld  = _ema(closes.slice(0, closes.length - lookback), period);
+    if (!emaFull || !emaOld || emaOld === 0) return null;
+    return (emaFull - emaOld) / emaOld * 100;
+  }
+
+  // Stochastic RSI — more sensitive momentum, catches turns before plain RSI
+  function _stochRsi(closes, rsiLen, stochLen, kSmooth, dSmooth) {
+    var needed = rsiLen + stochLen + Math.max(kSmooth, dSmooth) + 2;
+    if (!closes || closes.length < needed) return null;
+    var rsiArr = [];
+    for (var i = stochLen; i >= 0; i--) {
+      rsiArr.unshift(_rsi(closes.slice(0, closes.length - i), rsiLen));
+    }
+    if (rsiArr.some(function (v) { return v === null; })) return null;
+    var stochArr = [];
+    for (var s = 0; s < rsiArr.length; s++) {
+      var win = rsiArr.slice(Math.max(0, s - stochLen + 1), s + 1);
+      var lo = Math.min.apply(null, win), hi = Math.max.apply(null, win);
+      stochArr.push(hi > lo ? (rsiArr[s] - lo) / (hi - lo) * 100 : 50);
+    }
+    function _sma(arr, len) {
+      if (arr.length < len) return null;
+      var sum = 0;
+      for (var si = arr.length - len; si < arr.length; si++) sum += arr[si];
+      return sum / len;
+    }
+    var kArr = [];
+    for (var ki = kSmooth - 1; ki < stochArr.length; ki++) {
+      kArr.push(_sma(stochArr.slice(0, ki + 1), kSmooth));
+    }
+    var kNow = kArr[kArr.length - 1], kPrev = kArr[kArr.length - 2];
+    var dNow = _sma(kArr, dSmooth);
+    var dPrev = kArr.length > dSmooth ? _sma(kArr.slice(0, kArr.length - 1), dSmooth) : null;
+    if (kNow === null || dNow === null) return null;
+    return {
+      k:         kNow,
+      d:         dNow,
+      crossUp:   kPrev != null && dPrev != null && kPrev < dPrev && kNow >= dNow,
+      crossDown: kPrev != null && dPrev != null && kPrev > dPrev && kNow <= dNow
+    };
+  }
+
+  // RSI Divergence — bullish: price LL but RSI HL; bearish: price HH but RSI LH
+  function _divergence(closes, rsiPeriod, lookback) {
+    if (!closes || closes.length < rsiPeriod + lookback + 3) return { bullDiv: false, bearDiv: false };
+    var rsiNow   = _rsi(closes, rsiPeriod);
+    var rsiOld   = _rsi(closes.slice(0, closes.length - lookback), rsiPeriod);
+    if (rsiNow === null || rsiOld === null) return { bullDiv: false, bearDiv: false };
+    var priceNow = closes[closes.length - 1];
+    var priceOld = closes[closes.length - 1 - lookback];
+    var pd = (priceNow - priceOld) / priceOld;
+    var rd = rsiNow - rsiOld;
+    return {
+      bullDiv: pd < -0.005 && rd >  4 && rsiNow < 52,
+      bearDiv: pd >  0.005 && rd < -4 && rsiNow > 48
+    };
+  }
+
   // ── HL candle fetch ────────────────────────────────────────────────────────
   // Parameterised version of gii-scalper.js _hlFetch — takes any HL coin name
 
@@ -225,56 +319,133 @@
     var volR     = _volRatio(vl5);
     var price    = cl5[cl5.length - 1];
     if (rsi5m === null || ema9_15 === null || ema21_15 === null || !bb15) return null;
+
+    // Elite TA additions
+    var adxData = _adx(c5m, 14);
+    var emaSlp  = _emaSlope(cl15, 9, 3);
+    var stochR  = _stochRsi(cl5, 14, 14, 3, 3);
+    var divData = _divergence(cl5, 7, 10);
+    var regime  = adxData ? (adxData.trending ? 'trending' : adxData.ranging ? 'ranging' : 'mixed') : 'mixed';
+
     return {
       rsi5m:      rsi5m,
       ema9_15:    ema9_15,
       ema21_15:   ema21_15,
       bb15:       bb15,
+      bbWidth:    bb15.bw || 0,
       macd15:     macd15,
       atr5:       atr5 || price * 0.002,
       volRatio:   volR,
       price:      price,
       emaBullish: ema9_15 > ema21_15,
-      emaBearish: ema9_15 < ema21_15
+      emaBearish: ema9_15 < ema21_15,
+      adx:        adxData,
+      emaSlope:   emaSlp,
+      stochRsi:   stochR,
+      divergence: divData,
+      regime:     regime
     };
   }
 
   // ── setup scoring (adapted from gii-scalper.js with per-sector thresholds) ─
 
-  function _scoreSetup(ind, dir, thresh) {
+  function _scoreSetup(ind, dir, thresh, sector) {
     var score = 0.0;
     var reasons = [];
     var entryType = 'pullback';
+    var regime    = ind.regime || 'mixed';
 
     if (dir === 'long') {
+      // ── Core indicators ──────────────────────────────────────────────────
       if (ind.rsi5m < thresh.rsiLong) {
         score += 0.18; reasons.push('RSI7 ' + ind.rsi5m.toFixed(0) + ' (OS)');
         if (ind.rsi5m < thresh.rsiStrongL) { score += 0.10; reasons.push('extreme OS'); }
         entryType = 'mean_reversion';
       }
-      if (ind.emaBullish)                           { score += 0.12; reasons.push('EMA9>21'); }
-      if (ind.bb15 && ind.price <= ind.bb15.lower * 1.006) { score += 0.10; reasons.push('BB lower'); }
+      if (ind.emaBullish)                                         { score += 0.12; reasons.push('EMA9>21'); }
+      if (ind.bb15 && ind.price <= ind.bb15.lower * 1.006)       { score += 0.10; reasons.push('BB lower'); }
       if (ind.macd15) {
-        if (ind.macd15.crossUp)        { score += 0.13; reasons.push('MACD xUp'); entryType = 'breakout'; }
-        else if (ind.macd15.hist > 0)  { score += 0.05; reasons.push('MACD +hist'); }
+        if (ind.macd15.crossUp)       { score += 0.13; reasons.push('MACD xUp'); entryType = 'breakout'; }
+        else if (ind.macd15.hist > 0) { score += 0.05; reasons.push('MACD +hist'); }
       }
-      if (ind.volRatio > 1.8)      { score += 0.09; reasons.push('Vol x' + ind.volRatio.toFixed(1)); }
+      if      (ind.volRatio > 1.8) { score += 0.09; reasons.push('Vol x' + ind.volRatio.toFixed(1)); }
       else if (ind.volRatio > 1.3) { score += 0.05; reasons.push('Vol x' + ind.volRatio.toFixed(1)); }
 
+      // ── Elite TA additions ───────────────────────────────────────────────
+      if (ind.stochRsi) {
+        if (ind.stochRsi.k < 20 && ind.stochRsi.d < 20)       { score += 0.10; reasons.push('StochRSI-OS'); }
+        else if (ind.stochRsi.crossUp && ind.stochRsi.k < 40) { score += 0.07; reasons.push('StochRSI-xUp'); }
+      }
+      if (ind.divergence) {
+        if (ind.divergence.bullDiv) { score += 0.12; reasons.push('bull-div'); }
+        if (ind.divergence.bearDiv) { score *= 0.75; reasons.push('bear-div-penalty'); }
+      }
+      if (ind.emaSlope !== null && ind.emaSlope !== undefined) {
+        if (ind.emaSlope >  0.02) { score += 0.07; reasons.push('EMA↑'); }
+        else if (ind.emaSlope < -0.05) { score -= 0.05; }
+      }
+      if (entryType === 'breakout'       && ind.bbWidth < 0.025) { score += 0.08; reasons.push('BB-squeeze'); }
+      if (entryType === 'mean_reversion' && ind.bbWidth > 0.08)  { score += 0.06; reasons.push('BB-extended'); }
+
     } else {
+      // ── Core indicators ──────────────────────────────────────────────────
       if (ind.rsi5m > thresh.rsiShort) {
         score += 0.18; reasons.push('RSI7 ' + ind.rsi5m.toFixed(0) + ' (OB)');
         if (ind.rsi5m > thresh.rsiStrongS) { score += 0.10; reasons.push('extreme OB'); }
         entryType = 'mean_reversion';
       }
-      if (ind.emaBearish)                             { score += 0.12; reasons.push('EMA9<21'); }
-      if (ind.bb15 && ind.price >= ind.bb15.upper * 0.994) { score += 0.10; reasons.push('BB upper'); }
+      if (ind.emaBearish)                                         { score += 0.12; reasons.push('EMA9<21'); }
+      if (ind.bb15 && ind.price >= ind.bb15.upper * 0.994)       { score += 0.10; reasons.push('BB upper'); }
       if (ind.macd15) {
-        if (ind.macd15.crossDown)      { score += 0.13; reasons.push('MACD xDown'); entryType = 'breakdown'; }
-        else if (ind.macd15.hist < 0)  { score += 0.05; reasons.push('MACD -hist'); }
+        if (ind.macd15.crossDown)     { score += 0.13; reasons.push('MACD xDown'); entryType = 'breakdown'; }
+        else if (ind.macd15.hist < 0) { score += 0.05; reasons.push('MACD -hist'); }
       }
-      if (ind.volRatio > 1.8)      { score += 0.09; reasons.push('Vol x' + ind.volRatio.toFixed(1)); }
+      if      (ind.volRatio > 1.8) { score += 0.09; reasons.push('Vol x' + ind.volRatio.toFixed(1)); }
       else if (ind.volRatio > 1.3) { score += 0.05; reasons.push('Vol x' + ind.volRatio.toFixed(1)); }
+
+      // ── Elite TA additions ───────────────────────────────────────────────
+      if (ind.stochRsi) {
+        if (ind.stochRsi.k > 80 && ind.stochRsi.d > 80)           { score += 0.10; reasons.push('StochRSI-OB'); }
+        else if (ind.stochRsi.crossDown && ind.stochRsi.k > 60)   { score += 0.07; reasons.push('StochRSI-xDn'); }
+      }
+      if (ind.divergence) {
+        if (ind.divergence.bearDiv) { score += 0.12; reasons.push('bear-div'); }
+        if (ind.divergence.bullDiv) { score *= 0.75; reasons.push('bull-div-penalty'); }
+      }
+      if (ind.emaSlope !== null && ind.emaSlope !== undefined) {
+        if (ind.emaSlope < -0.02) { score += 0.07; reasons.push('EMA↓'); }
+        else if (ind.emaSlope > 0.05) { score -= 0.05; }
+      }
+      if (entryType === 'breakdown'      && ind.bbWidth < 0.025) { score += 0.08; reasons.push('BB-squeeze'); }
+      if (entryType === 'mean_reversion' && ind.bbWidth > 0.08)  { score += 0.06; reasons.push('BB-extended'); }
+    }
+
+    // ── ADX regime gating ────────────────────────────────────────────────────
+    if (regime === 'trending' && entryType === 'mean_reversion') {
+      var trendAligned = (dir === 'long' && ind.emaBullish) || (dir === 'short' && ind.emaBearish);
+      if (!trendAligned) { score *= 0.55; reasons.push('trend-regime-penalty'); }
+    }
+    if (regime === 'ranging') {
+      if (entryType === 'breakout' || entryType === 'breakdown') {
+        score *= 0.70; reasons.push('range-regime-penalty');
+      } else {
+        score += 0.06; reasons.push('ranging-boost');
+      }
+    }
+
+    // ── Brain shared-learning boost ──────────────────────────────────────────
+    if (window.GII_SCALPER_BRAIN) {
+      try {
+        var gtiRegime = (window.GII && typeof GII.gti === 'function') ?
+          (function () {
+            var g = GII.gti(); var v = (g && g.value) || (typeof g === 'number' ? g : 0);
+            return v >= 80 ? 'extreme' : v >= 60 ? 'high' : v >= 30 ? 'moderate' : 'normal';
+          })() : 'normal';
+        var boost = GII_SCALPER_BRAIN.getSetupBoost(sector || 'unknown', entryType, gtiRegime);
+        score = _clamp(score * boost, 0, 1);
+        if (boost > 1.1) reasons.push('brain+' + Math.round((boost - 1) * 100) + '%');
+        else if (boost < 0.9) reasons.push('brain-' + Math.round((1 - boost) * 100) + '%');
+      } catch (e) {}
     }
 
     return { score: _clamp(score, 0, 1), reasons: reasons, entryType: entryType };
@@ -339,6 +510,17 @@
       retiredAt:     null,
       retiredReason: null
     };
+    // Pre-seed feedback from brain's cross-instance historical data
+    if (window.GII_SCALPER_BRAIN) {
+      try {
+        var inherited = GII_SCALPER_BRAIN.inheritFeedback(asset);
+        if (inherited) {
+          if (inherited.long  && inherited.long.total  >= 3) _feedback[asset + '_long']  = inherited.long;
+          if (inherited.short && inherited.short.total >= 3) _feedback[asset + '_short'] = inherited.short;
+        }
+      } catch (e) {}
+    }
+
     _stats.spawned++;
     console.info('[SCRAPER MGR] Spawned scraper for ' + asset +
       ' (' + watchItem.hlTicker + ')  spike=' + voltPct.toFixed(2) + '% stagger=' + staggerIdx);
@@ -467,8 +649,8 @@
       var ind = _computeIndicators(c5m, c15m);
       if (!ind) return;
 
-      var longSetup  = _scoreSetup(ind, 'long',  inst.thresh);
-      var shortSetup = _scoreSetup(ind, 'short', inst.thresh);
+      var longSetup  = _scoreSetup(ind, 'long',  inst.thresh, inst.sector);
+      var shortSetup = _scoreSetup(ind, 'short', inst.thresh, inst.sector);
 
       // Trend filter — penalise counter-trend setups × 0.50
       var trend = _getTrend(inst.asset, ind);
@@ -501,6 +683,15 @@
         else if (wr < 0.45)  conf = _clamp(conf * 0.85, 0, 0.88);
         else if (wr >= 0.65) conf = _clamp(conf * 1.06, 0, 0.88);
       }
+
+      // Brain sector alignment boost
+      if (window.GII_SCALPER_BRAIN) {
+        try {
+          var align = GII_SCALPER_BRAIN.getSectorAlignment(inst.asset, inst.sector, bestDir);
+          if (align > 0) { conf = _clamp(conf + align * 0.08, 0, 0.88); bestSetup.reasons.push('sector-aligned'); }
+        } catch (e) {}
+      }
+
       conf = _round2(conf);
 
       if (conf < MIN_CONF) return;
@@ -528,9 +719,13 @@
 
       inst._signals     = [sig];
       inst._signalCount = (inst._signalCount || 0) + 1;  // cumulative — survives signal overwrites
-      inst._activeScalp = { bias: bestDir, signalTs: Date.now() };
+      inst._activeScalp = { bias: bestDir, signalTs: Date.now(), entryType: bestSetup.entryType };
       inst.lastSignalAt = Date.now();
       _stats.signals++;
+
+      if (window.GII_SCALPER_BRAIN) {
+        try { GII_SCALPER_BRAIN.noteSignal(inst.asset, inst.sector, bestDir); } catch (e) {}
+      }
 
       console.info('[SCRAPER MGR] Signal: ' + bestDir.toUpperCase() + ' ' +
         inst.asset + '  conf=' + conf + '  ' + reasons.join(' | '));
@@ -651,6 +846,18 @@
     _feedback[fbKey].winRate = _feedback[fbKey].correct / _feedback[fbKey].total;
     _feedback[fbKey].lastTs  = new Date().toISOString();
     _saveFeedback();
+
+    // Feed brain with cross-agent shared learning
+    if (window.GII_SCALPER_BRAIN) {
+      try {
+        var activeInst = _instances[asset];
+        var entryType  = (activeInst && activeInst._activeScalp && activeInst._activeScalp.entryType)
+                         || 'unknown';
+        var sectorName = (activeInst && activeInst.sector) || 'unknown';
+        GII_SCALPER_BRAIN.recordOutcome(trade, { sector: sectorName, setupType: entryType, gtiRegime: null });
+        GII_SCALPER_BRAIN.clearSignal(asset);
+      } catch (e) {}
+    }
   }
 
   // ── public API ────────────────────────────────────────────────────────────
