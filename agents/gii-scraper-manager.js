@@ -1,4 +1,4 @@
-/* GII Scraper Manager — gii-scraper-manager.js v1
+/* GII Scraper Manager — gii-scraper-manager.js v2
  *
  * Watches all HL-covered non-BTC assets for volatility spikes and dynamically
  * spawns a technical scraper instance for whichever asset is moving.
@@ -32,6 +32,7 @@
   var MIN_TRADES_SCORE     = 3;     // need this many trades before scoring
   var EQUITY_SESSION_START = 7;     // 07:00 UTC (London open)
   var EQUITY_SESSION_END   = 21;    // 21:00 UTC (NY close)
+  var RESPAWN_COOLDOWN_MS  = 30 * 60 * 1000; // 30 min per-asset cooldown after retirement
   var HL_INFO              = 'https://api.hyperliquid.xyz/info';
   var FEEDBACK_KEY         = 'gii_scraper_mgr_feedback_v1';
 
@@ -61,14 +62,15 @@
 
   // ── state ─────────────────────────────────────────────────────────────────
 
-  var _instances  = {};   // { 'XAU': scraperInstance, ... } — active only
-  var _retired    = [];   // last 20 retired instances (summaries)
-  var _priceHist  = {};   // { 'XAU': [{ price, ts }, ...] } — 12 samples = 24 min window
-  var _voltScores = {};   // { 'XAU': 0.61, 'WTI': 0.08, ... }
-  var _feedback   = {};   // { 'XAU_long': { total, correct, winRate, lastTs } }
-  var _lastPollTs = 0;
-  var _scanTimer  = null;
-  var _stats      = { spawned: 0, retired: 0, signals: 0, cycles: 0 };
+  var _instances       = {};   // { 'XAU': scraperInstance, ... } — active only
+  var _retired         = [];   // last 20 retired instances (summaries)
+  var _priceHist       = {};   // { 'XAU': [{ price, ts }, ...] } — 12 samples = 24 min window
+  var _voltScores      = {};   // { 'XAU': 0.61, 'WTI': 0.08, ... }
+  var _feedback        = {};   // { 'XAU_long': { total, correct, winRate, lastTs } }
+  var _recentlyRetired = {};   // { 'XAU': retiredAtTs } — 30 min re-spawn cooldown
+  var _lastPollTs      = 0;
+  var _scanTimer       = null;
+  var _stats           = { spawned: 0, retired: 0, signals: 0, cycles: 0 };
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -313,48 +315,55 @@
   // ── instance lifecycle ────────────────────────────────────────────────────
 
   function _spawnInstance(watchItem, voltPct) {
-    var asset  = watchItem.eeAsset;
-    var thresh = SECTOR_THRESH[watchItem.sector] || SECTOR_THRESH.crypto;
+    var asset      = watchItem.eeAsset;
+    var thresh     = SECTOR_THRESH[watchItem.sector] || SECTOR_THRESH.crypto;
+    // Assign a stable stagger index at spawn time so retirements don't reshuffle offsets
+    var staggerIdx = Object.keys(_instances).length;
     _instances[asset] = {
-      asset:        asset,
-      hlTicker:     watchItem.hlTicker,
-      sector:       watchItem.sector,
-      thresh:       thresh,
-      spawnedAt:    Date.now(),
-      spawnReason:  'vol-spike:' + voltPct.toFixed(2) + '%',
-      lastPollAt:   0,
-      lastSignalAt: 0,
-      _candles5m:   [],
-      _candles15m:  [],
-      _activeScalp: null,  // { bias, signalTs }
-      _signals:     [],
-      score:        null,
-      retired:      false,
-      retiredAt:    null,
+      asset:         asset,
+      hlTicker:      watchItem.hlTicker,
+      sector:        watchItem.sector,
+      thresh:        thresh,
+      staggerIdx:    staggerIdx,
+      spawnedAt:     Date.now(),
+      spawnReason:   'vol-spike:' + voltPct.toFixed(2) + '%',
+      lastPollAt:    0,
+      lastSignalAt:  0,
+      _candles5m:    [],
+      _candles15m:   [],
+      _activeScalp:  null,  // { bias, signalTs }
+      _signals:      [],
+      _signalCount:  0,     // cumulative signals emitted this session
+      score:         null,
+      retired:       false,
+      retiredAt:     null,
       retiredReason: null
     };
     _stats.spawned++;
     console.info('[SCRAPER MGR] Spawned scraper for ' + asset +
-      ' (' + watchItem.hlTicker + ')  spike=' + voltPct.toFixed(2) + '%');
+      ' (' + watchItem.hlTicker + ')  spike=' + voltPct.toFixed(2) + '% stagger=' + staggerIdx);
   }
 
   function _retireInstance(inst, reason) {
-    inst.retired      = true;
-    inst.retiredAt    = Date.now();
+    inst.retired       = true;
+    inst.retiredAt     = Date.now();
     inst.retiredReason = reason;
     _retired.unshift({
-      asset:         inst.asset,
-      hlTicker:      inst.hlTicker,
-      spawnedAt:     inst.spawnedAt,
-      retiredAt:     inst.retiredAt,
-      retiredReason: reason,
-      signalsEmitted: inst._signals.length > 0 ? 1 : 0,
-      score:         inst.score
+      asset:          inst.asset,
+      hlTicker:       inst.hlTicker,
+      spawnedAt:      inst.spawnedAt,
+      retiredAt:      inst.retiredAt,
+      retiredReason:  reason,
+      signalsEmitted: inst._signalCount || 0,  // cumulative count, not just last batch
+      score:          inst.score
     });
     if (_retired.length > 20) _retired.pop();
+    // Record cooldown so this asset can't immediately re-spawn
+    _recentlyRetired[inst.asset] = Date.now();
     delete _instances[inst.asset];
     _stats.retired++;
-    console.info('[SCRAPER MGR] Retired scraper for ' + inst.asset + ' — ' + reason);
+    console.info('[SCRAPER MGR] Retired scraper for ' + inst.asset + ' — ' + reason +
+      ' (' + (inst._signalCount || 0) + ' signals)');
   }
 
   function _checkRetire(inst) {
@@ -518,6 +527,7 @@
       };
 
       inst._signals     = [sig];
+      inst._signalCount = (inst._signalCount || 0) + 1;  // cumulative — survives signal overwrites
       inst._activeScalp = { bias: bestDir, signalTs: Date.now() };
       inst.lastSignalAt = Date.now();
       _stats.signals++;
@@ -585,6 +595,9 @@
     WATCHLIST.forEach(function (w) {
       if (_instances[w.eeAsset]) return;          // already active
       if (activeCount >= MAX_ACTIVE) return;      // at cap
+      // Re-spawn cooldown — don't immediately re-spawn after retirement
+      var cooledAt = _recentlyRetired[w.eeAsset] || 0;
+      if (cooledAt && (Date.now() - cooledAt) < RESPAWN_COOLDOWN_MS) return;
       var volt = _voltScores[w.eeAsset] || 0;
       if (volt >= w.spikePct) {
         _spawnInstance(w, volt);
@@ -597,12 +610,11 @@
       _checkRetire(_instances[k]);
     });
 
-    // Step 5 — staggered candle polls
-    var keys = Object.keys(_instances);
-    keys.forEach(function (k, idx) {
+    // Step 5 — staggered candle polls (staggerIdx is fixed at spawn, not the live array index)
+    Object.keys(_instances).forEach(function (k) {
       var inst = _instances[k];
       if (!inst) return;
-      var due = inst.lastPollAt + INSTANCE_POLL_MS + idx * STAGGER_MS;
+      var due = inst.lastPollAt + INSTANCE_POLL_MS + (inst.staggerIdx || 0) * STAGGER_MS;
       if (Date.now() >= due) _pollInstance(inst);
     });
   }
@@ -682,8 +694,10 @@
           spawnedAt:     inst.spawnedAt,
           lastPollAt:    inst.lastPollAt,
           lastSignalAt:  inst.lastSignalAt,
+          signalCount:   inst._signalCount || 0,      // FIX: cumulative count
           score:         inst.score,
-          activeSlot:    !!inst._activeScalp,
+          // FIX: rich object so UI can show bias; null when no active trade
+          activeSlot:    inst._activeScalp ? { bias: inst._activeScalp.bias } : null,
           retired:       false
         };
       });

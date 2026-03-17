@@ -1,4 +1,4 @@
-/* GII UI — gii-ui.js v5
+/* GII UI — gii-ui.js v6
  * GII panel renderer — injects #giiWrap after #eeWrap
  * Depends on: window.GII, window.GII_AGENT_*, window.GII_SCRAPER_MANAGER
  * Exposes: window.GII_UI
@@ -700,8 +700,8 @@
           : '—';
         var scoreCol = (inst.score || 0) >= 0.6 ? 'var(--green,#00e676)'
                      : (inst.score || 0) >= 0.35 ? 'var(--amber,#ffc107)' : 'var(--red,#ff1744)';
-        var slotBadge = inst._activeScalp
-          ? '<span style="color:var(--amber,#ffc107)">⚡ LIVE</span>'
+        var slotBadge = inst.activeSlot
+          ? '<span style="color:var(--amber,#ffc107)">⚡ ' + (inst.activeSlot.bias || 'LIVE').toUpperCase() + '</span>'
           : '<span style="color:rgba(255,255,255,0.3)">free</span>';
         html += '<tr>' +
           '<td style="color:var(--gii);font-weight:700">' + _esc(inst.asset) + '</td>' +
