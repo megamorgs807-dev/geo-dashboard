@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   GII-ROUTING v3 — Instrument Router & Leverage Optimiser  [HL-FIRST MODE]
+   GII-ROUTING v5 — Instrument Router & Leverage Optimiser  [HL-FIRST MODE]
    ══════════════════════════════════════════════════════════════════════════════
    Called by EE.onSignals() before every signal is processed.
 
@@ -103,7 +103,7 @@
      WARM_MS:   route to HL but 1× only — slightly stale is still better than
                 Yahoo/backend (delayed, sometimes 15-min old)                 */
   var HL_FRESH_MS = 30000;    // < 30s — same as HLFeed's own definition
-  var HL_WARM_MS  = 120000;   // 30s – 2min — still prefer HL at 1×
+  var HL_WARM_MS  = 300000;   // 30s – 5min — prefer HL at 1× (v5: extended from 2min to cover brief WS pauses)
 
   /* ── Fee structures ─────────────────────────────────────────────────────────
      HL: 0.05% taker. Traditional: CFD/stock estimates.                       */
@@ -525,6 +525,8 @@
     status: function () {
       var gti = _getGTIContext();
       return {
+        lastPoll:       _decisions.length ? _decisions[0].ts : 0,   // v5: health panel uses this; routing is on-demand not polled
+        note:           'on-demand router — ' + _stats.total + ' decisions',
         totalDecisions: _stats.total,
         hlRouted:       _stats.hlRouted,
         hlFresh:        _stats.hlFresh,
