@@ -564,6 +564,10 @@
       var rawConf = (post * 100 + conv.confBonus * 100) * conv.boost;
       rawConf = _clamp(rawConf, 0, 95);
 
+      // v61: bonus when multiple agents independently agree on same asset+direction
+      var agreeCount = (agentContrib[key] || []).length;
+      if (agreeCount > 1) rawConf = _clamp(rawConf + (agreeCount - 1) * 3, 0, 95);
+
       // Module 4: apply market lag boost if detected
       if (_lagBoost > 1.0) rawConf = _clamp(rawConf * _lagBoost, 0, 95);
 

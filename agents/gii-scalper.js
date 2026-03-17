@@ -370,14 +370,19 @@
     return 'neutral';
   }
 
-  // GTI gate: pause scalping during elevated geopolitical tension
-  function _gtiOk() {
+  // GTI gate: returns a size multiplier (0.0 = full stop, 1.0 = no change)
+  // v61: graduated cap instead of binary on/off
+  function _gtiSizeMult() {
     try {
-      if (!window.GII || typeof GII.gti !== 'function') return true;
-      var g = GII.gti();
-      var gtiVal = (g && typeof g.value === 'number') ? g.value : (typeof g === 'number' ? g : 0);
-      return gtiVal < GTI_GATE;
-    } catch (e) { return true; }
+      if (!window.GII || typeof GII.gti !== 'function') return 1.0;
+      var g   = GII.gti();
+      var val = (g && typeof g.value === 'number') ? g.value : (typeof g === 'number' ? g : 0);
+      if (val >= 90) return 0.0;   // catastrophic — full stop
+      if (val >= 80) return 0.45;  // extreme tension — 45% size
+      if (val >= 70) return 0.65;  // high tension    — 65% size
+      if (val >= 60) return 0.80;  // elevated        — 80% size
+      return 1.0;
+    } catch (e) { return 1.0; }
   }
 
   // Scalper slot: one trade at a time
@@ -433,7 +438,8 @@
       emaSlope:   emaSlp,
       stochRsi:   stochR,
       divergence: divData,
-      regime:     regime
+      regime:      regime,
+      dataQuality: c5m.length >= 80 ? 1.0 : c5m.length >= 60 ? 0.92 : 0.85  // v61: candle data quality
     };
   }
 
@@ -523,7 +529,7 @@
     }
     if (regime === 'ranging') {
       if (entryType === 'breakout' || entryType === 'breakdown') {
-        score *= 0.70; reasons.push('range-regime-penalty');
+        score *= 0.50; reasons.push('range-regime-penalty');  // v61: was 0.70 — false breakouts in ranging are common
       } else {
         score += 0.06; reasons.push('ranging-boost');  // mean-reversion thrives here
       }
@@ -565,6 +571,12 @@
     // Base confidence from setup score (score 0.20 → conf 0.60; score 0.60+ → conf ~0.86)
     var conf = _clamp(0.52 + setup.score * 0.60, 0, 0.88);
     var reasons = setup.reasons.slice();
+
+    // v61: discount confidence if candle data is sparse
+    if (ind.dataQuality && ind.dataQuality < 1.0) {
+      conf = _clamp(conf * ind.dataQuality, 0, 0.88);
+      reasons.push('data-quality-' + ind.dataQuality);
+    }
 
     // 1h trend filter boost/penalty
     var trend1h = _get1hTrend();
@@ -626,17 +638,17 @@
     _lastPollTs = Date.now();
     _status.lastPoll = _lastPollTs;
 
-    var gtiGated = !_gtiOk();
+    var _gtiM    = _gtiSizeMult();  // v61: graduated multiplier
     var slotBusy = !_slotFree();
 
-    _status.gtiGated  = gtiGated;
+    _status.gtiGated  = (_gtiM === 0.0);
     _status.slotBusy  = slotBusy;
     var _gtiRaw = (window.GII && typeof GII.gti === 'function') ? GII.gti() : null;
     _status.gtiLevel  = (_gtiRaw && typeof _gtiRaw.value === 'number') ? +_gtiRaw.value.toFixed(1) : 0;
 
-    if (gtiGated) {
+    if (_gtiM === 0.0) {
       _signals  = [];
-      _status.note = 'GTI=' + _status.gtiLevel + ' >= gate=' + GTI_GATE + ' — scalping paused';
+      _status.note = 'GTI=' + _status.gtiLevel + ' >= 90 — scalping stopped';
       return;
     }
     if (slotBusy) {
@@ -716,6 +728,11 @@
         }
 
         var sig = _buildSignal(bestDir, ind, bestSetup);
+
+        // v61: apply GTI size multiplier to confidence
+        if (_gtiM < 1.0) {
+          sig.confidence = _round2(_clamp(sig.confidence * _gtiM, 0, 0.88));
+        }
 
         if (sig.confidence < MIN_CONF) {
           _signals = [];
@@ -816,6 +833,21 @@
   window.addEventListener('load', function () {
     _loadFeedback();
     _loadCache();
+    // v61: re-sync slot with EE on load to prevent 2h blackout after page refresh
+    setTimeout(function () {
+      try {
+        if (window.EE && typeof EE.getOpenTrades === 'function') {
+          var _open = EE.getOpenTrades();
+          var _existing = _open.find(function (t) {
+            return (t.asset || '').toUpperCase() === 'BTC';
+          });
+          if (_existing) {
+            _activeScalp = { bias: _existing.direction.toLowerCase(), signalTs: Date.now(), entryType: 'unknown' };
+            console.info('[SCALPER] _activeScalp restored from open BTC trade');
+          }
+        }
+      } catch (e) {}
+    }, 5000);
     setTimeout(function () {
       poll();
       setInterval(poll, POLL_INTERVAL_MS);

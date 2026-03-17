@@ -343,7 +343,8 @@
       emaSlope:   emaSlp,
       stochRsi:   stochR,
       divergence: divData,
-      regime:     regime
+      regime:      regime,
+      dataQuality: c5m.length >= 80 ? 1.0 : c5m.length >= 60 ? 0.92 : 0.85  // v61: candle data quality
     };
   }
 
@@ -427,7 +428,7 @@
     }
     if (regime === 'ranging') {
       if (entryType === 'breakout' || entryType === 'breakdown') {
-        score *= 0.70; reasons.push('range-regime-penalty');
+        score *= 0.50; reasons.push('range-regime-penalty');  // v61: was 0.70 — false breakouts in ranging are common
       } else {
         score += 0.06; reasons.push('ranging-boost');
       }
@@ -473,14 +474,19 @@
   }
 
   // ── GTI gate ──────────────────────────────────────────────────────────────
+  // v61: graduated cap instead of binary on/off
 
-  function _gtiOk() {
+  function _gtiSizeMult() {
     try {
-      if (!window.GII || typeof GII.gti !== 'function') return true;
-      var g = GII.gti();
-      var v = (g && typeof g.value === 'number') ? g.value : (typeof g === 'number' ? g : 0);
-      return v < GTI_GATE;
-    } catch (e) { return true; }
+      if (!window.GII || typeof GII.gti !== 'function') return 1.0;
+      var g   = GII.gti();
+      var val = (g && typeof g.value === 'number') ? g.value : (typeof g === 'number' ? g : 0);
+      if (val >= 90) return 0.0;   // catastrophic — full stop
+      if (val >= 80) return 0.45;  // extreme tension — 45% size
+      if (val >= 70) return 0.65;  // high tension    — 65% size
+      if (val >= 60) return 0.80;  // elevated        — 80% size
+      return 1.0;
+    } catch (e) { return 1.0; }
   }
 
   // ── instance lifecycle ────────────────────────────────────────────────────
@@ -620,8 +626,9 @@
       if (utcH < EQUITY_SESSION_START || utcH >= EQUITY_SESSION_END) return;
     }
 
-    // GTI gate
-    if (!_gtiOk()) return;
+    // GTI gate — v61: graduated multiplier
+    var _gtiM = _gtiSizeMult();
+    if (_gtiM === 0.0) return;
 
     // One-at-a-time per instance
     if (inst._activeScalp) {
@@ -670,6 +677,12 @@
       // Build confidence
       var conf = _clamp(0.52 + bestSetup.score * 0.60, 0, 0.88);
 
+      // v61: discount confidence if candle data is sparse
+      if (ind.dataQuality && ind.dataQuality < 1.0) {
+        conf = _clamp(conf * ind.dataQuality, 0, 0.88);
+        bestSetup.reasons.push('data-quality-' + ind.dataQuality);
+      }
+
       // Trend alignment boost/penalty
       if (trend === bestDir)       conf = _clamp(conf + 0.05, 0, 0.88);
       else if (trend !== 'neutral') conf = _clamp(conf - 0.08, 0, 0.88);
@@ -691,6 +704,9 @@
           if (align > 0) { conf = _clamp(conf + align * 0.08, 0, 0.88); bestSetup.reasons.push('sector-aligned'); }
         } catch (e) {}
       }
+
+      // v61: apply GTI size multiplier to confidence
+      if (_gtiM < 1.0) conf = _clamp(conf * _gtiM, 0, 0.88);
 
       conf = _round2(conf);
 

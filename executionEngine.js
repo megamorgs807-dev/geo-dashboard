@@ -50,7 +50,7 @@
     enabled:               true,         // auto-execution always on by default
     min_confidence:        65,           // minimum IC confidence % to auto-execute
     virtual_balance:       1000,         // starting virtual balance (USD)
-    risk_per_trade_pct:    3,            // % of balance risked per trade — aggressive
+    risk_per_trade_pct:    2,            // % of balance risked per trade — v61: reduced from 3% to limit concurrent exposure
     stop_loss_pct:         1.5,          // % distance from entry — tighter than original 3%, better capital preservation
     take_profit_ratio:     2.5,          // R:R multiplier — improved from 2:1, more profit per win
     max_open_trades:       8,            // max concurrent open trades — aggressive
@@ -69,7 +69,7 @@
     daily_loss_limit_pct:  5,            // pause if session P&L drops below -5%
     event_gate_enabled:    true,         // block new trades near major calendar events
     event_gate_hours:      0.5,          // hours before event to block (0.5 = 30min)
-    max_risk_usd:          75            // hard cap per trade — keeps compounding from going exponential above ~$2.5k balance
+    max_risk_usd:          50            // v61: hard cap reduced from $75 → $50 — kicks in earlier at ~$2.5k balance
   };
 
   /* ── Sector map — used for max_per_sector concentration cap ──────────────── */
@@ -262,7 +262,7 @@
   var _showAllClosed        = false; // UI toggle: show all closed trades vs capped at 25
   var _closedSessionOnly    = false; // UI toggle: show only this-session closed trades
   var _sessionStartBalance  = null;  // balance at session start — for daily loss limit
-  var _lossStreak           = 0;     // consecutive losses counter — for streak sizing
+  var _lossStreak           = { long: 0, short: 0 };  // v61: per-direction streak — long losses don't penalise short sizing
   var _wsConnected          = false; // Binance WebSocket status
   var _wsBtcWs              = null;  // WebSocket instance (BTC real-time)
   var _backendPrices = {};  // symbol → price, populated by _pollBackendPrices() every 25 s (H4)
@@ -1092,8 +1092,10 @@
       }
     }
 
-    // Loss streak sizing: halve risk after 3+ consecutive losses, 75% after 2
-    var streakMult = _lossStreak >= 3 ? 0.50 : _lossStreak >= 2 ? 0.75 : 1.0;
+    // v61: per-direction loss streak — long losses don't penalise short sizing
+    var _dirKey    = (sig.dir || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
+    var _dirStreak = _lossStreak[_dirKey] || 0;
+    var streakMult = _dirStreak >= 3 ? 0.50 : _dirStreak >= 2 ? 0.75 : 1.0;
     if (streakMult < 1.0) {
       // Logged on open so the user can see why size is reduced
     }
@@ -1151,8 +1153,13 @@
       source:           sig.source           || _inferSource(sig.reason || ''),
       kelly_mult:       +kellyMult.toFixed(2),       // EV sizing multiplier applied (for display/audit)
       streak_mult:      +streakMult.toFixed(2),      // loss-streak sizing reduction
+      // v61: signal metadata for smart partial TP and trailing logic
+      signal_conf:  sig.conf  || 0,
+      entry_type:   sig.entryType || ((sig.reason || '').toLowerCase().indexOf('breakout') !== -1 ? 'breakout' : 'other'),
       // ── Trailing / break-even / partial TP state ────────────────────────────
-      trailing_stop_active: false,   // activated once break-even is hit
+      // v61: breakout trades start with trailing active immediately (no need to wait for partial TP)
+      trailing_stop_active: !!(_cfg.trailing_stop_enabled &&
+        (sig.entryType === 'breakout' || (sig.reason || '').toLowerCase().indexOf('breakout') !== -1)),
       highest_price:        null,    // LONG: tracks peak price for trail
       lowest_price:         null,    // SHORT: tracks trough price for trail
       break_even_done:      false,   // true once stop moved to entry
@@ -1436,14 +1443,15 @@
       } catch (e) { /* notification may fail silently */ }
     }
 
-    // Update loss streak counter (used for position sizing on future trades)
+    // v61: per-direction loss streak (long/short tracked independently)
+    var _tradeDir = (trade.direction || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
     if (trade.pnl_usd > 0) {
-      if (_lossStreak > 0) log('RISK', 'Loss streak ended at ' + _lossStreak + ' — full size restored', 'green');
-      _lossStreak = 0;
+      if (_lossStreak[_tradeDir] > 0) log('RISK', _tradeDir.toUpperCase() + ' loss streak ended at ' + _lossStreak[_tradeDir] + ' — full size restored', 'green');
+      _lossStreak[_tradeDir] = 0;
     } else {
-      _lossStreak++;
-      if (_lossStreak >= 3)      log('RISK', 'Streak ' + _lossStreak + ' losses — position size halved until next win', 'red');
-      else if (_lossStreak >= 2) log('RISK', 'Streak ' + _lossStreak + ' losses — position size at 75%', 'amber');
+      _lossStreak[_tradeDir]++;
+      if (_lossStreak[_tradeDir] >= 3)      log('RISK', _tradeDir.toUpperCase() + ' streak ' + _lossStreak[_tradeDir] + ' losses — position size halved', 'red');
+      else if (_lossStreak[_tradeDir] >= 2) log('RISK', _tradeDir.toUpperCase() + ' streak ' + _lossStreak[_tradeDir] + ' losses — position size at 75%', 'amber');
     }
 
     renderUI();
@@ -1566,6 +1574,15 @@
         _notify('⛔ Daily Loss Limit Hit',
           'Session P&L: ' + sessionLossPct.toFixed(1) + '% — auto-execution paused',
           'ee-daily-limit');
+        // v61: close all currently-losing open trades to stop the bleed
+        openTrades().forEach(function (t) {
+          var px = _livePrice[t.trade_id];
+          if (!px) return;
+          var pnlUsd = t.direction === 'LONG'
+            ? (px - t.entry_price) * t.units
+            : (t.entry_price - px) * t.units;
+          if (pnlUsd < 0) closeTrade(t.trade_id, px, 'DAILY_LIMIT');
+        });
         renderUI();
       }
     }
@@ -1583,14 +1600,19 @@
         var isLong  = trade.direction === 'LONG';
         var isShort = trade.direction === 'SHORT';
 
-        // ── Partial TP1: take 50% at halfway to full TP ─────────────────────
-        if (_cfg.partial_tp_enabled && !trade.partial_tp_taken) {
+        // ── Partial TP1: dynamic fraction based on signal confidence ────────
+        // v61: high-conf breakouts skip partial TP to capture full move;
+        //      lower-conf / mean-reversion trades take 50% early as protection.
+        var _sconf       = trade.signal_conf || 65;
+        var _skipPartial = _sconf >= 75 && trade.entry_type === 'breakout';
+        var _partialFrac = _sconf >= 70 ? 0.25 : 0.50;
+        if (_cfg.partial_tp_enabled && !trade.partial_tp_taken && !_skipPartial) {
           var tp1 = isLong
             ? trade.entry_price + 0.5 * (trade.take_profit - trade.entry_price)
             : trade.entry_price - 0.5 * (trade.entry_price - trade.take_profit);
           var hitTP1 = isLong ? (price >= tp1) : (price <= tp1);
           if (hitTP1) {
-            var closedUnits  = trade.units * 0.5;
+            var closedUnits  = trade.units * _partialFrac;
             // Use tp1 price (not current price) so partial P&L is always capped at 1×R.
             var partialClosePrice = isLong ? Math.min(price, tp1) : Math.max(price, tp1);
             // Reality check 2 — apply limit-order exit slippage (spread only, no market slippage)
@@ -1604,7 +1626,7 @@
             trade.partial_tp_price  = +adjPartialClose.toFixed(6);
             trade.partial_pnl_usd   = partialPnl;
             trade.costs_usd         = +((trade.costs_usd || 0) + partialComm).toFixed(4);
-            trade.units             = +(trade.units * 0.5).toFixed(6);
+            trade.units             = +(trade.units * (1 - _partialFrac)).toFixed(6);
             trade.size_usd          = +(trade.units * trade.entry_price).toFixed(2); // v48 fix: use entry price, not live price
             // Move stop to entry + round-trip exit cost (break-even) — v53: cost-based, not hardcoded
             var _beCosts = _getCosts(trade.asset);
@@ -1620,12 +1642,12 @@
             saveCfg();
             saved = true;
             log('PARTIAL',
-              trade.asset + ' 50% TP @ ' + _num(adjPartialClose) +
+              trade.asset + ' ' + Math.round(_partialFrac * 100) + '% TP @ ' + _num(adjPartialClose) +
               '  Banked: ' + (partialPnl >= 0 ? '+' : '') + '$' + _num(partialPnl) +
               '  comm:-$' + _num(partialComm) +
               '  SL→breakeven', 'green');
             _notify('🎯 Partial TP — ' + trade.asset,
-              '50% closed @ ' + _num(adjPartialClose) + ' (+$' + _num(partialPnl) + ' net)\nStop moved to break-even.',
+              Math.round(_partialFrac * 100) + '% closed @ ' + _num(adjPartialClose) + ' (+$' + _num(partialPnl) + ' net)\nStop moved to break-even.',
               'ee-partial-' + trade.trade_id);
           }
         }
@@ -2037,14 +2059,19 @@
     // Streak indicator
     var streakEl = document.getElementById('eeStreakBadge');
     if (streakEl) {
-      if (_lossStreak === 0) {
+      var _totalStreak = (_lossStreak.long || 0) + (_lossStreak.short || 0);
+      var _maxStreak   = Math.max(_lossStreak.long || 0, _lossStreak.short || 0);
+      if (_totalStreak === 0) {
         streakEl.textContent = '';
         streakEl.style.display = 'none';
       } else {
         streakEl.style.display = 'inline';
-        var mult = _lossStreak >= 3 ? '½ size' : '¾ size';
-        streakEl.textContent = '⚠ ' + _lossStreak + ' loss streak — ' + mult;
-        streakEl.style.color = _lossStreak >= 3 ? 'var(--red)' : 'var(--amber)';
+        var streakParts = [];
+        if (_lossStreak.long  > 0) streakParts.push('L×' + _lossStreak.long);
+        if (_lossStreak.short > 0) streakParts.push('S×' + _lossStreak.short);
+        var mult = _maxStreak >= 3 ? '½ size' : '¾ size';
+        streakEl.textContent = '⚠ ' + streakParts.join(' ') + ' — ' + mult;
+        streakEl.style.color = _maxStreak >= 3 ? 'var(--red)' : 'var(--amber)';
       }
     }
     // WebSocket status
