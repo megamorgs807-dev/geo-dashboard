@@ -217,14 +217,24 @@
         EE.getAllTrades().forEach(function (t) {
           if (t.status !== 'CLOSED' || !t.close_reason) return;
           var key = _norm(t.asset) + '_' + (t.direction || '').toUpperCase();
-          if (!data[key]) data[key] = { wins: 0, total: 0 };
+          if (!data[key]) data[key] = { wins: 0, total: 0, holdHoursSum: 0, holdCount: 0 };
           data[key].total++;
           if (t.close_reason === 'TAKE_PROFIT' || t.close_reason === 'TRAILING_STOP') {
             data[key].wins++;
           }
+          /* v53 Fix F: accumulate actual hold duration for hold-time estimation */
+          if (t.timestamp_open && t.timestamp_close) {
+            var h = (new Date(t.timestamp_close) - new Date(t.timestamp_open)) / 3600000;
+            if (h > 0 && h < 720) { // sanity: 0–30 days
+              data[key].holdHoursSum += h;
+              data[key].holdCount++;
+            }
+          }
         });
         Object.keys(data).forEach(function (k) {
-          data[k].winRate = data[k].total > 0 ? data[k].wins / data[k].total : null;
+          data[k].winRate      = data[k].total > 0 ? data[k].wins / data[k].total : null;
+          data[k].avgHoldHours = data[k].holdCount >= 3
+            ? data[k].holdHoursSum / data[k].holdCount : null; // need ≥3 samples
         });
       }
     } catch (e) {}
@@ -255,6 +265,8 @@
   }
 
   /* ── Estimate hold duration (hours) ────────────────────────────────────── */
+  /* v53 Fix F: blends empirical avg hold time (60%) with heuristic (40%) once
+     ≥3 closed trades exist for the asset × direction pair.                    */
   function _estimateHoldHours(sig, sector) {
     var conf   = sig.conf || 50;
     var impact = sig.impactMult || 1.0;
@@ -264,7 +276,18 @@
       var utcHour = new Date().getUTCHours();
       if (utcHour < 13 || utcHour >= 20) base = Math.max(base, 16);
     }
-    return Math.min(48, base);
+    base = Math.min(48, base);
+    /* Blend in empirical history if available */
+    try {
+      var cache = _buildWinRateCache();
+      var dir   = (sig.dir || sig.bias || 'LONG').toUpperCase();
+      var eKey  = _norm(sig.asset) + '_' + dir;
+      var entry = cache[eKey];
+      if (entry && entry.avgHoldHours !== null) {
+        base = Math.min(48, entry.avgHoldHours * 0.60 + base * 0.40);
+      }
+    } catch (e) {}
+    return base;
   }
 
   /* ── Fixed TP target as fraction of entry price ─────────────────────────── */

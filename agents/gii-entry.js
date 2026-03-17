@@ -61,7 +61,8 @@
     'TLT':   { stopPct: 1.5, tpRatio: 2.5 },
     'JPY':   { stopPct: 1.5, tpRatio: 2.5 },
     'CHF':   { stopPct: 1.5, tpRatio: 2.5 },
-    'VIX':   { stopPct: 8.0, tpRatio: 2.0 }   /* VIX is extremely volatile */
+    'VIX':   { stopPct: 8.0, tpRatio: 2.0 },  /* VIX is extremely volatile */
+    'VXX':   { stopPct: 6.0, tpRatio: 2.0 }   /* VXX ETF — same signal, lower raw vol than VIX index */
   };
   var VOL_STOP_DEFAULT = { stopPct: 3.0, tpRatio: 2.5 };
 
@@ -363,17 +364,23 @@
   function _processQueue() {
     var now = Date.now();
 
-    /* Expire stale items */
-    _queue = _queue.filter(function (item) {
-      return (now - item.queuedAt) < QUEUE_TTL_MS;
+    /* Expire stale items — log each one so queue drops are visible in audit log */
+    var _expiredItems = _queue.filter(function (item) { return (now - item.queuedAt) >= QUEUE_TTL_MS; });
+    _expiredItems.forEach(function (item) {
+      _stats.rejected++;
+      _rejected.unshift({ asset: item.sig.asset, dir: item.sig.dir, reason: 'queue-ttl-expired', ts: now });
+      if (_rejected.length > 50) _rejected.pop();
     });
+    _queue = _queue.filter(function (item) { return (now - item.queuedAt) < QUEUE_TTL_MS; });
 
     if (!_queue.length) return;
 
-    /* Deduplicate queue by asset (keep highest-conf version) */
+    /* Deduplicate queue by asset only — prevents both a LONG and SHORT for the
+       same asset firing in the same cycle (contradictory signals). Keeps the
+       highest-confidence signal regardless of direction. */
     var byAsset = {};
     _queue.forEach(function (item) {
-      var key = item.sig.asset + '_' + item.sig.dir;
+      var key = item.sig.asset;   // v53: asset-only key (was asset+dir)
       if (!byAsset[key] || (item.sig.conf || 0) > (byAsset[key].sig.conf || 0)) {
         byAsset[key] = item;
       }

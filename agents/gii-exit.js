@@ -405,6 +405,9 @@
       var newStop15 = dir === 'LONG'
         ? +(entry + halfR).toFixed(4)
         : +(entry - halfR).toFixed(4);
+      /* TP clamp: stop must never overshoot the take-profit level (matches EE logic) */
+      if (dir === 'LONG'  && trade.take_profit && newStop15 > trade.take_profit) newStop15 = +trade.take_profit.toFixed(4);
+      if (dir === 'SHORT' && trade.take_profit && newStop15 < trade.take_profit) newStop15 = +trade.take_profit.toFixed(4);
       /* Only tighten — don't loosen if current stop is already better */
       if (dir === 'LONG'  && trade.stop_loss && newStop15 <= trade.stop_loss) return null;
       if (dir === 'SHORT' && trade.stop_loss && newStop15 >= trade.stop_loss) return null;

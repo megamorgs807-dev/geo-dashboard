@@ -1520,10 +1520,12 @@
             trade.costs_usd         = +((trade.costs_usd || 0) + partialComm).toFixed(4);
             trade.units             = +(trade.units * 0.5).toFixed(6);
             trade.size_usd          = +(trade.units * trade.entry_price).toFixed(2); // v48 fix: use entry price, not live price
-            // Move stop to entry ± tiny buffer (break-even)
+            // Move stop to entry + round-trip exit cost (break-even) — v53: cost-based, not hardcoded
+            var _beCosts = _getCosts(trade.asset);
+            var _beBuf   = _beCosts.commission + _beCosts.spread * 0.5 + (_beCosts.slippage || 0);
             var beStop = isLong
-              ? +(trade.entry_price * 1.001).toFixed(6)
-              : +(trade.entry_price * 0.999).toFixed(6);
+              ? +(trade.entry_price * (1 + _beBuf)).toFixed(6)
+              : +(trade.entry_price * (1 - _beBuf)).toFixed(6);
             trade.stop_loss        = beStop;
             trade.break_even_done  = true;
             trade.trailing_stop_active = true;
@@ -1552,9 +1554,11 @@
             : trade.entry_price - halfDist;
           var hitBE = isLong ? (price >= beTrigger) : (price <= beTrigger);
           if (hitBE) {
+            var _beCosts2 = _getCosts(trade.asset);
+            var _beBuf2   = _beCosts2.commission + _beCosts2.spread * 0.5 + (_beCosts2.slippage || 0);
             var newBEStop = isLong
-              ? +(trade.entry_price * 1.001).toFixed(6)
-              : +(trade.entry_price * 0.999).toFixed(6);
+              ? +(trade.entry_price * (1 + _beBuf2)).toFixed(6)
+              : +(trade.entry_price * (1 - _beBuf2)).toFixed(6);
             if ((isLong && newBEStop > trade.stop_loss) ||
                 (isShort && newBEStop < trade.stop_loss)) {
               trade.stop_loss           = newBEStop;
@@ -1582,6 +1586,8 @@
             var newHigh = Math.max(price, trade.highest_price || price);
             trade.highest_price = newHigh;
             var trailedStop = +(newHigh - trailDist).toFixed(6);
+            // Symmetric TP clamp for LONG: trail must not exceed TP (mirrors SHORT clamp below)
+            if (trade.take_profit && trailedStop > trade.take_profit) trailedStop = +trade.take_profit.toFixed(6);
             if (trailedStop > trade.stop_loss) {
               trade.stop_loss = trailedStop;
               saved = true;
