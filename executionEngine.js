@@ -931,7 +931,7 @@
         return { ok: false, reason: 'Max per sector (' + _cfg.max_per_sector + ') reached for ' + sector };
     }
 
-    if (open.some(function (t) { return t.asset === sig.asset; }))
+    if (open.some(function (t) { return normaliseAsset(t.asset) === normaliseAsset(sig.asset); }))
       return { ok: false, reason: 'Already have open trade for ' + sig.asset };
 
     // Pending lock: fetchPrice is async — block second signal for same asset while first is in flight
@@ -1126,6 +1126,14 @@
       units   = (_cfg.virtual_balance * MAX_LEVERAGE) / entryPrice;
       sizeUsd = units * entryPrice;
       log('AUDIT', '⚠ LEVERAGE: ' + sig.asset + ' capped at ' + MAX_LEVERAGE + '× — units reduced to ' + units.toFixed(4), 'amber');
+    }
+
+    // Reality check 7 — reject zero-size positions: risk budget exhausted or SL too wide.
+    // Previously these slipped through as phantom trades (units=0) blocking asset slots.
+    var MIN_SIZE_USD = 1.0;  // absolute floor — $1 minimum position
+    if (units <= 0 || sizeUsd < MIN_SIZE_USD) {
+      log('RISK', sig.asset + ' rejected — position too small ($' + sizeUsd.toFixed(2) + '): risk budget exhausted or SL distance too wide', 'amber');
+      return null;
     }
 
     return {
