@@ -143,7 +143,10 @@
 
   function _daysUntil(dateStr) {
     var target = new Date(dateStr + 'T00:00:00Z').getTime();
-    return Math.floor((target - Date.now()) / 86400000);
+    // Return fractional days so the EE event-gate (gateHours/24 window) works precisely.
+    // Previously used Math.floor() which made any same-day event show days=0 and gate
+    // ALL day instead of just the last 30 min before the event.
+    return (target - Date.now()) / 86400000;
   }
 
   function _icKeywordMatch(ev) {
@@ -210,11 +213,13 @@
 
       if (finalConf < 0.22) return; // don't clutter with very weak signals
 
-      var timeLabel = days === 0  ? 'TODAY' :
-                      days === 1  ? 'TOMORROW' :
-                      days <= 7   ? 'in ' + days + ' days' :
-                      days <= 30  ? 'in ' + days + ' days' :
-                                    'in ' + days + ' days';
+      var _daysInt  = Math.floor(days);
+      var timeLabel = days < 0           ? 'PAST' :
+                      days < (1/24)      ? 'in <1h' :
+                      days < 1           ? 'in ' + Math.round(days * 24) + 'h' :
+                      _daysInt === 1     ? 'TOMORROW' :
+                      _daysInt <= 7      ? 'in ' + _daysInt + ' days' :
+                                          'in ' + _daysInt + ' days';
       var icTag = icHit ? ' [IC confirmed]' : '';
 
       _pushSignal({
