@@ -4966,12 +4966,17 @@
 
       <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
         <button class="ee-cfg-save"  onclick="EE.updateConfig()">&#9654; SAVE PARAMETERS</button>
-        <button class="ee-cfg-ghost" onclick="EE.resetBalance()">Reset Balance</button>
+        <button class="ee-cfg-ghost" onclick="EE.softReset()" title="Close all open trades at market price — history and balance preserved" style="margin-right:4px">Soft Reset</button>
+        <button class="ee-cfg-ghost" onclick="EE.accountReset()">Account Reset</button>
         <button class="ee-cfg-ghost" onclick="EE.clearHistory()">Clear History</button>
         <button class="ee-cfg-ghost" style="color:#00c8a0;border-color:rgba(0,200,160,0.4)" onclick="EE.analyticsReset()">&#9654; New Session</button>
         <button class="ee-cfg-ghost" style="color:#ff4444;border-color:rgba(255,68,68,0.4)" onclick="EE.fullReset()">&#9888; Full Reset</button>
         <button class="ee-cfg-ghost" onclick="EE.exportJSON()">&#8595; JSON</button>
         <button class="ee-cfg-ghost" onclick="EE.exportCSV()">&#8595; CSV</button>
+      </div>
+      <div style="margin-top:6px;font-size:11px;opacity:0.7">
+        Backups: <span id="eeBackupCount">—</span> saved &nbsp;
+        <button onclick="var b=EE.listBackups();console.table(b);alert(b.length+' backup(s). See browser console for details (F12).');" style="font-size:10px">View in Console</button>
       </div>
 
       <!-- Backend URL — set this to your deployed Render/Railway URL -->
@@ -12857,7 +12862,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=55"></script>
+<script src="executionEngine.js?v=56"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
@@ -12912,5 +12917,14 @@ function _modalKeyHandler(e) {
 <!-- HL-Feed — Hyperliquid real-time price WebSocket (WTI, Brent, Gold, Silver, equities) -->
 <!-- Loaded last so EE.injectPrice() is available when the WS opens 6 s post-load.       -->
 <script src="hl-feed.js?v=2"></script>
+<script>
+  // Update EE backup count display after all scripts have loaded
+  setTimeout(function() {
+    try {
+      var el = document.getElementById('eeBackupCount');
+      if (el && window.EE) el.textContent = EE.listBackups().length;
+    } catch(e) {}
+  }, 1500);
+</script>
 </body>
 </html>

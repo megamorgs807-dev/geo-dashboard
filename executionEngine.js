@@ -22,9 +22,11 @@
   'use strict';
 
   /* ── Storage keys ──────────────────────────────────────────────────────────── */
-  var CFG_KEY     = 'geodash_ee_config_v2';
-  var TRADES_KEY  = 'geodash_ee_trades_v1';
-  var SIGLOG_KEY  = 'geodash_ee_siglog_v1';
+  var CFG_KEY         = 'geodash_ee_config_v2';
+  var TRADES_KEY      = 'geodash_ee_trades_v1';
+  var SIGLOG_KEY      = 'geodash_ee_siglog_v1';
+  var PNL_HISTORY_KEY = 'geodash_pnl_history_v1';
+  var STATE_VERSION   = '2.0';
 
   /* ── SQLite API ─────────────────────────────────────────────────────────────
      Primary persistence: GeoIntel backend on port 8765.
@@ -254,6 +256,7 @@
   var _livePrice   = {};   // trade_id → most-recently fetched market price
   var _lastSignals = [];   // most recent IC signal batch — used by the re-scan loop
   var _signalLog   = [];   // full history of every IC signal seen (capped at 200)
+  var _pnlHistory  = [];   // { ts, balance, event, pnl_usd } balance timeline (capped at 500)
   var _pendingOpen = {};   // asset → true while a fetchPrice is in-flight (prevents duplicate opens)
   var _initialised = false; // reentrancy guard — prevents duplicate intervals if init() called twice
   var _showAllClosed        = false; // UI toggle: show all closed trades vs capped at 25
@@ -385,6 +388,10 @@
     try {
       var raw = localStorage.getItem(CFG_KEY);
       _cfg = raw ? Object.assign({}, DEFAULTS, JSON.parse(raw)) : Object.assign({}, DEFAULTS);
+      if (_cfg._state_version !== STATE_VERSION) {
+        console.info('[EE] State version migrating from', _cfg._state_version || 'none', '→', STATE_VERSION);
+      }
+      _cfg._state_version = STATE_VERSION;
     } catch (e) { _cfg = Object.assign({}, DEFAULTS); }
   }
 
@@ -410,7 +417,13 @@
           }
         }
       }
-      _trades = raw ? JSON.parse(raw) : [];
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) throw new Error('trades not array');
+        _trades = parsed;
+      } else {
+        _trades = [];
+      }
     } catch (e) { _trades = []; }
   }
 
@@ -447,6 +460,54 @@
 
   function saveSigLog() {
     try { localStorage.setItem(SIGLOG_KEY, JSON.stringify(_signalLog)); } catch (e) {}
+  }
+
+  /* ── P&L History (localStorage) ─────────────────────────────────────────── */
+
+  function loadPnlHistory() {
+    try {
+      var raw = localStorage.getItem(PNL_HISTORY_KEY);
+      _pnlHistory = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(_pnlHistory)) _pnlHistory = [];
+    } catch (e) { _pnlHistory = []; }
+  }
+
+  function savePnlHistory() {
+    try { localStorage.setItem(PNL_HISTORY_KEY, JSON.stringify(_pnlHistory)); } catch (e) {}
+  }
+
+  function _recordPnlSnapshot(event, pnl_usd) {
+    _pnlHistory.push({
+      ts:      Date.now(),
+      balance: _cfg.virtual_balance,
+      event:   event || 'unknown',
+      pnl_usd: pnl_usd || 0
+    });
+    if (_pnlHistory.length > 500) _pnlHistory = _pnlHistory.slice(-500);
+    savePnlHistory();
+  }
+
+  /* ── Backup — snapshot state before destructive operations ──────────────── */
+
+  function _createBackup() {
+    try {
+      var ts  = Date.now();
+      var bak = {
+        version:    STATE_VERSION,
+        created:    new Date().toISOString(),
+        cfg:        JSON.stringify(_cfg),
+        trades:     JSON.stringify(_trades),
+        sigLog:     JSON.stringify(_signalLog.slice(0, 50)),
+        pnlHistory: JSON.stringify(_pnlHistory)
+      };
+      localStorage.setItem('geodash_backup_' + ts, JSON.stringify(bak));
+      // Keep only the 3 most recent backups to stay within quota
+      var bkeys = Object.keys(localStorage)
+        .filter(function (k) { return k.indexOf('geodash_backup_') === 0; })
+        .sort();
+      while (bkeys.length > 3) { try { localStorage.removeItem(bkeys.shift()); } catch(e) {} }
+      return ts;
+    } catch (e) { return null; }
   }
 
   /* ── API helpers (async, fire-and-forget) ────────────────────────────────── */
@@ -1289,6 +1350,7 @@
     // Update virtual balance (pnl_usd is net of close commission; open commission already deducted at open)
     _cfg.virtual_balance += trade.pnl_usd;
     saveCfg();
+    _recordPnlSnapshot('close:' + reason, trade.pnl_usd);
 
     // Sync outcome back to Hit Rate Tracker
     if (window.HRS && typeof HRS.signals !== 'undefined') {
@@ -3191,18 +3253,45 @@
       return (price && isFinite(price)) ? price : null;
     },
 
-    /* ── Reset virtual balance to $10,000 ── */
-    resetBalance: function () {
-      if (!confirm('Reset virtual balance to $1,000? This will not affect trade history.')) return;
+    /* ── Soft reset — close all open trades at market, keep everything else ── */
+    softReset: function () {
+      var open = openTrades();
+      if (!open.length) { alert('No open trades to close.'); return; }
+      if (!confirm('Close all ' + open.length + ' open trade(s) at current market price?\n\nBalance, history and learning data are preserved.')) return;
+      var n = open.length;
+      open.forEach(function (t) {
+        var token = _normaliseToken(t.asset);
+        var price = _priceCache[token] || _livePrice[t.trade_id] || t.entry_price;
+        closeTrade(t.trade_id, price, 'MANUAL');
+      });
+      log('CONFIG', 'Soft reset: ' + n + ' open trade(s) closed at market', 'amber');
+      renderUI();
+    },
+
+    /* ── Account reset — reset balance + P&L timeline, keep trade history ── */
+    accountReset: function () {
+      if (!confirm(
+        'Account Reset:\n\n' +
+        '✓ Reset balance to $' + DEFAULTS.virtual_balance + '\n' +
+        '✓ Clear P&L timeline\n\n' +
+        '✗ Trade history kept\n' +
+        '✗ Learning weights kept\n' +
+        '✗ Settings kept'
+      )) return;
       _cfg.virtual_balance = DEFAULTS.virtual_balance;
       saveCfg();
-      // Reset session start so stats only count trades from this point forward
+      _pnlHistory = [];
+      savePnlHistory();
       _sessionStart = new Date().toISOString();
       _sessionStartBalance = DEFAULTS.virtual_balance;
       try { localStorage.setItem('geodash_session_start_v1', _sessionStart); } catch(e) {}
-      log('CONFIG', 'Virtual balance reset to $' + DEFAULTS.virtual_balance, 'amber');
+      _recordPnlSnapshot('account-reset', 0);
+      log('CONFIG', 'Account reset: balance restored to $' + DEFAULTS.virtual_balance, 'amber');
       renderUI();
     },
+
+    /* ── Reset virtual balance (alias kept for any existing onclick refs) ── */
+    resetBalance: function () { return this.accountReset(); },
 
     /* ── Clear closed trade history ── */
     clearHistory: function () {
@@ -3216,6 +3305,9 @@
     /* ── Full reset — wipes everything and starts fresh ── */
     fullReset: function () {
       if (!confirm('Full reset: close ALL open trades, clear all history and reset balance to $' + DEFAULTS.virtual_balance + '?\n\nThis cannot be undone.')) return;
+      // 0. Backup current state before wiping (survives the reload)
+      var _bts = _createBackup();
+      if (_bts) console.info('[EE] Full-reset backup saved: geodash_backup_' + _bts);
       // 1. Wipe backend DB first (fire-and-forget with log)
       if (_apiOnline) {
         _apiFetch('/api/trades', { method: 'DELETE' })
@@ -3280,6 +3372,40 @@
         // 4. Reload page — agents reinitialise fresh, scanning resumes immediately
         window.location.reload();
       });
+    },
+
+    /* ── P&L timeline access ── */
+    getPnlHistory: function () { return _pnlHistory.slice(); },
+
+    /* ── Backup management ── */
+    listBackups: function () {
+      try {
+        return Object.keys(localStorage)
+          .filter(function (k) { return k.indexOf('geodash_backup_') === 0; })
+          .map(function (k) {
+            try {
+              var b = JSON.parse(localStorage.getItem(k));
+              return { key: k, created: b.created, version: b.version,
+                       trades: JSON.parse(b.trades || '[]').length };
+            } catch(e) { return { key: k, created: null }; }
+          }).sort(function (a, b) { return b.key > a.key ? -1 : 1; });
+      } catch(e) { return []; }
+    },
+
+    restoreBackup: function (ts) {
+      try {
+        var key = 'geodash_backup_' + ts;
+        var raw = localStorage.getItem(key);
+        if (!raw) { alert('Backup not found: ' + key); return; }
+        var b = JSON.parse(raw);
+        var tradeCount = JSON.parse(b.trades || '[]').length;
+        if (!confirm('Restore backup from ' + b.created + ' (' + tradeCount + ' trades)?\n\nCurrent state will be overwritten. Page will reload.')) return;
+        try { localStorage.setItem(CFG_KEY,          b.cfg);         } catch(e) {}
+        try { localStorage.setItem(TRADES_KEY,        b.trades);     } catch(e) {}
+        try { localStorage.setItem(SIGLOG_KEY,        b.sigLog);     } catch(e) {}
+        try { localStorage.setItem(PNL_HISTORY_KEY,   b.pnlHistory); } catch(e) {}
+        window.location.reload();
+      } catch(e) { alert('Restore failed: ' + (e.message || String(e))); }
     },
 
     /* ── Future broker integration (stubs) ── */
@@ -3466,6 +3592,7 @@
     loadCfg();
     loadTrades();
     loadSigLog();
+    loadPnlHistory();
 
     // Populate backend URL input with saved value (if any)
     try {
@@ -3491,6 +3618,12 @@
       _cfg.enabled = true;
     }
     saveCfg();
+
+    // Autosave safety net — belt-and-suspenders every 7 s
+    setInterval(function () { saveTrades(); saveCfg(); }, 7000);
+
+    // Record starting balance for P&L timeline
+    _recordPnlSnapshot('load', 0);
 
     // First monitor at 9s: HL-Feed connects at 6s + ~1-2s for WS handshake and first
     // allMids message. Waiting until 9s ensures the first stop/TP check has real prices.
