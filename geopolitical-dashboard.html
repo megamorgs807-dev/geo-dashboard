@@ -6380,10 +6380,29 @@
             oninput="document.getElementById('sbMultVal').textContent=parseFloat(this.value).toFixed(1)+'×'; if(window.SB) SB.setMult(this.value)">
           <span id="sbMultVal" style="color:var(--purple);font-weight:bold;min-width:32px">1.0×</span>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button onclick="if(window.SB){ SB.config({api:'http://localhost:8765'}); SB.pollAll(); }"
             style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--purple);color:var(--purple);cursor:pointer;letter-spacing:0.5px">
             ▶ CONNECT :8765</button>
+          <button onclick="(function(){
+            var btn = event.target;
+            btn.textContent = '⟳ RESTARTING…';
+            btn.style.opacity = '0.5';
+            fetch('http://localhost:8765/api/status').then(function(r){ return r.json(); }).then(function(d){
+              btn.textContent = '✓ ONLINE (' + d.events + ' events)';
+              btn.style.borderColor = 'var(--green)'; btn.style.color = 'var(--green)';
+              btn.style.opacity = '1';
+              if(window.SB){ SB.config({api:'http://localhost:8765'}); SB.pollAll(); }
+              setTimeout(function(){ btn.textContent = '⟳ REFRESH BACKEND'; btn.style.borderColor='var(--blue)'; btn.style.color='var(--blue)'; btn.style.opacity='1'; }, 4000);
+            }).catch(function(){
+              btn.textContent = '✗ OFFLINE — run: cd backend &amp;&amp; python3 server.py';
+              btn.style.borderColor = 'var(--red)'; btn.style.color = 'var(--red)';
+              btn.style.opacity = '1';
+              setTimeout(function(){ btn.textContent = '⟳ REFRESH BACKEND'; btn.style.borderColor='var(--blue)'; btn.style.color='var(--blue)'; }, 6000);
+            });
+          })()"
+            style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--blue);color:var(--blue);cursor:pointer;letter-spacing:0.5px">
+            ⟳ REFRESH BACKEND</button>
           <button onclick="if(window.SB) SB.demo();"
             style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--amber);color:var(--amber);cursor:pointer;letter-spacing:0.5px">
             ◉ RUN DEMO</button>

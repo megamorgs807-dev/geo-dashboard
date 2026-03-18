@@ -48,10 +48,12 @@ app.add_middleware(
     allow_origins=[
         'null',                                         # file:// pages (Chrome/Firefox)
         'http://localhost',
-        'http://localhost:3008',                        # geo-dashboard Python HTTP server
+        'http://localhost:3008',                        # Claude preview server
+        'http://localhost:8080',                        # user's main dashboard link
         'http://localhost:8765',
         'http://127.0.0.1',
         'http://127.0.0.1:3008',
+        'http://127.0.0.1:8080',
         'http://127.0.0.1:8765',
         'https://megamorgs807-dev.github.io',          # GitHub Pages live dashboard
     ] + _extra,
