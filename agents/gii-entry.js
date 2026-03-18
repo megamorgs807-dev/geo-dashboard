@@ -69,6 +69,10 @@
   };
   var VOL_STOP_DEFAULT = { stopPct: 3.0, tpRatio: 2.5 };
 
+  /* Max trades that can be opened from a single news event (signal.reason prefix).
+     Prevents one "Iran Escalation" headline from opening 10+ correlated positions. */
+  var MAX_TRADES_PER_EVENT = 3;
+
   /* ── STATE ──────────────────────────────────────────────────────────────── */
   var _queue      = [];   // pending signals awaiting scoring
   var _approved   = [];   // last 50 approved signals (audit log)
@@ -81,10 +85,21 @@
     var now = Date.now();
     (Array.isArray(signals) ? signals : [signals]).forEach(function (s) {
       if (!s || !s.asset || !s.dir) return;
+      var _src = sourceTag || s.source || 'ic';
+      var _isScalperSrc = _src === 'scalper' || _src === 'scalper-session' ||
+                          (s.reason && s.reason.indexOf('SCALPER') === 0);
+      // Reject single-source signals early — don't waste scoring cycles on them
+      if (!_isScalperSrc && s.srcCount !== undefined && s.srcCount < 2) {
+        _stats.rejected++;
+        _rejected.unshift({ asset: s.asset, dir: s.dir,
+          reason: 'srcCount ' + s.srcCount + ' < 2 at queue — dropped before scoring', ts: now });
+        if (_rejected.length > 50) _rejected.pop();
+        return;
+      }
       _stats.submitted++;
       _queue.push({
         sig:       s,
-        source:    sourceTag || s.source || 'ic',
+        source:    _src,
         queuedAt:  now
       });
     });
@@ -427,6 +442,26 @@
         return;
       }
 
+      /* Per-event trade cap: no more than MAX_TRADES_PER_EVENT open trades from the
+         same news event. Uses first 40 chars of sig.reason as the event key.
+         Scalper signals are exempt — they use technical setups, not news events. */
+      if (!isScalper && sig.reason && window.EE && typeof EE.getOpenTrades === 'function') {
+        try {
+          var _eventKey = (sig.reason || '').substring(0, 40).toLowerCase();
+          var _openFromEvent = EE.getOpenTrades().filter(function (t) {
+            return (t.reason || '').substring(0, 40).toLowerCase() === _eventKey;
+          }).length;
+          if (_openFromEvent >= MAX_TRADES_PER_EVENT) {
+            _stats.rejected++;
+            _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+              reason: 'event cap: ' + _openFromEvent + '/' + MAX_TRADES_PER_EVENT +
+                ' trades already open for "' + sig.reason.substring(0, 35) + '"', ts: now });
+            if (_rejected.length > 50) _rejected.pop();
+            return;
+          }
+        } catch (e) {}
+      }
+
       /* Smart region/sector rotation — if cap is full, replace weakest trade when new signal scores higher.
          Always keep the highest-conviction opportunities open rather than blocking good signals. */
       var ENTRY_SECTOR_MAP = {
@@ -449,23 +484,31 @@
             return (t.thesis && t.thesis.confluenceScore) ? t.thesis.confluenceScore : (t.conf || 50) / 15;
           }
 
+          /* Minimum score advantage required to justify rotation.
+             Prevents churning on noise: a new signal must beat the weakest by
+             at least 25% relative margin (e.g. 5.0 vs 4.0 = 25% — rotate;
+             5.0 vs 4.8 = 4% — keep incumbent). */
+          var ROTATION_MIN_DELTA = 0.25;
+
           /* Region rotation */
           var regionTrades = eeOpen.filter(function (t) { return t.region === sig.region; });
           if (eeCfg.max_per_region && regionTrades.length >= eeCfg.max_per_region) {
             var weakestRegion = regionTrades.slice().sort(function (a, b) {
               return _tradeScore(a) - _tradeScore(b);
             })[0];
-            if (weakestRegion && newScore > _tradeScore(weakestRegion)) {
-              /* New signal beats weakest — rotate it out */
+            var weakestRegionScore = weakestRegion ? _tradeScore(weakestRegion) : 0;
+            /* Require new signal to beat weakest by at least 25% relative delta */
+            if (weakestRegion && newScore > weakestRegionScore * (1 + ROTATION_MIN_DELTA)) {
+              /* New signal beats weakest by meaningful margin — rotate it out */
               try { EE.forceCloseTrade(weakestRegion.trade_id,
-                'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + _tradeScore(weakestRegion).toFixed(2) + ')'); } catch (e) {}
+                'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + weakestRegionScore.toFixed(2) + ')'); } catch (e) {}
               _stats.rotated++;
             } else {
-              /* All existing trades score higher — keep them */
+              /* Score difference not significant enough — keep incumbents */
               _stats.rejected++;
               _rejected.unshift({ asset: sig.asset, dir: sig.dir,
-                reason: 'region cap: ' + sig.region + ' trades score higher (' +
-                  (weakestRegion ? _tradeScore(weakestRegion).toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ')', ts: now });
+                reason: 'region cap: ' + sig.region + ' score delta insufficient (' +
+                  (weakestRegion ? weakestRegionScore.toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ', need +25%)', ts: now });
               if (_rejected.length > 50) _rejected.pop();
               return;
             }
@@ -481,15 +524,17 @@
               var weakestSector = sectorTrades.slice().sort(function (a, b) {
                 return _tradeScore(a) - _tradeScore(b);
               })[0];
-              if (weakestSector && newScore > _tradeScore(weakestSector)) {
+              var weakestSectorScore = weakestSector ? _tradeScore(weakestSector) : 0;
+              /* Require 25% relative delta before rotating sector position */
+              if (weakestSector && newScore > weakestSectorScore * (1 + ROTATION_MIN_DELTA)) {
                 try { EE.forceCloseTrade(weakestSector.trade_id,
-                  'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + _tradeScore(weakestSector).toFixed(2) + ')'); } catch (e) {}
+                  'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + weakestSectorScore.toFixed(2) + ')'); } catch (e) {}
                 _stats.rotated++;
               } else {
                 _stats.rejected++;
                 _rejected.unshift({ asset: sig.asset, dir: sig.dir,
-                  reason: 'sector cap: ' + assetSector + ' trades score higher (' +
-                    (weakestSector ? _tradeScore(weakestSector).toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ')', ts: now });
+                  reason: 'sector cap: ' + assetSector + ' score delta insufficient (' +
+                    (weakestSector ? weakestSectorScore.toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ', need +25%)', ts: now });
                 if (_rejected.length > 50) _rejected.pop();
                 return;
               }
@@ -508,9 +553,12 @@
         tpRatio:         sig.tpRatio  || volStop.tpRatio    /* per-asset R:R  — EE overrides flat 2.0 */
       });
 
-      /* Boost confidence by confluence (up to +8 points) */
-      var confBoost = Math.min(8, Math.floor(result.score * 0.8));
-      enriched.conf = Math.min(95, (sig.conf || 50) + confBoost);
+      /* Boost confidence by confluence (up to +5 points), capped at 88.
+         Audit finding: with +8 boost and 95 cap, nearly all approved trades hit 95%
+         making confidence indistinguishable between winners and losers.
+         Smaller boost + lower cap preserves meaningful differentiation. */
+      var confBoost = Math.min(5, Math.floor(result.score * 0.6));
+      enriched.conf = Math.min(88, (sig.conf || 50) + confBoost);
 
       toEmit.push(enriched);
       _stats.approved++;

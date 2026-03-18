@@ -24,6 +24,13 @@ from event_store import get_store
 from uw_store import get_uw_store
 import trades_store
 
+# ── UW runtime key (set via POST /api/uw/key, persisted to uw_config.json) ───
+_UW_CONFIG_FILE  = os.path.join(os.path.dirname(__file__), 'uw_config.json')
+_uw_key_runtime: str = ''  # overrides UW_API_KEY if set
+
+def _active_uw_key() -> str:
+    return _uw_key_runtime or UW_API_KEY
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -426,18 +433,48 @@ async def api_regime():
 
 @app.get('/api/uw/status')
 async def uw_status():
-    """UW integration status — key configured, data counts, latest tide."""
+    """UW integration status — key configured, data counts, latest tide, per-feed status."""
+    from pipeline import get_uw_feed_status
     uw = get_uw_store()
-    stats    = await asyncio.get_event_loop().run_in_executor(None, uw.stats)
-    tide     = await asyncio.get_event_loop().run_in_executor(None, uw.get_latest_tide)
-    iv_ranks = await asyncio.get_event_loop().run_in_executor(None, uw.get_iv_ranks)
+    stats       = await asyncio.get_event_loop().run_in_executor(None, uw.stats)
+    tide        = await asyncio.get_event_loop().run_in_executor(None, uw.get_latest_tide)
+    iv_ranks    = await asyncio.get_event_loop().run_in_executor(None, uw.get_iv_ranks)
+    feed_status = get_uw_feed_status()
     return JSONResponse(content={
-        'key_configured': bool(UW_API_KEY),
-        'stats':    stats,
-        'tide':     tide,
-        'iv_ranks': iv_ranks,
-        'ts':       int(time.time() * 1000),
+        'key_configured': bool(_active_uw_key()),
+        'stats':       stats,
+        'tide':        tide,
+        'iv_ranks':    iv_ranks,
+        'feed_status': feed_status,
+        'ts':          int(time.time() * 1000),
     })
+
+
+@app.post('/api/uw/key')
+async def uw_set_key(request: Request):
+    """Accept UW API key entered via the dashboard — no backend restart needed."""
+    global _uw_key_runtime
+    body = await request.json()
+    key  = (body.get('key') or '').strip()
+    _uw_key_runtime = key
+    # Tell the pipeline immediately
+    from pipeline import set_uw_key
+    set_uw_key(key)
+    # Persist so it survives restarts
+    try:
+        with open(_UW_CONFIG_FILE, 'w') as f:
+            json.dump({'uw_api_key': key}, f)
+    except Exception as e:
+        print(f'[UW] Could not persist key: {e}')
+    return JSONResponse(content={'ok': True, 'configured': bool(key)})
+
+
+@app.post('/api/uw/poll')
+async def uw_poll_now():
+    """Trigger an immediate full UW data fetch (forces all feeds regardless of schedule)."""
+    from pipeline import run_uw_poll
+    asyncio.create_task(run_uw_poll())
+    return JSONResponse(content={'ok': True, 'ts': int(time.time() * 1000)})
 
 
 @app.get('/api/uw/flow-alerts')

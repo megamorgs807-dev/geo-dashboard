@@ -23,6 +23,28 @@ from ingest.unusual_whales import (
     fetch_flow_alerts, fetch_darkpool, fetch_congress_trades,
     fetch_market_tide, fetch_iv_ranks,
 )
+# ── Runtime key overrides (set via dashboard without restart) ─────────────────
+_uw_key_override:  str = ''
+
+def set_uw_key(key: str) -> None:
+    global _uw_key_override
+    _uw_key_override = key.strip()
+    print(f'[UW] API key {"set" if _uw_key_override else "cleared"} at runtime')
+
+def _get_uw_key() -> str:
+    return _uw_key_override or UW_API_KEY
+
+# ── Per-feed status (updated on each successful / failed poll) ────────────────
+_uw_feed_status: dict = {
+    'flow':     {'last_ok': 0, 'count': 0, 'error': None},
+    'darkpool': {'last_ok': 0, 'count': 0, 'error': None},
+    'congress': {'last_ok': 0, 'count': 0, 'error': None},
+    'tide':     {'last_ok': 0, 'count': 0, 'error': None},
+    'iv':       {'last_ok': 0, 'count': 0, 'error': None},
+}
+
+def get_uw_feed_status() -> dict:
+    return {k: dict(v) for k, v in _uw_feed_status.items()}
 
 # Shared thread pool for synchronous network calls
 _executor = ThreadPoolExecutor(max_workers=8)
@@ -147,70 +169,100 @@ async def _ingest_uw() -> List[Dict]:
     """
     global _uw_last_flow_ts, _uw_last_dp_cycle, _uw_last_cong_cycle, _uw_last_iv_cycle, _uw_tide
 
-    if not UW_API_KEY:
+    _key = _get_uw_key()
+    if not _key:
         return []
 
     uw_store = get_uw_store()
     events   = []
+    _now_ms  = int(time.time() * 1000)
 
     # ── Flow alerts — every cycle ──────────────────────────────────────────
     try:
-        alerts = await _run_sync(fetch_flow_alerts, UW_API_KEY, _uw_last_flow_ts or None)
+        alerts = await _run_sync(fetch_flow_alerts, _key, _uw_last_flow_ts or None)
         for evt in alerts:
             is_new = await _run_sync(uw_store.upsert_flow_alert, evt)
             if is_new:
                 events.append(evt)
                 _uw_last_flow_ts = max(_uw_last_flow_ts, evt.get('ts', 0))
+        _uw_feed_status['flow']['last_ok'] = _now_ms
+        _uw_feed_status['flow']['count']   = _uw_feed_status['flow']['count'] + len(alerts)
+        _uw_feed_status['flow']['error']   = None
     except Exception as e:
         print(f'[UW] flow_alerts error: {e}')
+        _uw_feed_status['flow']['error'] = str(e)
 
     # ── Dark pool + market tide — every 5 cycles ───────────────────────────
     if _cycle_n - _uw_last_dp_cycle >= 5 or _uw_last_dp_cycle == 0:
         _uw_last_dp_cycle = _cycle_n
         try:
-            dp_evts = await _run_sync(fetch_darkpool, UW_API_KEY)
+            dp_evts = await _run_sync(fetch_darkpool, _key)
             for evt in dp_evts:
                 is_new = await _run_sync(uw_store.upsert_darkpool, evt)
                 if is_new:
                     events.append(evt)
+            _uw_feed_status['darkpool']['last_ok'] = _now_ms
+            _uw_feed_status['darkpool']['count']   = len(dp_evts)
+            _uw_feed_status['darkpool']['error']   = None
         except Exception as e:
             print(f'[UW] darkpool error: {e}')
+            _uw_feed_status['darkpool']['error'] = str(e)
 
         try:
-            tide = await _run_sync(fetch_market_tide, UW_API_KEY)
+            tide = await _run_sync(fetch_market_tide, _key)
             if tide:
                 _uw_tide = tide
                 await _run_sync(uw_store.upsert_tide, tide)
+                _uw_feed_status['tide']['last_ok'] = _now_ms
+                _uw_feed_status['tide']['error']   = None
         except Exception as e:
             print(f'[UW] market_tide error: {e}')
+            _uw_feed_status['tide']['error'] = str(e)
 
     # ── IV ranks — every 15 cycles ─────────────────────────────────────────
     if _cycle_n - _uw_last_iv_cycle >= 15 or _uw_last_iv_cycle == 0:
         _uw_last_iv_cycle = _cycle_n
         try:
-            iv_map = await _run_sync(fetch_iv_ranks, UW_API_KEY)
+            iv_map = await _run_sync(fetch_iv_ranks, _key)
             if iv_map:
                 await _run_sync(uw_store.upsert_iv_ranks, iv_map)
+                _uw_feed_status['iv']['last_ok'] = _now_ms
+                _uw_feed_status['iv']['count']   = len(iv_map)
+                _uw_feed_status['iv']['error']   = None
         except Exception as e:
             print(f'[UW] iv_ranks error: {e}')
+            _uw_feed_status['iv']['error'] = str(e)
 
     # ── Congress trades — every 30 cycles ──────────────────────────────────
     if _cycle_n - _uw_last_cong_cycle >= 30 or _uw_last_cong_cycle == 0:
         _uw_last_cong_cycle = _cycle_n
         try:
-            cong_evts = await _run_sync(fetch_congress_trades, UW_API_KEY)
+            cong_evts = await _run_sync(fetch_congress_trades, _key)
             for evt in cong_evts:
                 is_new = await _run_sync(uw_store.upsert_congress, evt)
                 if is_new:
                     events.append(evt)
+            _uw_feed_status['congress']['last_ok'] = _now_ms
+            _uw_feed_status['congress']['count']   = len(cong_evts)
+            _uw_feed_status['congress']['error']   = None
         except Exception as e:
             print(f'[UW] congress error: {e}')
+            _uw_feed_status['congress']['error'] = str(e)
 
     # Prune old data every 10 cycles
     if _cycle_n % 10 == 0:
         await _run_sync(uw_store.prune)
 
     return events
+
+
+async def run_uw_poll() -> None:
+    """Force an immediate full UW poll of all feeds."""
+    global _uw_last_dp_cycle, _uw_last_cong_cycle, _uw_last_iv_cycle
+    _uw_last_dp_cycle   = 0
+    _uw_last_cong_cycle = 0
+    _uw_last_iv_cycle   = 0
+    await _ingest_uw()
 
 
 async def _pipeline_cycle():
@@ -226,15 +278,15 @@ async def _pipeline_cycle():
     print(f'[PIPELINE] cycle {_cycle_n} starting… (GDELT: {"yes" if run_gdelt else "skip"})')
 
     # Run news ingestion, market data, and UW concurrently
-    events_task = asyncio.create_task(_ingest_events(run_gdelt=run_gdelt))
-    market_task = asyncio.create_task(_ingest_market())
-    uw_task     = asyncio.create_task(_ingest_uw())
+    events_task  = asyncio.create_task(_ingest_events(run_gdelt=run_gdelt))
+    market_task  = asyncio.create_task(_ingest_market())
+    uw_task      = asyncio.create_task(_ingest_uw())
 
-    events    = await events_task
-    market    = await market_task
-    uw_events = await uw_task
+    events     = await events_task
+    market     = await market_task
+    uw_events  = await uw_task
 
-    # Merge UW events into the main event stream
+    # Merge all smart-money events into the main event stream
     events.extend(uw_events)
 
     # Compute regime multiplier from live VIX

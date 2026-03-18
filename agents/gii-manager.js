@@ -280,6 +280,92 @@
     } catch (e) {}
   }
 
+  /* ── CHECK: portfolio quality — are the open slots filled with the BEST trades? ──
+     Runs every poll cycle. Scores each open trade by current conviction and:
+       1. Flags trades that have fallen below minimum quality
+       2. Detects region/event over-concentration (>2 trades from same source)
+       3. Closes the weakest trade if slots are full AND it's significantly below threshold
+     This ensures the 8 open slots are always occupied by the strongest opportunities. */
+  function _checkPortfolioQuality() {
+    if (!window.EE || typeof EE.getOpenTrades !== 'function') return;
+    try {
+      var open = EE.getOpenTrades();
+      if (!open.length) return;
+
+      var cfg = EE.getConfig ? EE.getConfig() : {};
+      var maxSlots = cfg.max_open_trades || 8;
+      var slotsFull = open.length >= maxSlots;
+
+      /* Score proxy: same logic as gii-entry rotation */
+      function _tradeScore(t) {
+        return (t.thesis && t.thesis.confluenceScore) ? t.thesis.confluenceScore : (t.confidence || 50) / 15;
+      }
+
+      /* Minimum quality score to hold a slot — below this, trade is a candidate for closure */
+      var MIN_HOLD_SCORE = 3.5;
+
+      /* 1. Find weak trades (below threshold) */
+      var weakTrades = open.filter(function(t) {
+        var ageMs = _ts() - new Date(t.timestamp_open || 0).getTime();
+        return ageMs > 30 * 60 * 1000 && _tradeScore(t) < MIN_HOLD_SCORE;
+      });
+
+      if (weakTrades.length) {
+        _addAlert('portfolio_weak', 'warn', 'PORTFOLIO',
+          weakTrades.length + ' open trade(s) below quality threshold: ' +
+          weakTrades.map(function(t) {
+            return t.asset + '(score ' + _tradeScore(t).toFixed(1) + ')';
+          }).join(', '));
+        /* If slots are full, auto-close the weakest to free room for better signals */
+        if (slotsFull) {
+          var weakest = weakTrades.slice().sort(function(a, b) { return _tradeScore(a) - _tradeScore(b); })[0];
+          if (weakest && _tradeScore(weakest) < MIN_HOLD_SCORE * 0.7) {
+            try {
+              EE.forceCloseTrade(weakest.trade_id, 'MANAGER:quality-below-threshold(score ' + _tradeScore(weakest).toFixed(1) + ')');
+              _addAlert('portfolio_purge', 'warn', 'PORTFOLIO',
+                'Auto-closed ' + weakest.asset + ' (score=' + _tradeScore(weakest).toFixed(1) + ') — slots full, freeing room for stronger signal');
+            } catch (e) {}
+          }
+        }
+      } else {
+        _resolve('portfolio_weak');
+        _resolve('portfolio_purge');
+      }
+
+      /* 2. Event/region concentration — flag if >2 slots from same event keyword */
+      var eventCounts = {};
+      open.forEach(function(t) {
+        var key = (t.reason || '').substring(0, 40).toLowerCase();
+        if (key) eventCounts[key] = (eventCounts[key] || 0) + 1;
+      });
+      var concentrated = Object.keys(eventCounts).filter(function(k) { return eventCounts[k] > 2; });
+      if (concentrated.length) {
+        _addAlert('portfolio_concentration', 'warn', 'PORTFOLIO',
+          'Event concentration: ' + concentrated.map(function(k) {
+            return '"' + k.substring(0, 30) + '" ×' + eventCounts[k];
+          }).join(', ') + ' — single event dominating portfolio');
+      } else {
+        _resolve('portfolio_concentration');
+      }
+
+      /* 3. Zombie positions — $0 size open for >10 min (belt-and-suspenders over EE cleanup) */
+      var zombies = open.filter(function(t) {
+        var ageMs = _ts() - new Date(t.timestamp_open || 0).getTime();
+        return (!t.size_usd || t.size_usd === 0) && ageMs > 10 * 60 * 1000;
+      });
+      if (zombies.length) {
+        _addAlert('portfolio_zombie', 'error', 'PORTFOLIO',
+          zombies.length + ' zombie position(s) with $0 size: ' + zombies.map(function(t) { return t.asset; }).join(', '));
+        zombies.forEach(function(t) {
+          try { EE.forceCloseTrade(t.trade_id, 'MANAGER:zombie-$0-size'); } catch(e) {}
+        });
+      } else {
+        _resolve('portfolio_zombie');
+      }
+
+    } catch (e) {}
+  }
+
   /* ── MAIN POLL ──────────────────────────────────────────────────────────── */
   function _poll() {
     _lastCheck = _ts();
@@ -289,6 +375,7 @@
     _checkEE();
     _checkGIICore();
     _checkScalper();
+    _checkPortfolioQuality();
   }
 
   /* ── PUBLIC API ─────────────────────────────────────────────────────────── */

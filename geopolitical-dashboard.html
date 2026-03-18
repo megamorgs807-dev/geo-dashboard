@@ -6419,19 +6419,50 @@
     <div class="section-header">
       <span class="section-num" style="background:#7b2fff">UW</span>
       <span class="section-title" style="color:#a78bfa">Unusual Whales Intelligence</span>
-      <span class="section-ts">Options Flow · Dark Pool · Congress · IV Rank</span>
+      <span class="section-ts">Flow · Dark Pool · Congress · Tide · IV Rank</span>
     </div>
-    <div style="padding:0 2px">
+
+    <div class="grid-2" style="margin-bottom:12px">
+      <!-- Left: connection status / key entry -->
       <div class="card" style="border-top:2px solid #7b2fff">
-        <div class="card-title" style="display:flex;align-items:center;gap:8px">
-          <span class="signal-tag shadowbroker" style="background:#7b2fff">LIVE</span>
-          Smart Money Signals
-          <button onclick="if(window.UWIntel) UWIntel.refresh();"
-            style="margin-left:auto;font-size:9px;padding:2px 8px;background:var(--bg3);border:1px solid #7b2fff;color:#a78bfa;cursor:pointer;border-radius:2px;letter-spacing:0.5px">
-            ⟳ REFRESH</button>
+        <div class="card-title">
+          <span class="signal-tag shadowbroker" style="background:#7b2fff">UW</span>
+          Feed Status &amp; Controls
         </div>
-        <div id="uwIntelPanel" style="font-size:11px;color:var(--dim);padding:4px 0">
-          Loading UW data…
+        <div id="uwFeedStatusPanel" style="font-size:11px;color:var(--dim)">
+          Connecting to backend&hellip;
+        </div>
+      </div>
+
+      <!-- Right: smart money data -->
+      <div class="card" style="border-top:2px solid #7b2fff">
+        <div class="card-title">Smart Money Signals</div>
+        <div id="uwDataPanel" style="font-size:11px;color:var(--dim);padding:4px 0">
+          Loading UW data&hellip;
+        </div>
+      </div>
+    </div>
+
+    <!-- Signal threshold + controls bar -->
+    <div class="card" style="border-left:3px solid #7b2fff;margin-bottom:0">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px">
+        <div>
+          <span style="color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1px">Signal Threshold</span><br>
+          <span style="color:var(--text);font-size:10px">Min signal strength (0–100) to inject UW alerts into EE. Lower = more signals, more noise.</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="uwThreshSlider" min="20" max="90" step="5" value="60"
+            style="width:100px;accent-color:#7b2fff"
+            oninput="document.getElementById('uwThreshVal').textContent=this.value; if(window.UWIntel) UWIntel.setThresh(this.value)">
+          <span id="uwThreshVal" style="color:#a78bfa;font-weight:bold;min-width:24px">60</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button id="uwPollBtn" onclick="window._uwPollNow()"
+            style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid #7b2fff;color:#a78bfa;cursor:pointer;letter-spacing:0.5px">
+            ▶ POLL NOW</button>
+          <button onclick="if(window.UWIntel) UWIntel.refresh();"
+            style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--blue);color:var(--blue);cursor:pointer;letter-spacing:0.5px">
+            ⟳ REFRESH</button>
         </div>
       </div>
     </div>
@@ -12950,7 +12981,7 @@ function _modalKeyHandler(e) {
 <!-- ShadowBroker Integration — injects OSINT feeds into the AI pipeline -->
 <script src="shadowbroker.js?v=23"></script>
 <!-- Unusual Whales Intelligence — options flow, dark pool, congress, IV rank, tide -->
-<script src="agents/uw-intelligence.js?v=1"></script>
+<script src="agents/uw-intelligence.js?v=3"></script>
 <!-- Polymarket Integration — prediction market consensus → IC pipeline (paper trading only) -->
 <script src="polymarket.js?v=15"></script>
 

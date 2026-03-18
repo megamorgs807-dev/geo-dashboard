@@ -48,7 +48,7 @@
   var DEFAULTS = {
     mode:                  'SIMULATION', // 'SIMULATION' | 'LIVE'
     enabled:               true,         // auto-execution always on by default
-    min_confidence:        65,           // minimum IC confidence % to auto-execute
+    min_confidence:        70,           // minimum IC confidence % to auto-execute — raised from 65 (audit: low-conf trades not profitable)
     virtual_balance:       1000,         // starting virtual balance (USD)
     risk_per_trade_pct:    2,            // % of balance risked per trade — v61: reduced from 3% to limit concurrent exposure
     stop_loss_pct:         1.5,          // % distance from entry — tighter than original 3%, better capital preservation
@@ -502,6 +502,10 @@
       // v72+ migration: raise legacy 5% daily loss limit to new default of 50%
       if (_cfg.daily_loss_limit_pct < 10) {
         _cfg.daily_loss_limit_pct = DEFAULTS.daily_loss_limit_pct;
+      }
+      // audit migration: raise min_confidence from legacy 65 to 70
+      if (_cfg.min_confidence < 70) {
+        _cfg.min_confidence = DEFAULTS.min_confidence;
       }
     } catch (e) { _cfg = Object.assign({}, DEFAULTS); }
   }
@@ -1025,6 +1029,12 @@
     if (sig.conf < _cfg.min_confidence)
       return { ok: false, reason: 'Conf ' + sig.conf + '% < threshold ' + _cfg.min_confidence + '%' };
 
+    // Source corroboration: require at least 2 independent data sources for non-scalper signals.
+    // Single-source signals (srcCount=1) have high false-positive rate — audit found no win-rate benefit.
+    var _isSrcScalper = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
+    if (!_isSrcScalper && sig.srcCount !== undefined && sig.srcCount < 2)
+      return { ok: false, reason: 'srcCount ' + sig.srcCount + ' < 2 — single-source signal not confirmed' };
+
     var open = openTrades();
 
     if (open.length >= _cfg.max_open_trades)
@@ -1226,6 +1236,15 @@
     if (_isScalperSig && riskAmt > SCALPER_RISK_CAP) {
       log('SCALPER', sig.asset + ' scalper risk capped $' + riskAmt.toFixed(2) + ' → $' + SCALPER_RISK_CAP, 'dim');
       riskAmt = SCALPER_RISK_CAP;
+    }
+
+    // Crypto volatility discount: BTC/ETH/SOL are 3-5× more volatile than equities/energy.
+    // Wide stops (6-7%) mean larger notional positions — cap by halving the risk budget.
+    var _cryptoAssets = { 'BTC': true, 'ETH': true, 'SOL': true, 'BNB': true, 'ADA': true };
+    if (_cryptoAssets[normaliseAsset(sig.asset)]) {
+      var _beforeCrypto = riskAmt;
+      riskAmt = riskAmt * 0.50;
+      log('RISK', sig.asset + ' crypto size discount: $' + _beforeCrypto.toFixed(2) + ' → $' + riskAmt.toFixed(2) + ' (50% vol cap)', 'dim');
     }
     var slDist   = Math.abs(entryPrice - stopLoss);
 
@@ -1752,6 +1771,21 @@
         renderUI();
       }
     }
+
+    // Zombie position cleanup: cancel any open trade with $0 size that has been
+    // sitting for >5 minutes. These are phantom positions (price feed failed at open)
+    // that occupy slots and block real signals but contribute nothing.
+    var _zombieMs = 5 * 60 * 1000;
+    openTrades().forEach(function (zt) {
+      if ((zt.size_usd === 0 || !zt.size_usd) && zt.units === 0) {
+        var ageMs = Date.now() - new Date(zt.timestamp_open || 0).getTime();
+        if (ageMs > _zombieMs) {
+          log('TRADE', 'Zombie position cancelled: ' + zt.asset + ' (size=$0, age=' +
+            Math.round(ageMs / 60000) + 'min)', 'amber');
+          closeTrade(zt.trade_id, zt.entry_price || 0, 'ZOMBIE-CANCEL');
+        }
+      }
+    });
 
     openTrades().forEach(function (trade) {
       fetchPrice(trade.asset, function (price) {
@@ -3464,7 +3498,7 @@
     /* ── gii-exit: get last known price for an asset from the price cache ── */
     getLastPrice: function (asset) {
       if (!asset) return null;
-      var token = _normaliseToken(asset);
+      var token = normaliseAsset(asset);
       var price = _priceCache[token];
       return (price && isFinite(price)) ? price : null;
     },
@@ -3476,7 +3510,7 @@
       if (!confirm('Close all ' + open.length + ' open trade(s) at current market price?\n\nBalance, history and learning data are preserved.')) return;
       var n = open.length;
       open.forEach(function (t) {
-        var token = _normaliseToken(t.asset);
+        var token = normaliseAsset(t.asset);
         var price = _priceCache[token] || _livePrice[t.trade_id] || t.entry_price;
         closeTrade(t.trade_id, price, 'MANUAL');
       });

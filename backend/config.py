@@ -17,7 +17,17 @@ DB_PATH         = os.path.join(os.path.dirname(__file__), 'events.db')
 # ── Optional API keys (set via environment variables) ───────────────────────
 ALPHA_VANTAGE_KEY = os.getenv('AV_KEY', '')          # free key from alphavantage.co
 NEWS_API_KEY      = os.getenv('NEWS_API_KEY', '')    # newsapi.org (optional)
-UW_API_KEY        = os.getenv('UW_API_KEY', '')      # unusualwhales.com API key
+
+# UW key: loaded from uw_config.json (browser-entered) first, then env var.
+# This lets the key be set via the dashboard without a backend restart.
+_uw_config_file = os.path.join(os.path.dirname(__file__), 'uw_config.json')
+try:
+    import json as _json
+    with open(_uw_config_file) as _f:
+        _uw_saved = _json.load(_f)
+    UW_API_KEY = _uw_saved.get('uw_api_key') or os.getenv('UW_API_KEY', '')
+except Exception:
+    UW_API_KEY = os.getenv('UW_API_KEY', '')
 
 # ── GDELT ───────────────────────────────────────────────────────────────────
 GDELT_URL = (

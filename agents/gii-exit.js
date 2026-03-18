@@ -165,20 +165,36 @@
     var region = trade.region || (thesis && thesis.region) || 'GLOBAL';
     var dir    = trade.direction;
 
-    /* Check region probability has not collapsed */
+    /* Check region probability has not collapsed.
+       Strategy: if news quiets down, move stop to break-even rather than force-closing.
+       Markets often continue the trend for hours after news fades — cutting immediately
+       locks in losses at the worst moment. Only force-close if trade is already in a loss. */
     if (window.__IC && __IC.regionStates && __IC.regionStates[region]) {
       var regionProb = __IC.regionStates[region].prob || 0;
       if (regionProb < IC_PROB_DROP_THRESHOLD) {
-        return { action: 'FORCE_CLOSE', reason: 'ic-region-collapsed', detail:
-          'Region ' + region + ' prob=' + regionProb + '% < ' + IC_PROB_DROP_THRESHOLD + '% threshold' };
+        var _livePrice = _getPrice(trade.asset);
+        var _inProfit = _livePrice && (
+          (dir === 'LONG'  && _livePrice > trade.entry_price) ||
+          (dir === 'SHORT' && _livePrice < trade.entry_price)
+        );
+        if (_inProfit) {
+          /* Position is profitable — tighten to break-even and let it run */
+          return { action: 'TIGHTEN_STOP', reason: 'ic-region-collapsed-be', detail:
+            'Region ' + region + ' prob=' + regionProb + '% collapsed — moving to break-even (trade in profit)' };
+        } else {
+          /* Already losing — force-close to limit further damage */
+          return { action: 'FORCE_CLOSE', reason: 'ic-region-collapsed', detail:
+            'Region ' + region + ' prob=' + regionProb + '% < ' + IC_PROB_DROP_THRESHOLD + '% threshold (trade at loss)' };
+        }
       }
       /* If we stored entry prob, check for significant drop */
       if (thesis && thesis.regionProbAtEntry && dir === 'LONG') {
         var probDrop = thesis.regionProbAtEntry - regionProb;
         if (probDrop > 35) {
-          return { action: 'FORCE_CLOSE', reason: 'ic-region-dropped', detail:
+          /* Significant drop — tighten stop rather than panic-close */
+          return { action: 'TIGHTEN_STOP', reason: 'ic-region-dropped', detail:
             'Region prob dropped ' + probDrop.toFixed(0) + 'pts from entry (' +
-            thesis.regionProbAtEntry + '% → ' + regionProb + '%)' };
+            thesis.regionProbAtEntry + '% → ' + regionProb + '%) — trailing stop tightened' };
         }
       }
     }
