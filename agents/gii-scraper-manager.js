@@ -40,16 +40,29 @@
   // All HL-covered assets except BTC (already has dedicated scalpers).
   // spikePct = % price move in 15 min that triggers a spawn.
 
+  // hlTicker = allMids key for price spike detection (named for crypto, @N for spot tokens).
+  // eeAsset  = EE canonical asset name used in signals and HL gate check.
+  // onHL     = true if HL spot token exists (will execute); false = flagged only.
   var WATCHLIST = [
-    { hlTicker: 'GOLD',   eeAsset: 'XAU',    sector: 'precious', spikePct: 0.4 },
-    { hlTicker: 'CL',     eeAsset: 'WTI',    sector: 'energy',   spikePct: 0.5 },
-    { hlTicker: 'SILVER', eeAsset: 'SILVER', sector: 'precious', spikePct: 0.5 },
-    { hlTicker: 'ETH',    eeAsset: 'ETH',    sector: 'crypto',   spikePct: 1.0 },
-    { hlTicker: 'SOL',    eeAsset: 'SOL',    sector: 'crypto',   spikePct: 1.2 },
-    { hlTicker: 'XRP',    eeAsset: 'XRP',    sector: 'crypto',   spikePct: 1.2 },
-    { hlTicker: 'NVDA',   eeAsset: 'NVDA',   sector: 'equity',   spikePct: 0.6 },
-    { hlTicker: 'TSLA',   eeAsset: 'TSLA',   sector: 'equity',   spikePct: 0.8 },
-    { hlTicker: 'SPY',    eeAsset: 'SPY',    sector: 'equity',   spikePct: 0.3 }
+    /* ── Crypto perps (always on HL) ───────────────────────────────── */
+    { hlTicker: 'ETH',    eeAsset: 'ETH',    sector: 'crypto',   spikePct: 1.0, onHL: true  },
+    { hlTicker: 'SOL',    eeAsset: 'SOL',    sector: 'crypto',   spikePct: 1.2, onHL: true  },
+    { hlTicker: 'XRP',    eeAsset: 'XRP',    sector: 'crypto',   spikePct: 1.2, onHL: true  },
+    /* ── HL spot equity/ETF tokens (@N indices, Mar 2026 spotMeta) ── */
+    { hlTicker: '@264',   eeAsset: 'TSLA',   sector: 'equity',   spikePct: 0.8, onHL: true  },
+    { hlTicker: '@268',   eeAsset: 'AAPL',   sector: 'equity',   spikePct: 0.4, onHL: true  },
+    { hlTicker: '@280',   eeAsset: 'AMZN',   sector: 'equity',   spikePct: 0.6, onHL: true  },
+    { hlTicker: '@287',   eeAsset: 'META',   sector: 'equity',   spikePct: 0.6, onHL: true  },
+    { hlTicker: '@288',   eeAsset: 'QQQ',    sector: 'equity',   spikePct: 0.3, onHL: true  },
+    { hlTicker: '@289',   eeAsset: 'MSFT',   sector: 'equity',   spikePct: 0.4, onHL: true  },
+    { hlTicker: '@266',   eeAsset: 'GOOGL',  sector: 'equity',   spikePct: 0.5, onHL: true  },
+    { hlTicker: '@271',   eeAsset: 'HOOD',   sector: 'equity',   spikePct: 1.2, onHL: true  },
+    { hlTicker: '@279',   eeAsset: 'SPY',    sector: 'equity',   spikePct: 0.3, onHL: true  },
+    { hlTicker: '@263',   eeAsset: 'CRCL',   sector: 'equity',   spikePct: 1.5, onHL: true  },
+    { hlTicker: '@265',   eeAsset: 'SLV',    sector: 'precious', spikePct: 0.5, onHL: true  },
+    { hlTicker: '@276',   eeAsset: 'GLD',    sector: 'precious', spikePct: 0.4, onHL: true  },
+    /* ── NOT on HL — monitored for signal generation but will be flagged ── */
+    { hlTicker: 'NVDA',   eeAsset: 'NVDA',   sector: 'equity',   spikePct: 0.6, onHL: false },
   ];
 
   // RSI thresholds per sector (slightly looser than BTC scalper's 35/65)

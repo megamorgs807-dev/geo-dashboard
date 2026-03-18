@@ -41,11 +41,14 @@
 
   /* ── HL ticker/pair-index → EE asset name mapping ──────────────────────────
      Crypto perps use named tickers (e.g. 'BTC') — these match allMids keys.
-     Equity/ETF/commodity spot tokens use @N pair-index format (e.g. '@247')
-     discovered via POST /info {type:'spotMeta'} → universe[N].name.
+     Equity/ETF spot tokens use @N pair-index from:
+       POST /info {type:'spotMeta'} → universe[].index → '@N' key in allMids.
+     Verified Mar 2026: spotMeta max pair index = 300. @263-@289 are the NEW
+     full-USD-price equity tokens (TSLA at ~$246, META at ~$620, MSFT ~$399).
+     Old fractional @247-@272 range (FI, MMOVE, RISK…) removed — wrong prices.
      Array order matters: first name is the "canonical" EE name for display.
-     Assets NOT in HL spotMeta (TLT, TSM, XLE, SMH, SOXX, WTI, BRENT, WHEAT)
-     are omitted — they continue using TD/AV.                                */
+     Not on HL spot (flagged by HL gate): WTI, BRENT, LMT, RTX, NOC, TSM, NVDA,
+     ASML, XLE, SMH, SOXX, TLT, XOM, GDX, CORN, WHEAT, DAL, UAL.            */
   var HL_MAP = {
     /* Crypto perps — named tickers present in allMids */
     'BTC':   ['BTC', 'BITCOIN'],
@@ -55,18 +58,21 @@
     'BNB':   ['BNB'],
     'ADA':   ['ADA'],
 
-    /* Spot equity/ETF tokens — @N pair-index from spotMeta universe */
-    '@247':  ['TSLA'],
-    '@248':  ['SLV', 'SILVER', 'XAG'],
-    '@249':  ['GOOGL'],
-    '@251':  ['AAPL'],
-    '@254':  ['HOOD'],
-    '@259':  ['GLD'],
-    '@262':  ['SPY'],
-    '@263':  ['AMZN'],
-    '@270':  ['META'],
-    '@271':  ['QQQ'],
-    '@272':  ['MSFT']
+    /* Spot equity/ETF tokens — @N pair-index, full USD price (Mar 2026 spotMeta)
+       Prices ~10-20% of real stock price on some tokens due to oracle/synthetic
+       pricing; direction and TA signals remain valid.                        */
+    '@263':  ['CRCL'],                  // Circle (pre-IPO),  ~$126
+    '@264':  ['TSLA'],                  // Tesla,             ~$246
+    '@265':  ['SLV', 'SILVER', 'XAG'], // Silver ETF token,  ~$72
+    '@266':  ['GOOGL'],                 // Alphabet,          ~$310
+    '@268':  ['AAPL'],                  // Apple,             ~$253
+    '@271':  ['HOOD'],                  // Robinhood,         ~$77
+    '@276':  ['GLD'],                   // Gold ETF token,    ~$467
+    '@279':  ['SPY'],                   // S&P 500 ETF token, ~$665
+    '@280':  ['AMZN'],                  // Amazon,            ~$213
+    '@287':  ['META'],                  // Meta,              ~$620
+    '@288':  ['QQQ'],                   // Nasdaq 100 ETF,    ~$600
+    '@289':  ['MSFT']                   // Microsoft,         ~$399
   };
 
   /* ── HL-accurate cost model for paper-trading simulation ───────────────────
@@ -96,13 +102,14 @@
     'SOL':     'crypto',  'XRP':      'crypto',
     'BNB':     'crypto',  'ADA':      'crypto',
     /* Spot equity/ETF tokens (canonical EE names from HL_MAP) */
+    'CRCL':    'equity',
     'TSLA':    'equity',  'GOOGL':   'equity',
     'AAPL':    'equity',  'HOOD':    'equity',
     'SPY':     'equity',  'AMZN':    'equity',
     'META':    'equity',  'QQQ':     'equity',
     'MSFT':    'equity',
     'SLV':     'precious','SILVER':  'precious','XAG': 'precious',
-    'GLD':     'equity'   // HL spot ETF token — priced in token units
+    'GLD':     'precious' // Gold ETF spot token
   };
 
   /* ── Build static coverage set and reverse-map at init ─────────────────────
@@ -308,6 +315,57 @@
       _connect();
     }
   };
+
+  /* ── Structured asset registry — console: HL_ASSET_REGISTRY.table() ────── */
+  window.HL_ASSET_REGISTRY = (function () {
+    var ENTRIES = [
+      /* Crypto perps */
+      { eeName:'BTC',   hlTicker:'BTC',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'BTC perpetual' },
+      { eeName:'ETH',   hlTicker:'ETH',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'ETH perpetual' },
+      { eeName:'SOL',   hlTicker:'SOL',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'' },
+      { eeName:'XRP',   hlTicker:'XRP',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'' },
+      { eeName:'BNB',   hlTicker:'BNB',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'' },
+      { eeName:'ADA',   hlTicker:'ADA',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'' },
+      /* HL spot equity/ETF tokens (full USD price, Mar 2026) */
+      { eeName:'CRCL',  hlTicker:'@263',  assetClass:'equity',   region:'US',     sector:'fintech',  onHL:true, fullPrice:true,  notes:'Circle pre-IPO, ~$126' },
+      { eeName:'TSLA',  hlTicker:'@264',  assetClass:'equity',   region:'US',     sector:'ev',       onHL:true, fullPrice:true,  notes:'Tesla, ~$246' },
+      { eeName:'SLV',   hlTicker:'@265',  assetClass:'precious', region:'GLOBAL', sector:'precious', onHL:true, fullPrice:false, notes:'Silver token, ~$72 (not ETF price)' },
+      { eeName:'GOOGL', hlTicker:'@266',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:false, notes:'Alphabet, ~$310 (premium vs real)' },
+      { eeName:'AAPL',  hlTicker:'@268',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:false, notes:'Apple, ~$253 (small premium)' },
+      { eeName:'HOOD',  hlTicker:'@271',  assetClass:'equity',   region:'US',     sector:'fintech',  onHL:true, fullPrice:false, notes:'Robinhood, ~$77 (premium vs real)' },
+      { eeName:'GLD',   hlTicker:'@276',  assetClass:'precious', region:'GLOBAL', sector:'precious', onHL:true, fullPrice:false, notes:'Gold ETF token, ~$467' },
+      { eeName:'SPY',   hlTicker:'@279',  assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:false, notes:'S&P 500 ETF token, ~$665' },
+      { eeName:'AMZN',  hlTicker:'@280',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Amazon, ~$213' },
+      { eeName:'META',  hlTicker:'@287',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Meta, ~$620 (accurate)' },
+      { eeName:'QQQ',   hlTicker:'@288',  assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:false, notes:'Nasdaq 100 ETF token, ~$600' },
+      { eeName:'MSFT',  hlTicker:'@289',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Microsoft, ~$399 (accurate)' },
+      /* NOT on HL — will be flagged by HL gate */
+      { eeName:'WTI',   hlTicker:null,    assetClass:'commodity', region:'GLOBAL', sector:'energy',  onHL:false, fullPrice:false, notes:'No HL spot token — flag for CME/CFD' },
+      { eeName:'BRENT', hlTicker:null,    assetClass:'commodity', region:'GLOBAL', sector:'energy',  onHL:false, fullPrice:false, notes:'No HL spot token — flag for CME/CFD' },
+      { eeName:'LMT',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token — flag for Alpaca/TD' },
+      { eeName:'RTX',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },
+      { eeName:'NOC',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },
+      { eeName:'NVDA',  hlTicker:null,    assetClass:'equity',   region:'US',     sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token (high-demand, prioritize)' },
+      { eeName:'TSM',   hlTicker:null,    assetClass:'equity',   region:'TAIWAN', sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
+      { eeName:'ASML',  hlTicker:null,    assetClass:'equity',   region:'EU',     sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
+      { eeName:'XLE',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'energy',   onHL:false, fullPrice:false, notes:'No HL spot token' },
+      { eeName:'SMH',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
+      { eeName:'TLT',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'bonds',    onHL:false, fullPrice:false, notes:'No HL spot token' },
+    ];
+    return {
+      all:      function () { return ENTRIES.slice(); },
+      onHL:     function () { return ENTRIES.filter(function(e){ return e.onHL; }); },
+      notOnHL:  function () { return ENTRIES.filter(function(e){ return !e.onHL; }); },
+      find:     function (ee) { return ENTRIES.find(function(e){ return e.eeName === ee.toUpperCase(); }) || null; },
+      table:    function () {
+        var w = ['eeName','hlTicker','assetClass','sector','onHL','notes'];
+        var rows = ENTRIES.map(function(e){
+          return [e.eeName, e.hlTicker||'—', e.assetClass, e.sector, e.onHL?'✓':'✗', e.notes];
+        });
+        console.table(rows.reduce(function(o,r){ o[r[0]]={hlTicker:r[1],class:r[2],sector:r[3],onHL:r[4],notes:r[5]}; return o; }, {}));
+      }
+    };
+  }());
 
   /* ── Boot: start 6s after page load to avoid clash with IC 4s bootstrap ── */
   window.addEventListener('load', function () {

@@ -5037,6 +5037,41 @@
       </div>
     </div>
 
+    <!-- Flagged Trades — signals blocked by HL-only gate -->
+    <div class="ee-config-section" style="margin-bottom:16px">
+      <div class="ee-panel-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <span>⚑ Flagged Trades <span style="color:var(--dim);font-weight:400;font-size:8px">(not available on Hyperliquid)</span></span>
+        <span style="font-size:9px;color:var(--dim);font-weight:400">
+          Today: <span id="eeFlaggedToday" style="color:var(--bright)">0</span>
+          &nbsp;·&nbsp; Week: <span id="eeFlaggedWeek" style="color:var(--bright)">0</span>
+        </span>
+      </div>
+      <div id="eeFlaggedSummary" style="font-size:9px;color:var(--dim);margin:6px 0 10px;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:2px;min-height:22px">
+        No flagged trades yet
+      </div>
+      <div style="display:grid;grid-template-columns:60px 55px 80px 40px 1fr 1fr;gap:0;font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:0.8px;padding:0 4px 4px;border-bottom:1px solid var(--border);margin-bottom:4px">
+        <span>Time</span><span>Asset</span><span>Direction</span><span>Conf</span><span>Source</span><span>Reason</span>
+      </div>
+      <div id="eeFlaggedTrades" style="max-height:220px;overflow-y:auto">
+        <div class="ee-placeholder">No flagged trades yet — all signals so far are on HL</div>
+      </div>
+      <div style="margin-top:10px;font-size:9px;color:var(--dim);border-top:1px solid var(--border);padding-top:8px">
+        Assets blocked most are the next platforms to integrate. Check the console:
+        <code style="background:var(--bg3);padding:1px 5px;border-radius:2px;font-size:9px">HL_ASSET_REGISTRY.table()</code>
+      </div>
+    </div>
+    <style>
+      .ee-flag-row { display:grid; grid-template-columns:60px 55px 80px 40px 1fr 1fr; gap:0; padding:4px; font-size:9px; border-bottom:1px solid rgba(255,255,255,0.04); }
+      .ee-flag-row:hover { background:var(--bg3); }
+      .ee-flag-ts   { color:var(--dim); }
+      .ee-flag-asset{ font-weight:700; color:var(--bright); }
+      .ee-flag-dir  { }
+      .ee-flag-conf { color:#ff9500; }
+      .ee-flag-src  { color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .ee-flag-why  { color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .ee-flag-empty{ padding:12px; text-align:center; color:var(--dim); font-size:9px; }
+    </style>
+
     <!-- Future broker connections -->
     <div class="ee-config-section" style="margin-bottom:16px">
       <div class="ee-panel-title">
@@ -12872,7 +12907,7 @@ function _modalKeyHandler(e) {
 <script src="polymarket.js?v=15"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=60"></script>
+<script src="executionEngine.js?v=70"></script>
 
 <!-- GII Multi-Agent Intelligence System — agents first, then core, then UI -->
 <script src="agents/gii-energy.js?v=2"></script>
@@ -12926,7 +12961,7 @@ function _modalKeyHandler(e) {
 
 <!-- HL-Feed — Hyperliquid real-time price WebSocket (WTI, Brent, Gold, Silver, equities) -->
 <!-- Loaded last so EE.injectPrice() is available when the WS opens 6 s post-load.       -->
-<script src="hl-feed.js?v=2"></script>
+<script src="hl-feed.js?v=3"></script>
 <script>
   // Update EE backup count display after all scripts have loaded
   setTimeout(function() {

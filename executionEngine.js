@@ -74,18 +74,125 @@
 
   /* ── Sector map — used for max_per_sector concentration cap ──────────────── */
   var EE_SECTOR_MAP = {
+    /* Energy — not on HL spot (flagged) */
     'WTI':'energy',   'BRENT':'energy', 'XLE':'energy',  'XOM':'energy',   'GAS':'energy',
-    'XAU':'precious', 'GLD':'precious', 'SLV':'precious',
+    /* Precious */
+    'XAU':'precious', 'GLD':'precious', 'SLV':'precious', 'SILVER':'precious',
+    /* Defense — not on HL spot (flagged) */
     'XAR':'defense',  'LMT':'defense',  'RTX':'defense',  'NOC':'defense',
+    /* Crypto perps */
     'BTC':'crypto',   'ETH':'crypto',   'SOL':'crypto',   'BNB':'crypto',   'ADA':'crypto',
-    'SPY':'equity',   'QQQ':'equity',   'VIX':'equity',   'VXX':'equity',   'EEM':'equity',   'FXI':'equity',
+    /* HL spot equity tokens */
+    'TSLA':'equity',  'AAPL':'equity',  'AMZN':'equity',  'META':'equity',
+    'QQQ':'equity',   'MSFT':'equity',  'GOOGL':'equity', 'HOOD':'equity',
+    'SPY':'equity',   'CRCL':'equity',
+    /* Other equities — various HL coverage status */
+    'VIX':'equity',   'VXX':'equity',   'EEM':'equity',   'FXI':'equity',
+    /* Semis — mostly not on HL (flagged) */
     'SMH':'semis',    'TSM':'semis',    'NVDA':'semis',   'ASML':'semis',
+    /* Agri — not on HL (flagged) */
     'WHT':'agri',     'CORN':'agri',    'SOYB':'agri',
     'DAL':'airlines', 'UAL':'airlines',
     'LIT':'battery',  'COPX':'metals',  'XME':'metals',
     'JPY':'forex',    'CHF':'forex',    'NOK':'forex',    'GBP':'forex',
-    'INDA':'em',      'TSLA':'ev'
+    'INDA':'em'
   };
+
+  /* ── Flagged trades state (assets not available on Hyperliquid) ─────────────
+     Captured BEFORE canExecute() so we record every opportunity missed due to
+     HL unavailability, regardless of other risk limits.
+     Stored in localStorage (FLAG_STORE_KEY) and rendered in #eeFlaggedTrades. */
+  var _flaggedTrades  = [];
+  var FLAG_STORE_KEY  = 'ee_flagged_v1';
+  var FLAG_MAX        = 500;
+
+  function _loadFlaggedTrades() {
+    try { _flaggedTrades = JSON.parse(localStorage.getItem(FLAG_STORE_KEY) || '[]'); }
+    catch (e) { _flaggedTrades = []; }
+  }
+  function _saveFlaggedTrades() {
+    try { localStorage.setItem(FLAG_STORE_KEY, JSON.stringify(_flaggedTrades.slice(0, FLAG_MAX))); }
+    catch (e) {}
+  }
+
+  /* Create a flag record from a signal and persist it */
+  function _flagTrade(sig, hlReason) {
+    var record = {
+      id:          'FLAG-' + Date.now().toString(36).toUpperCase(),
+      flaggedAt:   new Date().toISOString(),
+      asset:       sig.asset  || '—',
+      direction:   sig.dir    || '—',
+      confidence:  sig.conf   || 0,
+      signalSource:sig.from   || sig.source || (sig.reason ? sig.reason.split(':')[0] : '—'),
+      region:      sig.region || '—',
+      signalReason:sig.reason || '',
+      hlReason:    hlReason,
+      intendedRiskPct: _cfg.risk_per_trade_pct
+    };
+    _flaggedTrades.unshift(record);
+    if (_flaggedTrades.length > FLAG_MAX) _flaggedTrades.pop();
+    _saveFlaggedTrades();
+    _renderFlaggedTrades();
+    log('FLAG', record.asset + ' ' + record.direction +
+        ' ' + record.confidence + '% — ' + hlReason, 'dim');
+  }
+
+  /* Summarise flagged trades: top blocked assets over last 7 days */
+  function _getFlagSummary() {
+    var cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+    var recent = _flaggedTrades.filter(function (f) {
+      return new Date(f.flaggedAt).getTime() >= cutoff;
+    });
+    var counts = {};
+    recent.forEach(function (f) {
+      counts[f.asset] = (counts[f.asset] || 0) + 1;
+    });
+    return Object.keys(counts)
+      .sort(function (a, b) { return counts[b] - counts[a]; })
+      .slice(0, 5)
+      .map(function (asset) { return { asset: asset, count: counts[asset] }; });
+  }
+
+  /* Render the flagged trades panel */
+  function _renderFlaggedTrades() {
+    var panel = document.getElementById('eeFlaggedTrades');
+    if (!panel) return;
+    var todayCutoff = Date.now() - 24 * 3600 * 1000;
+    var todayFlags  = _flaggedTrades.filter(function (f) { return new Date(f.flaggedAt).getTime() >= todayCutoff; });
+    var weekFlags   = _flaggedTrades.filter(function (f) { return new Date(f.flaggedAt).getTime() >= Date.now() - 7 * 24 * 3600 * 1000; });
+
+    // Update counters
+    var todayEl = document.getElementById('eeFlaggedToday');
+    var weekEl  = document.getElementById('eeFlaggedWeek');
+    if (todayEl) todayEl.textContent = todayFlags.length;
+    if (weekEl)  weekEl.textContent  = weekFlags.length;
+
+    // Top missed assets summary
+    var summary = _getFlagSummary();
+    var summaryEl = document.getElementById('eeFlaggedSummary');
+    if (summaryEl && summary.length) {
+      summaryEl.textContent = 'Most missed this week: ' +
+        summary.map(function (s) { return s.asset + ' (' + s.count + '×)'; }).join('  ·  ');
+    }
+
+    // Rows — show last 25
+    var show = _flaggedTrades.slice(0, 25);
+    panel.innerHTML = show.length ? show.map(function (f) {
+      var t   = new Date(f.flaggedAt);
+      var ts  = (t.getHours() < 10 ? '0' : '') + t.getHours() + ':' +
+                (t.getMinutes() < 10 ? '0' : '') + t.getMinutes();
+      var dir = f.direction === 'LONG' ? '<span style="color:#4fc">▲ LONG</span>'
+                                       : '<span style="color:#f88">▼ SHORT</span>';
+      return '<div class="ee-flag-row">' +
+        '<span class="ee-flag-ts">'   + ts               + '</span>' +
+        '<span class="ee-flag-asset">'+ f.asset          + '</span>' +
+        '<span class="ee-flag-dir">'  + dir              + '</span>' +
+        '<span class="ee-flag-conf">' + f.confidence     + '%</span>' +
+        '<span class="ee-flag-src">'  + (f.signalSource || '—').substring(0,18) + '</span>' +
+        '<span class="ee-flag-why">'  + f.hlReason       + '</span>' +
+        '</div>';
+    }).join('') : '<div class="ee-flag-empty">No flagged trades yet — all signals so far are on HL</div>';
+  }
 
   /* ── Asset remap table ─────────────────────────────────────────────────────
      Maps signal asset names that are not directly tradeable to their real-market
@@ -1529,6 +1636,15 @@
         return;
       }
 
+      // ── HL-only gate: runs regardless of enabled/disabled state ─────────────
+      // Captures every missed opportunity for platform integration decisions.
+      var _hlAsset = normaliseAsset(sig.asset);
+      if (!window.HLFeed || !HLFeed.covers(_hlAsset)) {
+        _flagTrade(sig, 'Not available on Hyperliquid — flag for future platform');
+        _logSignal(sig, 'SKIPPED', 'Not on HL: ' + sig.asset);
+        return;
+      }
+
       if (!_cfg.enabled) {
         _logSignal(sig, 'SKIPPED', 'Auto-execution paused');
         return;
@@ -1882,6 +1998,7 @@
     renderConfigFields();
     renderOpenTrades();
     renderClosedTrades();
+    _renderFlaggedTrades();
     var el = document.getElementById('eeActivityLog');
     if (el) renderLog(el);
     // Show/hide live mode warning
@@ -3663,6 +3780,7 @@
     loadTrades();
     loadSigLog();
     loadPnlHistory();
+    _loadFlaggedTrades();
 
     // Populate backend URL input with saved value (if any)
     try {

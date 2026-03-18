@@ -60,34 +60,44 @@
   /* ── Instrument map: traditional asset → HL perpetual equivalent ────────────
      GLD → XAU is the key remap: GLD is the SPDR ETF (~$275 ≈ 1/10 oz gold).
      HL trades spot GOLD (~$3000). Routing fixes the price and position sizing.  */
+  /* hlAsset = EE canonical name (HLFeed.covers/isAvailable accept EE names,
+     not raw @N indices — the @N→EEname mapping lives in hl-feed.js HL_MAP).
+     Assets NOT on HL spot (WTI, BRENT, LMT, TSM, NVDA…) are kept here so the
+     router can still compute EV/sector/leverage for the flagged-trade log.    */
   var INSTRUMENT_MAP = {
-    /* Precious metals */
-    'GLD':    { hlAsset: 'XAU',    sector: 'precious', maxLev: 5 },
-    'SLV':    { hlAsset: 'SILVER', sector: 'precious', maxLev: 5 },
-    'XAU':    { hlAsset: 'XAU',    sector: 'precious', maxLev: 5 },
-    'GOLD':   { hlAsset: 'GOLD',   sector: 'precious', maxLev: 5 },
-    'SILVER': { hlAsset: 'SILVER', sector: 'precious', maxLev: 5 },
-    'XAG':    { hlAsset: 'SILVER', sector: 'precious', maxLev: 5 },
-    /* Energy */
+    /* Precious metals — GLD/SLV now on HL spot (@276/@265) */
+    'GLD':    { hlAsset: 'GLD',    sector: 'precious', maxLev: 3 },
+    'SLV':    { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
+    'SILVER': { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
+    'XAG':    { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
+    'XAU':    { hlAsset: 'GLD',    sector: 'precious', maxLev: 3 },
+    /* Energy — NOT on HL spot (will be flagged) */
     'WTI':    { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
     'OIL':    { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
     'CRUDE':  { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
     'BRENT':  { hlAsset: 'BRENT',  sector: 'energy',   maxLev: 5 },
-    /* Crypto */
+    /* Crypto perps */
     'BTC':    { hlAsset: 'BTC',    sector: 'crypto',   maxLev: 3 },
     'ETH':    { hlAsset: 'ETH',    sector: 'crypto',   maxLev: 3 },
     'SOL':    { hlAsset: 'SOL',    sector: 'crypto',   maxLev: 2 },
     'XRP':    { hlAsset: 'XRP',    sector: 'crypto',   maxLev: 2 },
     'BNB':    { hlAsset: 'BNB',    sector: 'crypto',   maxLev: 2 },
     'ADA':    { hlAsset: 'ADA',    sector: 'crypto',   maxLev: 2 },
-    /* US equities */
-    'SPY':    { hlAsset: 'SPY',    sector: 'equity',   maxLev: 3 },
+    /* HL spot equity tokens (full USD price, @263-@289) */
+    'CRCL':   { hlAsset: 'CRCL',   sector: 'equity',   maxLev: 2 },
+    'TSLA':   { hlAsset: 'TSLA',   sector: 'equity',   maxLev: 2 },
+    'AAPL':   { hlAsset: 'AAPL',   sector: 'equity',   maxLev: 2 },
+    'AMZN':   { hlAsset: 'AMZN',   sector: 'equity',   maxLev: 2 },
+    'META':   { hlAsset: 'META',   sector: 'equity',   maxLev: 2 },
     'QQQ':    { hlAsset: 'QQQ',    sector: 'equity',   maxLev: 3 },
+    'MSFT':   { hlAsset: 'MSFT',   sector: 'equity',   maxLev: 2 },
+    'GOOGL':  { hlAsset: 'GOOGL',  sector: 'equity',   maxLev: 2 },
+    'HOOD':   { hlAsset: 'HOOD',   sector: 'equity',   maxLev: 2 },
+    'SPY':    { hlAsset: 'SPY',    sector: 'equity',   maxLev: 3 },
+    /* NOT on HL spot — kept for EV model / flagged-trade context */
     'NVDA':   { hlAsset: 'NVDA',   sector: 'equity',   maxLev: 3 },
     'TSM':    { hlAsset: 'TSM',    sector: 'equity',   maxLev: 3 },
     'ASML':   { hlAsset: 'ASML',   sector: 'equity',   maxLev: 2 },
-    'AAPL':   { hlAsset: 'AAPL',   sector: 'equity',   maxLev: 2 },
-    'TSLA':   { hlAsset: 'TSLA',   sector: 'equity',   maxLev: 2 },
     'LMT':    { hlAsset: 'LMT',    sector: 'equity',   maxLev: 3 },
     'RTX':    { hlAsset: 'RTX',    sector: 'equity',   maxLev: 3 },
     'NOC':    { hlAsset: 'NOC',    sector: 'equity',   maxLev: 3 },

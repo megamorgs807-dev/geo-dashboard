@@ -72,22 +72,25 @@
   //         must NOT fall back to TD/AV for @N assets (incompatible scale).
   // hl4h:   true when HL native 4h bars available (crypto perps only).
   // HL spot token coverage confirmed via candleSnapshot 90-day test (Mar 2026):
-  //   @247=TSLA(52bars) @248=SLV(90) @249=GOOGL(89) @251=AAPL(90)
-  //   @254=HOOD(91) @259=GLD(0) @262=SPY(0) @263=AMZN(78)
-  //   @270=META(70) @271=QQQ(51) @272=MSFT(10)
+  //   Updated Mar 2026: new full-USD-price tokens discovered in spotMeta.
+  //   Old fractional @247-@272 range replaced with @263-@289 range.
+  //   @263=CRCL(78bars) @264=TSLA(68) @265=SLV(70) @266=GOOGL(51) @268=AAPL(51)
+  //   @271=HOOD(51) @276=GLD(45) @279=SPY(24) @280=AMZN(29)
+  //   @287=META(33) @288=QQQ(32) @289=MSFT(23)
   // No HL coverage: TLT, TSM, XLE, SMH, SOXX, WTI, BRENT, WHEAT → TD/AV only.
   var ASSETS = [
-    // ── HL spot equity tokens (primary: HL @N, fallback: TD for GLD/SPY only when @N has data) ──
-    { id:'TSLA', sym:'TSLA', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@247' },
-    { id:'AAPL', sym:'AAPL', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@251' },
-    { id:'AMZN', sym:'AMZN', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@263' },
-    { id:'META', sym:'META', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@270' },
-    { id:'QQQ',  sym:'QQQ',  api:'twelvedata', type:'equity', region:'US',     hlCoin:'@271' },
-    { id:'MSFT', sym:'MSFT', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@272' },
-    { id:'GOOGL',sym:'GOOGL',api:'twelvedata', type:'equity', region:'US',     hlCoin:'@249' },
-    { id:'HOOD', sym:'HOOD', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@254' },
-    { id:'SPY',  sym:'SPY',  api:'twelvedata', type:'equity', region:'US',     hlCoin:'@262' },
-    { id:'GLD',  sym:'GLD',  api:'twelvedata', type:'equity', region:'GLOBAL', hlCoin:'@259' },
+    // ── HL spot equity tokens — new full-USD-price @N indices (Mar 2026 spotMeta) ──
+    { id:'CRCL', sym:'CRCL', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@263' },
+    { id:'TSLA', sym:'TSLA', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@264' },
+    { id:'AAPL', sym:'AAPL', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@268' },
+    { id:'AMZN', sym:'AMZN', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@280' },
+    { id:'META', sym:'META', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@287' },
+    { id:'QQQ',  sym:'QQQ',  api:'twelvedata', type:'equity', region:'US',     hlCoin:'@288' },
+    { id:'MSFT', sym:'MSFT', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@289' },
+    { id:'GOOGL',sym:'GOOGL',api:'twelvedata', type:'equity', region:'US',     hlCoin:'@266' },
+    { id:'HOOD', sym:'HOOD', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@271' },
+    { id:'SPY',  sym:'SPY',  api:'twelvedata', type:'equity', region:'US',     hlCoin:'@279' },
+    { id:'GLD',  sym:'GLD',  api:'twelvedata', type:'equity', region:'GLOBAL', hlCoin:'@276' },
     // ── TD-only equities (no HL spot token coverage confirmed) ────────────────
     { id:'TLT',  sym:'TLT',  api:'twelvedata', type:'equity', region:'US'           },
     { id:'TSM',  sym:'TSM',  api:'twelvedata', type:'equity', region:'TAIWAN'       },
