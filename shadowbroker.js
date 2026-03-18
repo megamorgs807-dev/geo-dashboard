@@ -1,9 +1,9 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   SHADOWBROKER INTEGRATION MODULE  —  V21
+   SHADOWBROKER INTEGRATION MODULE  —  V23
    ══════════════════════════════════════════════════════════════════════════════
    Public-API fallback chain (no keys, all CORS-open, verified working):
 
-     GDELT/Conflict → ShadowBroker /api/geopolitics
+     GDELT/Conflict → GeoIntel backend /api/events (port 8765)
                     → BBC World RSS + Al Jazeera RSS (via corsproxy.io)
 
      Seismic        → ShadowBroker /api/earthquakes
@@ -31,7 +31,7 @@
 
   /* ── CONFIG ─────────────────────────────────────────────────────────────── */
   var _cfg = Object.assign({
-    api:           'http://localhost:8000',
+    api:           'http://localhost:8765',
     enabled:       true,
     confMult:      1.0,
     pollGdelt:     300000,   // 5 min
@@ -487,13 +487,35 @@
   /* ── GDELT / Conflict ── */
   function _pollGdelt() {
     if (!_cfg.enabled) return;
-    _fetch(_cfg.api + '/api/geopolitics', 5000, function (err, data) {
+    /* Backend uses /api/events (our own format: {title,desc,source,region,ts,socialV,assets,signal})
+       Fall back to public RSS if backend is unreachable.                                          */
+    _fetch(_cfg.api + '/api/events', 5000, function (err, data) {
       if (err) { _gdeltPublicFallback(); return; }
       var events = data.events || data.gdelt || data || [];
       if (!Array.isArray(events)) events = [];
       var n = 0;
-      events.forEach(function (e) { var x = _normaliseGdelt(e); if (x) { _inject(x); n++; } });
-      _tick('gdelt', n, null, 'SB live');
+      events.forEach(function (e) {
+        // Backend events are already normalised — inject directly
+        if (e.title && e.region) {
+          var sv = typeof e.socialV === 'number' ? e.socialV : (e.signal ? e.signal / 100 : 0.3);
+          _inject({
+            title:    e.title,
+            desc:     e.desc  || e.title,
+            source:   'GeoIntel/Backend',
+            region:   e.region,
+            ts:       e.ts || Date.now(),
+            srcCount: e.srcCount || 1,
+            socialV:  _sv(sv),
+            sbFeed:   'gdelt'
+          });
+          n++;
+        } else {
+          // Fallback: try GDELT-format normaliser for any legacy events
+          var x = _normaliseGdelt(e);
+          if (x) { _inject(x); n++; }
+        }
+      });
+      _tick('gdelt', n, null, 'GeoIntel backend');
     });
   }
 

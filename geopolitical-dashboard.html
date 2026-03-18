@@ -6381,9 +6381,9 @@
           <span id="sbMultVal" style="color:var(--purple);font-weight:bold;min-width:32px">1.0×</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button onclick="if(window.SB){ SB.config({api:'http://localhost:8000'}); SB.pollAll(); }"
+          <button onclick="if(window.SB){ SB.config({api:'http://localhost:8765'}); SB.pollAll(); }"
             style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--purple);color:var(--purple);cursor:pointer;letter-spacing:0.5px">
-            ▶ CONNECT :8000</button>
+            ▶ CONNECT :8765</button>
           <button onclick="if(window.SB) SB.demo();"
             style="font-size:9px;padding:3px 10px;background:var(--bg3);border:1px solid var(--amber);color:var(--amber);cursor:pointer;letter-spacing:0.5px">
             ◉ RUN DEMO</button>
@@ -12903,7 +12903,7 @@ function _modalKeyHandler(e) {
 </script>
 
 <!-- ShadowBroker Integration — injects OSINT feeds into the AI pipeline -->
-<script src="shadowbroker.js?v=22"></script>
+<script src="shadowbroker.js?v=23"></script>
 <!-- Polymarket Integration — prediction market consensus → IC pipeline (paper trading only) -->
 <script src="polymarket.js?v=15"></script>
 
