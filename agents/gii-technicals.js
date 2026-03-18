@@ -1,16 +1,20 @@
-/* GII Technical Analysis Agent — gii-technicals.js v3
+/* GII Technical Analysis Agent — gii-technicals.js v4
  *
- * Institutional-grade multi-timeframe TA across 11 assets.
+ * Institutional-grade multi-timeframe TA across 19 assets.
  * Outputs regime-gated, SMC-confirmed, GII-integrated signals with A2A broadcast.
  *
  * Data source hierarchy (per asset):
- *   1. Hyperliquid    — primary (OHLCV, no key, no quota: BTC 15m/1h/4h/daily)
+ *   1. Hyperliquid    — primary for all HL-covered assets (no key, no quota)
+ *                       · BTC: named perp ticker, 15m/1h/4h/daily ✓
+ *                       · TSLA AAPL AMZN META QQQ MSFT GOOGL HOOD SPY GLD:
+ *                         @N spot token pair-index, prices in fractional units
+ *                         (TA direction signals valid; no TD/AV fallback for @N)
  *   2. Twelve Data    — secondary fallback for equities (800/day free)
  *   3. Alpha Vantage  — tertiary fallback for commodities (25/day free)
  *   4. CryptoCompare  — BTC final fallback (100k/month free)
  *   5. Cache          — stale-data fallback with confidence penalty
  *
- * HL advantage: native 15m + 4h candles, proper OHLCV, and unlimited quota.
+ * HL advantage: native 15m + 4h candles, proper OHLCV, unlimited quota.
  *
  * Setup (one-time): add before this script loads in the dashboard HTML:
  *   <script>
@@ -58,27 +62,44 @@
   var QUOTA_LIMITS   = { twelvedata: 750, alphavantage: 22 };   // leave 50/3 buffer
 
   // ── Asset definitions ──────────────────────────────────────────────────────
-  // type:  'equity' | 'crypto' | 'commodity'
-  // api:   primary data source
-  // For commodity assets Alpha Vantage returns close-only (no true OHLC),
-  // so ATR-based stops fall back to 1.5% for those assets.
-  // hlCoin — Hyperliquid ticker for candleSnapshot (primary OHLCV source).
-  // hl4h    — true when HL native 4h bars are available (skip build-from-1h).
-  // NOTE: HL candleSnapshot only works for crypto assets. Equity/commodity perps
-  // (SPY, TSM, XLE, SMH, CL, BRENTOIL) return empty arrays from candleSnapshot
-  // even though they stream via HLFeed WebSocket. Only BTC confirmed working.
+  // type:   'equity' | 'crypto' | 'commodity'
+  // api:    primary data source (fallback when HL unavailable)
+  // hlCoin: HL candleSnapshot identifier.
+  //         Crypto perps: named ticker ('BTC').
+  //         HL spot tokens: @N pair-index ('@247'=TSLA, '@251'=AAPL, etc.)
+  //         discovered via POST /info {type:'spotMeta'}.
+  //         IMPORTANT: @N prices are in fractional token units — _fetchCandles
+  //         must NOT fall back to TD/AV for @N assets (incompatible scale).
+  // hl4h:   true when HL native 4h bars available (crypto perps only).
+  // HL spot token coverage confirmed via candleSnapshot 90-day test (Mar 2026):
+  //   @247=TSLA(52bars) @248=SLV(90) @249=GOOGL(89) @251=AAPL(90)
+  //   @254=HOOD(91) @259=GLD(0) @262=SPY(0) @263=AMZN(78)
+  //   @270=META(70) @271=QQQ(51) @272=MSFT(10)
+  // No HL coverage: TLT, TSM, XLE, SMH, SOXX, WTI, BRENT, WHEAT → TD/AV only.
   var ASSETS = [
-    { id:'SPY',   sym:'SPY',    api:'twelvedata',    type:'equity',    region:'US'           },
-    { id:'GLD',   sym:'GLD',    api:'twelvedata',    type:'equity',    region:'GLOBAL'       },
-    { id:'TLT',   sym:'TLT',    api:'twelvedata',    type:'equity',    region:'US'           },
-    { id:'TSM',   sym:'TSM',    api:'twelvedata',    type:'equity',    region:'TAIWAN'       },
-    { id:'XLE',   sym:'XLE',    api:'twelvedata',    type:'equity',    region:'US'           },
-    { id:'SMH',   sym:'SMH',    api:'twelvedata',    type:'equity',    region:'US'           },
-    { id:'SOXX',  sym:'SOXX',   api:'twelvedata',    type:'equity',    region:'US'           },
-    { id:'BTC',   sym:'BTC',    api:'cryptocompare', type:'crypto',    region:'GLOBAL',      hlCoin:'BTC', hl4h:true },
-    { id:'WTI',   sym:'WTI',    api:'alphavantage',  type:'commodity', region:'MIDDLE EAST'  },
-    { id:'BRENT', sym:'BRENT',  api:'alphavantage',  type:'commodity', region:'MIDDLE EAST'  },
-    { id:'WEAT',  sym:'WHEAT',  api:'alphavantage',  type:'commodity', region:'UKRAINE'      }
+    // ── HL spot equity tokens (primary: HL @N, fallback: TD for GLD/SPY only when @N has data) ──
+    { id:'TSLA', sym:'TSLA', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@247' },
+    { id:'AAPL', sym:'AAPL', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@251' },
+    { id:'AMZN', sym:'AMZN', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@263' },
+    { id:'META', sym:'META', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@270' },
+    { id:'QQQ',  sym:'QQQ',  api:'twelvedata', type:'equity', region:'US',     hlCoin:'@271' },
+    { id:'MSFT', sym:'MSFT', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@272' },
+    { id:'GOOGL',sym:'GOOGL',api:'twelvedata', type:'equity', region:'US',     hlCoin:'@249' },
+    { id:'HOOD', sym:'HOOD', api:'twelvedata', type:'equity', region:'US',     hlCoin:'@254' },
+    { id:'SPY',  sym:'SPY',  api:'twelvedata', type:'equity', region:'US',     hlCoin:'@262' },
+    { id:'GLD',  sym:'GLD',  api:'twelvedata', type:'equity', region:'GLOBAL', hlCoin:'@259' },
+    // ── TD-only equities (no HL spot token coverage confirmed) ────────────────
+    { id:'TLT',  sym:'TLT',  api:'twelvedata', type:'equity', region:'US'           },
+    { id:'TSM',  sym:'TSM',  api:'twelvedata', type:'equity', region:'TAIWAN'       },
+    { id:'XLE',  sym:'XLE',  api:'twelvedata', type:'equity', region:'US'           },
+    { id:'SMH',  sym:'SMH',  api:'twelvedata', type:'equity', region:'US'           },
+    { id:'SOXX', sym:'SOXX', api:'twelvedata', type:'equity', region:'US'           },
+    // ── Crypto perp (HL named ticker, full OHLCV) ─────────────────────────────
+    { id:'BTC',  sym:'BTC',  api:'cryptocompare', type:'crypto', region:'GLOBAL', hlCoin:'BTC', hl4h:true },
+    // ── Commodities (Alpha Vantage — no HL coverage) ──────────────────────────
+    { id:'WTI',   sym:'WTI',   api:'alphavantage', type:'commodity', region:'MIDDLE EAST' },
+    { id:'BRENT', sym:'BRENT', api:'alphavantage', type:'commodity', region:'MIDDLE EAST' },
+    { id:'WEAT',  sym:'WHEAT', api:'alphavantage', type:'commodity', region:'UKRAINE'      }
   ];
 
   // Alpha Vantage function names for each commodity
@@ -1209,7 +1230,18 @@
           _saveCache();
           return candles;
         }
-        // HL failed or returned too few bars — fall through to legacy API
+        // @N spot tokens: NEVER fall back to legacy API — HL fractional prices
+        // are incompatible with TD/AV real-USD prices. Return stale cache or null.
+        if (assetDef.hlCoin.charAt(0) === '@') {
+          var stale = _cache[key];
+          if (stale && stale.candles && stale.candles.length >= 10) {
+            console.warn('[GII-TA] HL @N fetch failed for ' + assetDef.id +
+              ' — using stale cache (' + stale.candles.length + ' bars)');
+            return stale.candles;
+          }
+          return null;
+        }
+        // Named HL ticker (BTC perp): fall through to legacy API
         return _fetchLegacy(assetDef, tf, key);
       });
     }

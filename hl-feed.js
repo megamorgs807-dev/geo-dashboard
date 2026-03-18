@@ -1,17 +1,17 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   HL-FEED v2 — Hyperliquid Real-Time Price Feed (Primary Source)
+   HL-FEED v3 — Hyperliquid Real-Time Price Feed (Primary Source)
    ══════════════════════════════════════════════════════════════════════════════
    Connects to Hyperliquid's WebSocket (wss://api.hyperliquid.xyz/ws) and
    subscribes to allMids — streaming mid-prices for 300+ trading pairs including
    WTI, Brent crude, Gold, Silver, BTC/ETH/SOL, and 150+ US equities.
 
-   v2 changes vs v1:
-   ─ Maintains a dedicated _hlPrices store (per EE asset name, not just raw tickers)
-   ─ HL is now the HIGHEST-PRIORITY price source — executionEngine.js checks
-     HLFeed.getPrice() before backend cache / Yahoo / Binance / CoinGecko
-   ─ HL-accurate fee model exposed via HLFeed.costs() so _getCosts() returns
-     real HL perpetual fees (0.05% taker, 0.02% maker) instead of CFD estimates
-   ─ Richer public API: getPrice(), covers(), isAvailable(), costs(), coverage()
+   v3 changes vs v2:
+   ─ All dead named equity/commodity entries (CL, BRENTOIL, GOLD, NVDA…) removed
+   ─ Replaced with @N spot token pair-index format (e.g. @247=TSLA, @251=AAPL)
+     discovered via HL spotMeta endpoint — these actually stream in allMids
+   ─ Now covers: BTC ETH SOL XRP BNB ADA (crypto perps) + TSLA AAPL AMZN META
+     QQQ MSFT GOOGL HOOD SPY SLV GLD (HL spot equity/ETF tokens)
+   ─ (v2) _hlPrices store, highest-priority source, HL fee model, richer API
 
    Public API: window.HLFeed
      .getPrice(eeName)   → { price, ts, ageSec, fresh, hlTicker } | null
@@ -23,9 +23,12 @@
      .tickers()          → { 'CL': '73.50', ... } last raw HL prices
      .restart()          → force reconnect
 
-   GLD note: GLD is the SPDR ETF (~1/10 oz gold, price ~$275). HL's GOLD ticker
-   is spot (~$3000). Injecting spot GOLD as GLD would cause 10× size errors.
-   GLD is intentionally excluded — it continues to use Yahoo Finance.
+   @N spot tokens: HL lists equity/ETF/commodity spot tokens by pair-index in
+   allMids (e.g. @247=TSLA, @251=AAPL). Prices are in fractional token units
+   (not real USD). TA direction signals remain valid; stop/target values are in
+   token units consistent with EE's HL spot trading. Never fall back to TD/AV
+   for @N assets — incompatible price scale.
+   GLD (@259) and SLV (@248) are HL spot ETF tokens, now included.
    ══════════════════════════════════════════════════════════════════════════════ */
 
 (function () {
@@ -36,41 +39,34 @@
   var RECONNECT_MS  = 12000;    // gap between reconnect attempts
   var MAX_ERRORS    = 10;       // suppress parse error logs after this many
 
-  /* ── HL ticker → EE asset name mapping ─────────────────────────────────────
-     Only assets the bot actually trades (from IMPACT_MAP).
+  /* ── HL ticker/pair-index → EE asset name mapping ──────────────────────────
+     Crypto perps use named tickers (e.g. 'BTC') — these match allMids keys.
+     Equity/ETF/commodity spot tokens use @N pair-index format (e.g. '@247')
+     discovered via POST /info {type:'spotMeta'} → universe[N].name.
      Array order matters: first name is the "canonical" EE name for display.
-     GLD intentionally omitted — see note above.                              */
+     Assets NOT in HL spotMeta (TLT, TSM, XLE, SMH, SOXX, WTI, BRENT, WHEAT)
+     are omitted — they continue using TD/AV.                                */
   var HL_MAP = {
-    /* Commodities */
-    'CL':        ['WTI', 'OIL', 'CRUDE'],
-    'BRENTOIL':  ['BRENT'],
-    'GOLD':      ['GOLD', 'XAU'],           // NOT GLD — spot ≠ ETF
-    'SILVER':    ['SILVER', 'XAG', 'SLV'],
+    /* Crypto perps — named tickers present in allMids */
+    'BTC':   ['BTC', 'BITCOIN'],
+    'ETH':   ['ETH', 'ETHEREUM'],
+    'SOL':   ['SOL'],
+    'XRP':   ['XRP'],
+    'BNB':   ['BNB'],
+    'ADA':   ['ADA'],
 
-    /* Crypto */
-    'BTC':       ['BTC', 'BITCOIN'],
-    'ETH':       ['ETH', 'ETHEREUM'],
-    'SOL':       ['SOL'],
-    'XRP':       ['XRP'],
-    'BNB':       ['BNB'],
-    'ADA':       ['ADA'],
-
-    /* US Equities that appear in IMPACT_MAP */
-    'NVDA':      ['NVDA'],
-    'TSM':       ['TSM'],
-    'AAPL':      ['AAPL'],
-    'TSLA':      ['TSLA'],
-    'SPY':       ['SPY'],
-    'QQQ':       ['QQQ'],
-    'LMT':       ['LMT'],
-    'RTX':       ['RTX'],
-    'NOC':       ['NOC'],
-    'SMH':       ['SMH'],
-    'GDX':       ['GDX'],
-    'XLE':       ['XLE'],
-    'XOM':       ['XOM'],
-    'FXI':       ['FXI'],
-    'ASML':      ['ASML']
+    /* Spot equity/ETF tokens — @N pair-index from spotMeta universe */
+    '@247':  ['TSLA'],
+    '@248':  ['SLV', 'SILVER', 'XAG'],
+    '@249':  ['GOOGL'],
+    '@251':  ['AAPL'],
+    '@254':  ['HOOD'],
+    '@259':  ['GLD'],
+    '@262':  ['SPY'],
+    '@263':  ['AMZN'],
+    '@270':  ['META'],
+    '@271':  ['QQQ'],
+    '@272':  ['MSFT']
   };
 
   /* ── HL-accurate cost model for paper-trading simulation ───────────────────
@@ -94,18 +90,19 @@
   /* ── Sector classification for HL cost lookup ───────────────────────────────
      Maps every EE asset name that HL covers → cost sector key.               */
   var HL_SECTOR = {
-    'WTI':     'energy',  'OIL':     'energy',  'CRUDE':  'energy',
-    'BRENT':   'energy',
-    'GOLD':    'precious','XAU':     'precious', 'SILVER': 'precious',
-    'XAG':     'precious','SLV':     'precious',
-    'BTC':     'crypto',  'BITCOIN': 'crypto',   'ETH':    'crypto',
-    'ETHEREUM':'crypto',  'SOL':     'crypto',   'XRP':    'crypto',
-    'BNB':     'crypto',  'ADA':     'crypto',
-    'NVDA':    'equity',  'TSM':     'equity',   'AAPL':   'equity',
-    'TSLA':    'equity',  'SPY':     'equity',   'QQQ':    'equity',
-    'LMT':     'equity',  'RTX':     'equity',   'NOC':    'equity',
-    'SMH':     'equity',  'GDX':     'equity',   'XLE':    'equity',
-    'XOM':     'equity',  'FXI':     'equity',   'ASML':   'equity'
+    /* Crypto perps */
+    'BTC':     'crypto',  'BITCOIN':  'crypto',
+    'ETH':     'crypto',  'ETHEREUM': 'crypto',
+    'SOL':     'crypto',  'XRP':      'crypto',
+    'BNB':     'crypto',  'ADA':      'crypto',
+    /* Spot equity/ETF tokens (canonical EE names from HL_MAP) */
+    'TSLA':    'equity',  'GOOGL':   'equity',
+    'AAPL':    'equity',  'HOOD':    'equity',
+    'SPY':     'equity',  'AMZN':    'equity',
+    'META':    'equity',  'QQQ':     'equity',
+    'MSFT':    'equity',
+    'SLV':     'precious','SILVER':  'precious','XAG': 'precious',
+    'GLD':     'equity'   // HL spot ETF token — priced in token units
   };
 
   /* ── Build static coverage set and reverse-map at init ─────────────────────
