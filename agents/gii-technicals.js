@@ -102,10 +102,11 @@
   var _accuracy      = { total:0, correct:0, winRate:null };
   var _feedback      = {};
   var _fetchSeq      = Promise.resolve();   // serialised fetch queue
-  var _hlFetchErrors = 0;    // consecutive HL fetch failures — triggers health downgrade
-  var _pollTimer     = null; // reference to current setTimeout for adaptive rescheduling
+  var _hlFetchErrors  = 0;    // consecutive HL fetch failures — triggers health downgrade
+  var _pollTimer      = null; // reference to current setTimeout for adaptive rescheduling
+  var _lastBroadcast  = {};   // { assetId: { bias, conviction, ts } } — dedup broadcast
   // Daily API quota tracker: { date:'YYYY-MM-DD', twelvedata:N, alphavantage:N }
-  var _quota         = { date: '', twelvedata: 0, alphavantage: 0 };
+  var _quota          = { date: '', twelvedata: 0, alphavantage: 0 };
 
   // ── Persistence ────────────────────────────────────────────────────────────
   (function _boot() {
@@ -919,14 +920,21 @@
 
   // ── A2A Event Broadcasting ──────────────────────────────────────────────────
   // Dispatches standardised signal to window event bus for inter-agent consumption.
+  // Deduplicates: only fires when bias or conviction changes, or every 4h as a refresh.
   function _broadcast(signal) {
     try {
+      var prev = _lastBroadcast[signal.ticker];
+      var now  = Date.now();
+      var REFRESH_MS = 4 * 3600000;   // 4h max silence before forced re-broadcast
+      if (prev && prev.bias === signal.bias && prev.conviction === signal.conviction
+          && (now - prev.ts) < REFRESH_MS) return;
+      _lastBroadcast[signal.ticker] = { bias: signal.bias, conviction: signal.conviction, ts: now };
       window.dispatchEvent(new CustomEvent('GII_TA_SIGNAL', { detail: signal, bubbles: false }));
     } catch (e) {}
   }
 
   // ── Signal Builder ─────────────────────────────────────────────────────────
-  function _buildSignal(assetDef, mtf, gii, indDaily, smc) {
+  function _buildSignal(assetDef, mtf, gii, indDaily, smc, smc15m) {
     if (Math.abs(gii.composite) < 0.15) return null;
     if (mtf.grade === 'D')              return null;
 
@@ -983,6 +991,26 @@
         if (sweepOk) { smcSignals++; smcContext.liquiditySweep = true; }
       }
     }
+    // 15m SMC — entry-level confirmation (each counts as +0.5 signal weight)
+    if (smc15m) {
+      if (smc15m.fvg && smc15m.fvg.latest) {
+        var fvg15Ok = (bias === 'long'  && smc15m.fvg.latest.type === 'bullish') ||
+                      (bias === 'short' && smc15m.fvg.latest.type === 'bearish');
+        if (fvg15Ok) { smcSignals += 0.5; smcContext.fvg15m = smc15m.fvg.latest.type; }
+      }
+      if (smc15m.ob && smc15m.ob.nearPrice && smc15m.ob.nearPrice.length > 0) {
+        var ob15Ok = smc15m.ob.nearPrice.some(function (b) {
+          return (bias === 'long' && b.type === 'bullish') || (bias === 'short' && b.type === 'bearish');
+        });
+        if (ob15Ok) { smcSignals += 0.5; smcContext.ob15m = true; }
+      }
+      if (smc15m.liquidity && smc15m.liquidity.sweeps && smc15m.liquidity.sweeps.length > 0) {
+        var sw15Ok = smc15m.liquidity.sweeps.some(function (s) {
+          return (bias === 'long' && s.type === 'low_sweep') || (bias === 'short' && s.type === 'high_sweep');
+        });
+        if (sw15Ok) { smcSignals += 0.5; smcContext.sweep15m = true; }
+      }
+    }
     // Bonus: +0.05 per confirmed SMC signal when ≥2 align, capped at +0.10
     if (smcSignals >= 2) conf = _clamp(conf + Math.min(smcSignals * 0.05, 0.10), MIN_CONF, MAX_CONF);
 
@@ -1000,7 +1028,7 @@
     if (ind && ind.obvDiv === 'divergence') parts.push('OBVdiv');
     if (ind && ind.volRatio > 1.8)        parts.push('vol×' + ind.volRatio.toFixed(1));
     if (ind && ind.sqzRatio < 0.10)       parts.push('BBsqueeze');
-    if (smcSignals >= 2)                  parts.push('SMC×' + smcSignals);
+    if (smcSignals >= 2)                  parts.push('SMC×' + smcSignals.toFixed(1));
 
     var confFinal  = _clamp(conf, MIN_CONF, MAX_CONF);
     var stopLoss   = price > 0 ? (bias === 'long' ? price - atrStop   : price + atrStop)   : undefined;
@@ -1194,13 +1222,15 @@
   function _fetchLegacy(assetDef, tf, key) {
     var prom;
     if (assetDef.api === 'twelvedata') {
-      var tdInt = tf === '1h' ? '1h' : '1day';
+      // TD interval names: '15min' | '1h' | '1day'
+      var tdInt = tf === '15m' ? '15min' : tf === '1h' ? '1h' : '1day';
       prom = _enqueue(function () { return _td(assetDef.sym, tdInt, 200); });
     } else if (assetDef.api === 'alphavantage') {
-      if (tf !== 'daily') return Promise.resolve((_cache[assetDef.id + '_daily'] || {}).candles || null);
+      if (tf !== 'daily') return Promise.resolve(null);   // AV is daily-only
       var avFunc = AV_FUNCS[assetDef.sym] || assetDef.sym;
       prom = _enqueue(function () { return _av(avFunc); });
     } else if (assetDef.api === 'cryptocompare') {
+      if (tf === '15m') return Promise.resolve(null);     // no CC 15m fallback
       prom = _enqueue(function () { return _cc(tf); });
     } else {
       return Promise.resolve(null);
@@ -1238,8 +1268,8 @@
       ind4h = _computeIndicators(h4C, '4h', regime, id);
     }
 
-    // 15m candles: HL assets only (BTC); reuse 1h indicator weights
-    var m15C = assetDef.hlCoin ? (_cache[id + '_15m'] || {}).candles : null;
+    // 15m candles: all non-commodities (BTC via HL, equities via TD 15min)
+    var m15C = type !== 'commodity' ? (_cache[id + '_15m'] || {}).candles : null;
     if (m15C && m15C.length >= 20) {
       ind15m = _computeIndicators(m15C, '1h', regime, id);
     }
@@ -1267,7 +1297,7 @@
     gii.confidence *= sm;
     gii.composite  *= sm;
 
-    // SMC analysis on 4h candles (fall back to daily when no 4h)
+    // SMC — dual pass: 4h/daily for structure, 15m for entry precision
     var smcCandles = h4C || dailyC;
     var smc = {
       fvg:       _detectFVG(smcCandles),
@@ -1275,6 +1305,12 @@
       choch:     _detectCHoCH(smcCandles),
       liquidity: _detectLiquidityZones(smcCandles)
     };
+    // 15m SMC: entry-level FVG + OB + liquidity sweep (no CHoCH — too noisy on 15m)
+    var smc15m = (m15C && m15C.length >= 20) ? {
+      fvg:       _detectFVG(m15C),
+      ob:        _detectOrderBlocks(m15C),
+      liquidity: _detectLiquidityZones(m15C)
+    } : null;
 
     // Dynamic confidence from feedback win rate
     var bias = gii.composite > 0 ? 'long' : 'short';
@@ -1290,7 +1326,7 @@
       source: dailySrc, regime: regime, staleMult: sm
     };
 
-    return _buildSignal(assetDef, mtf, gii, indD, smc);
+    return _buildSignal(assetDef, mtf, gii, indD, smc, smc15m);
   }
 
   // ── System health state ─────────────────────────────────────────────────────
@@ -1348,9 +1384,10 @@
           fetches.push(_fetchCandles(a, 'daily'));
         }
       } else {
-        // Standard equity/crypto with no HL — daily + 1h (4h built from 1h)
+        // Standard equity/crypto with no HL — daily + 1h + 15m (4h built from 1h)
         fetches.push(_fetchCandles(a, 'daily'));
         fetches.push(_fetchCandles(a, '1h'));
+        fetches.push(_fetchCandles(a, '15m'));
       }
     });
 
