@@ -709,9 +709,8 @@
       var fb = _feedback[key];
       if (!fb || !fb.lastTs) return;
       var elapsed = now - new Date(fb.lastTs).getTime();
-      if (elapsed < 86400000) return;   // skip if updated within 24h
       var decayFactor = Math.pow(0.5, elapsed / HALF_LIFE_MS);
-      if (decayFactor > 0.99) return;   // negligible decay
+      if (decayFactor > 0.99) return;   // negligible decay — skips entries updated < ~10h ago
       fb.correct = (fb.correct || 0) * decayFactor;
       fb.fp      = (fb.fp      || 0) * decayFactor;
       fb.total   = (fb.total   || 0) * decayFactor;

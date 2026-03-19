@@ -1574,9 +1574,19 @@
     trade.timestamp_close = new Date().toISOString();
     trade.close_reason    = reason;
 
+    // Guard: corrupted or missing close price (NaN, Infinity, 0, negative) must not
+    // propagate into P&L. Reject the close and log — the monitor loop will retry.
+    var rawClosePrice = parseFloat(closePrice);
+    if (!isFinite(rawClosePrice) || rawClosePrice <= 0) {
+      log('TRADE', trade.asset + ' closeTrade: invalid closePrice (' + closePrice + ') — close aborted, will retry', 'amber');
+      trade.status = 'OPEN';  // revert
+      trade.timestamp_close = null;
+      trade.close_reason    = null;
+      return;
+    }
+
     // Reality check 2 — exit slippage: adjust fill price for spread + market-order slippage.
     // TP = limit order (spread only); SL / manual = market order (spread + slippage gap risk).
-    var rawClosePrice = parseFloat(closePrice);
     var adjClosePrice = _adjustedExitPrice(trade.asset, rawClosePrice, trade.direction, reason);
     trade.raw_close_price = +rawClosePrice.toFixed(6);
     trade.close_price     = +adjClosePrice.toFixed(6);

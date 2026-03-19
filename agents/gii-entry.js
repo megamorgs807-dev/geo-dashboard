@@ -85,6 +85,14 @@
     var now = Date.now();
     (Array.isArray(signals) ? signals : [signals]).forEach(function (s) {
       if (!s || !s.asset || !s.dir) return;
+      // Reject malformed confidence values (must be 0-100 or absent for default)
+      if (s.conf !== undefined && s.conf !== null && (!isFinite(s.conf) || s.conf < 0 || s.conf > 100)) {
+        _stats.rejected++;
+        _rejected.unshift({ asset: s.asset, dir: s.dir,
+          reason: 'invalid conf ' + s.conf + ' (must be 0-100)', ts: now });
+        if (_rejected.length > 50) _rejected.pop();
+        return;
+      }
       var _src = sourceTag || s.source || 'ic';
       var _isScalperSrc = _src === 'scalper' || _src === 'scalper-session' ||
                           (s.reason && s.reason.indexOf('SCALPER') === 0);

@@ -144,7 +144,9 @@
      ══════════════════════════════════════════════════════════════════════════════ */
   function _checkGTIGate(sig) {
     if (!window.GII || typeof GII.gti !== 'function') return null;
-    var gti = GII.gti();
+    var gtiObj = GII.gti();
+    var gti = (gtiObj && typeof gtiObj === 'object') ? gtiObj.value : gtiObj;  // GII.gti() returns { value, level }
+    if (!isFinite(gti)) return null;
     if (gti >= GK_CONFIG.extremeGTIThreshold && sig.conf < GK_CONFIG.extremeGTIMinConf) {
       return 'GTI ' + gti.toFixed(0) + '/100 (EXTREME) — conf ' + sig.conf + '% below ' + GK_CONFIG.extremeGTIMinConf + '% floor';
     }
@@ -211,8 +213,11 @@
      ══════════════════════════════════════════════════════════════════════════════ */
   function _regimePenalty(sig) {
     if (!window.GII || typeof GII.gti !== 'function') return 0;
+    var gtiObj = GII.gti();
+    var gti = (gtiObj && typeof gtiObj === 'object') ? gtiObj.value : gtiObj;  // GII.gti() returns { value, level }
+    if (!isFinite(gti)) return 0;
     // Only penalise signals that are already close to the threshold
-    if (GII.gti() > GK_CONFIG.regimeWarnGTI && sig.conf < 75) {
+    if (gti > GK_CONFIG.regimeWarnGTI && sig.conf < 75) {
       return GK_CONFIG.regimeWarnPenalty;
     }
     return 0;
@@ -258,7 +263,7 @@
         adjusted.conf = Math.max(0, adjusted.conf - penalty);
         adjusted._gkPenalty = penalty;
         _pushVerdict(adjusted, 'ADJ',
-          'Regime penalty: conf ' + sig.conf + '→' + adjusted.conf + '% (GTI ' + GII.gti().toFixed(0) + ')');
+          'Regime penalty: conf ' + sig.conf + '→' + adjusted.conf + '% (GTI ' + (function(){ var g=GII.gti(); return ((g&&typeof g==='object')?g.value:g).toFixed(0); })() + ')');
         passing.push(adjusted);
         return;
       }
