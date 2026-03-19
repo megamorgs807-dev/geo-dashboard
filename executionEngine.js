@@ -312,6 +312,13 @@
   /* Minimum time a trade must be open before TP/SL can trigger (ms).
      Prevents instant open→close in a single 30s monitor cycle. */
   var MIN_HOLD_MS = 90000;   // 1.5 minutes
+  /* Maximum time a geopolitical trade can remain open before auto-expiry.
+     Geopolitical events resolve/price-in within days. A trade still open
+     after 7 days means the thesis was never invalidated and exit signals
+     failed — safer to close stale positions than hold indefinitely.
+     Scalper trades use a much tighter 6-hour limit (set per-trade via source). */
+  var MAX_HOLD_MS_GEO     = 7 * 24 * 60 * 60 * 1000;  // 7 days
+  var MAX_HOLD_MS_SCALPER = 6 * 60 * 60 * 1000;        // 6 hours
 
   /* Maximum realistic leverage (notional / balance).
      Standard retail CFD/futures cap — resets to this if exceeded. */
@@ -2044,6 +2051,19 @@
         var tradeAgeMs = Date.now() - new Date(trade.timestamp_open).getTime();
         if (tradeAgeMs < MIN_HOLD_MS) {
           renderUI();
+          return;
+        }
+
+        // Reality check 4b — maximum hold time: auto-expire stale trades.
+        // Geopolitical trades go stale after ~7 days; scalper trades after 6h.
+        // If exit signals haven't fired by then, the trade is a zombie — close it.
+        var _isScalperTrade = trade.source === 'scalper' || trade.source === 'scalper-session';
+        var _maxHoldMs = _isScalperTrade ? MAX_HOLD_MS_SCALPER : MAX_HOLD_MS_GEO;
+        if (tradeAgeMs > _maxHoldMs) {
+          var _expiredHrs = Math.round(tradeAgeMs / 3600000);
+          log('TRADE', trade.asset + ' ' + trade.direction + ' auto-expired after ' +
+            _expiredHrs + 'h (max=' + (_maxHoldMs / 3600000) + 'h)', 'amber');
+          closeTrade(trade.trade_id, _getPrice(trade.asset) || trade.entry_price, 'MAX-HOLD-EXPIRED');
           return;
         }
 
@@ -4052,8 +4072,12 @@
         // Skip signals already successfully traded in _signalLog (same asset+dir).
         // After cooldown expires the re-scan would otherwise re-open a position for a
         // signal that was already executed and then closed — a stale IC batch.
+        // Time-bounded to 2 hours: a TRADED entry older than 2h is a different market
+        // event; a fresh IC signal for the same asset should be allowed through.
+        var _2h = 2 * 60 * 60 * 1000;
         if (_signalLog.some(function (e) {
-          return normaliseAsset(e.asset) === asset && e.dir === s.dir && e.action === 'TRADED';
+          return normaliseAsset(e.asset) === asset && e.dir === s.dir && e.action === 'TRADED' &&
+                 (now - new Date(e.ts).getTime()) < _2h;
         })) return false;
         // Skip if we already have an open trade for this asset.
         // Also check original_asset (pre-remap): GII_ROUTING maps GLD→XAU at signal
