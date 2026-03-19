@@ -2444,15 +2444,15 @@
 
       // Unrealised P&L row — always rendered; shows placeholder if price unavailable
       var liveRow = '';
-      if (livePx) {
+      if (livePx && t.entry_price && t.entry_price > 0) {
         var uPct = t.direction === 'LONG'
           ? (livePx - t.entry_price) / t.entry_price * 100
           : (t.entry_price - livePx) / t.entry_price * 100;
         var uUsd = t.units * Math.abs(livePx - t.entry_price) * (uPct >= 0 ? 1 : -1);
         var uCol = uPct >= 0 ? '#00c8a0' : '#ff4444';
         // Distance to SL and TP as % of entry
-        var slDist = Math.abs(livePx - t.stop_loss)   / t.entry_price * 100;
-        var tpDist = Math.abs(t.take_profit - livePx) / t.entry_price * 100;
+        var slDist = t.stop_loss   ? Math.abs(livePx - t.stop_loss)   / t.entry_price * 100 : null;
+        var tpDist = t.take_profit ? Math.abs(t.take_profit - livePx) / t.entry_price * 100 : null;
         liveRow =
           '<div style="font-size:9px;margin:5px 0 0 0;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07)">' +
             'Live: <b style="color:var(--text)">$' + _num(livePx) + '</b>' +
@@ -2461,8 +2461,13 @@
               (uPct >= 0 ? '+' : '') + uPct.toFixed(2) + '%&thinsp;' +
               '(' + (uUsd >= 0 ? '+$' : '-$') + _num(Math.abs(uUsd)) + ')' +
             '</b>' +
-            '&nbsp;&nbsp;<span style="color:var(--dim)">SL&nbsp;' + slDist.toFixed(1) + '% away' +
-            '&nbsp;·&nbsp;TP&nbsp;' + tpDist.toFixed(1) + '% away</span>' +
+            (slDist !== null || tpDist !== null
+              ? '&nbsp;&nbsp;<span style="color:var(--dim)">' +
+                  (slDist !== null ? 'SL&nbsp;' + slDist.toFixed(1) + '% away' : '') +
+                  (slDist !== null && tpDist !== null ? '&nbsp;·&nbsp;' : '') +
+                  (tpDist !== null ? 'TP&nbsp;' + tpDist.toFixed(1) + '% away' : '') +
+                '</span>'
+              : '') +
           '</div>';
       } else {
         liveRow =

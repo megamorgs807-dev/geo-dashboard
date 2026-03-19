@@ -342,7 +342,7 @@
 
     wrap.innerHTML = [
       '<div id="giiDebugHeader" onclick="document.getElementById(\'giiDebugBody\').classList.toggle(\'open\');this.querySelector(\'#giiDebugToggle\').textContent=document.getElementById(\'giiDebugBody\').classList.contains(\'open\')?\'▲ collapse\':\'▼ expand\'">',
-      '  <span id="giiDebugTitle">🔧 GII Debug Panel — 21 agents</span>',
+      '  <span id="giiDebugTitle">🔧 GII Debug Panel — ' + KNOWN_AGENTS.length + ' agents</span>',
       '  <span id="giiDebugToggle">▼ expand</span>',
       '</div>',
       '<div id="giiDebugBody"></div>'
@@ -362,12 +362,36 @@
   window.addEventListener('load', function () {
     _injectStyles();
 
-    // Wait for gii-ui.js to inject #giiWrap first (it delays 8s)
-    setTimeout(function () {
+    // Wait for gii-ui.js to inject #giiWrap — use MutationObserver for instant reaction,
+    // fall back to a 15s timeout if something goes wrong.
+    function _startDebug() {
       _inject();
       render();
       setInterval(render, REFRESH_MS);
-    }, 9500);
+    }
+
+    if (document.getElementById('giiWrap')) {
+      // Already present (unlikely at load but handle it)
+      _startDebug();
+    } else if (typeof MutationObserver !== 'undefined') {
+      var _obs = new MutationObserver(function (mutations, obs) {
+        if (document.getElementById('giiWrap') || document.getElementById(PANEL_ID)) {
+          obs.disconnect();
+          _startDebug();
+        }
+      });
+      _obs.observe(document.body, { childList: true, subtree: true });
+      // Safety fallback: give up waiting after 15s and inject anyway
+      setTimeout(function () {
+        if (!document.getElementById(PANEL_ID)) {
+          _obs.disconnect();
+          _startDebug();
+        }
+      }, 15000);
+    } else {
+      // No MutationObserver support — fall back to old-style delay
+      setTimeout(_startDebug, 9500);
+    }
   });
 
   // ── public API ────────────────────────────────────────────────────────────

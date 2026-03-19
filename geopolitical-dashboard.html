@@ -2164,20 +2164,74 @@
 
   <!-- ═══════════════════════════ LIVE PRICE TICKER ════════════════════════════════ -->
   <div class="ticker-row">
-    <div class="tick-item"><span class="tick-name">GOLD</span><span class="tick-price">$5,417</span><span class="tick-chg up">▲ ATH</span></div>
-    <div class="tick-item"><span class="tick-name">WTI CRUDE</span><span class="tick-price">$73.83</span><span class="tick-chg up">▲ +8.2%</span></div>
-    <div class="tick-item"><span class="tick-name">BRENT</span><span class="tick-price">$79.41</span><span class="tick-chg up">▲ +9.1%</span></div>
-    <div class="tick-item"><span class="tick-name">EUR/USD</span><span class="tick-price">1.1600</span><span class="tick-chg down">▼ -0.85%</span></div>
-    <div class="tick-item"><span class="tick-name">USD/JPY</span><span class="tick-price">157.74</span><span class="tick-chg up">▲ +0.4%</span></div>
-    <div class="tick-item"><span class="tick-name">DXY</span><span class="tick-price">98.40</span><span class="tick-chg up">▲ Safe-Haven</span></div>
-    <div class="tick-item"><span class="tick-name">S&amp;P 500</span><span class="tick-price">—</span><span class="tick-chg down">▼ -1.1%</span></div>
-    <div class="tick-item"><span class="tick-name">LMT</span><span class="tick-price">$587.90</span><span class="tick-chg up">▲ 52W HIGH</span></div>
-    <div class="tick-item"><span class="tick-name">XAR ETF</span><span class="tick-price">—</span><span class="tick-chg up">▲ +16.2% YTD</span></div>
+    <div class="tick-item"><span class="tick-name">GOLD</span><span class="tick-price" id="tick-price-GOLD">$5,417</span><span class="tick-chg up">▲ ATH</span></div>
+    <div class="tick-item"><span class="tick-name">WTI CRUDE</span><span class="tick-price" id="tick-price-WTI">$73.83</span><span class="tick-chg" id="tick-chg-WTI">▲ +8.2%</span></div>
+    <div class="tick-item"><span class="tick-name">BRENT</span><span class="tick-price" id="tick-price-BRENT">$79.41</span><span class="tick-chg" id="tick-chg-BRENT">▲ +9.1%</span></div>
+    <div class="tick-item"><span class="tick-name">EUR/USD</span><span class="tick-price" id="tick-price-EURUSD">1.1600</span><span class="tick-chg down">▼ -0.85%</span></div>
+    <div class="tick-item"><span class="tick-name">USD/JPY</span><span class="tick-price" id="tick-price-USDJPY">157.74</span><span class="tick-chg up">▲ +0.4%</span></div>
+    <div class="tick-item"><span class="tick-name">DXY</span><span class="tick-price" id="tick-price-DXY">98.40</span><span class="tick-chg up">▲ Safe-Haven</span></div>
+    <div class="tick-item"><span class="tick-name">S&amp;P 500</span><span class="tick-price" id="tick-price-SPY">—</span><span class="tick-chg down">▼ -1.1%</span></div>
+    <div class="tick-item"><span class="tick-name">LMT</span><span class="tick-price" id="tick-price-LMT">$587.90</span><span class="tick-chg up">▲ 52W HIGH</span></div>
+    <div class="tick-item"><span class="tick-name">XAR ETF</span><span class="tick-price" id="tick-price-XAR">—</span><span class="tick-chg up">▲ +16.2% YTD</span></div>
     <div style="margin-left:auto; font-size:10px; color:var(--dim); align-self:center;">
-      Sources: Fortune / FX Leaders / CNBC / Yahoo Finance<br>
-      <span class="placeholder">[REPLACE PRICES EACH SESSION]</span>
+      WTI &amp; Brent: <span id="tick-feed-status" style="color:var(--dim)">connecting…</span><br>
+      GOLD/FX/LMT: update manually each session
     </div>
   </div>
+  <script>
+  /* ── Live ticker updater — polls HLFeed every 5s for HL-covered prices ── */
+  (function _tickerLive() {
+    function _fmt(price) {
+      if (price >= 1000) return '$' + price.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      if (price >= 10)   return '$' + price.toFixed(2);
+      return price.toFixed(4);
+    }
+    function _update() {
+      if (typeof window.HLFeed === 'undefined') return;
+      var wti   = HLFeed.getPrice('WTI');
+      var brent = HLFeed.getPrice('BRENT');
+      var spy   = HLFeed.getPrice('SPY');
+      var status = document.getElementById('tick-feed-status');
+      if (wti && wti.fresh) {
+        document.getElementById('tick-price-WTI').textContent = _fmt(wti.price);
+        document.getElementById('tick-chg-WTI').textContent   = '● LIVE';
+        document.getElementById('tick-chg-WTI').className     = 'tick-chg up';
+        if (status) { status.textContent = 'live'; status.style.color = 'var(--bull)'; }
+      } else if (wti) {
+        document.getElementById('tick-price-WTI').textContent = _fmt(wti.price);
+        document.getElementById('tick-chg-WTI').textContent   = '~ ' + wti.ageSec + 's ago';
+        document.getElementById('tick-chg-WTI').className     = 'tick-chg';
+        if (status) { status.textContent = 'stale (' + wti.ageSec + 's)'; status.style.color = 'var(--warn)'; }
+      }
+      if (brent && brent.fresh) {
+        document.getElementById('tick-price-BRENT').textContent = _fmt(brent.price);
+        document.getElementById('tick-chg-BRENT').textContent   = '● LIVE';
+        document.getElementById('tick-chg-BRENT').className     = 'tick-chg up';
+      } else if (brent) {
+        document.getElementById('tick-price-BRENT').textContent = _fmt(brent.price);
+        document.getElementById('tick-chg-BRENT').textContent   = '~ ' + brent.ageSec + 's ago';
+        document.getElementById('tick-chg-BRENT').className     = 'tick-chg';
+      }
+      if (spy && spy.fresh) {
+        document.getElementById('tick-price-SPY').textContent = _fmt(spy.price);
+      }
+    }
+    /* Wait for HLFeed to be ready, then start polling */
+    var _attempts = 0;
+    var _waiter = setInterval(function () {
+      _attempts++;
+      if (typeof window.HLFeed !== 'undefined') {
+        clearInterval(_waiter);
+        _update();
+        setInterval(_update, 5000);
+      } else if (_attempts > 30) {
+        clearInterval(_waiter);
+        var s = document.getElementById('tick-feed-status');
+        if (s) { s.textContent = 'offline'; s.style.color = 'var(--bear)'; }
+      }
+    }, 500);
+  })();
+  </script>
 
   <!-- ═══════════════════════════════════════════════════════════════════════════════
        SITUATION INTELLIGENCE HUB — LOG IN & SEE THE WORLD IMMEDIATELY

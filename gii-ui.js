@@ -130,7 +130,9 @@
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.font = '10px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Accumulating history…', W / 2, H / 2);
+      var _chartAgeMin = Math.floor((Date.now() - _uiStartTs) / 60000);
+      var _chartMsg = _chartAgeMin >= 3 ? 'No GTI history yet' : 'Accumulating history…';
+      ctx.fillText(_chartMsg, W / 2, H / 2);
       return;
     }
 
@@ -228,6 +230,7 @@
   // ── dirty flag — set by GII core after each cycle ─────────────────────────
   var _dirty = true;          // start dirty so first render always runs
   var _lastRenderTs = 0;
+  var _uiStartTs    = Date.now(); // used for timeout fallbacks in empty-state panels
 
   function markDirty() { _dirty = true; }
 
@@ -292,7 +295,11 @@
           '</tr>';
       });
     } else {
-      html += '<tr><td colspan="4" style="color:rgba(255,255,255,0.3)">Accumulating…</td></tr>';
+      var _postAgeMin = Math.floor((Date.now() - _uiStartTs) / 60000);
+      var _postMsg = _postAgeMin >= 3
+        ? 'No Bayesian data — GII core needs at least 2 cycles with region signals'
+        : 'Accumulating… (' + (_postAgeMin < 1 ? '&lt;1' : _postAgeMin) + ' min)';
+      html += '<tr><td colspan="4" style="color:rgba(255,255,255,0.3)">' + _postMsg + '</td></tr>';
     }
     html += '</tbody></table></div>';
     html += '</div>'; // end row 1
@@ -368,7 +375,7 @@
     });
     html += '</div>';
     html += '<div style="margin-top:6px;color:rgba(255,255,255,0.5)">Pattern score: <b style="color:var(--gii)">' +
-      (hormuzPattern.totalScore || 0) + '</b>/10 (threshold: 3)' +
+      (hormuzPattern.totalScore != null ? hormuzPattern.totalScore : '—') + '</b>/10 (threshold: 3)' +
       (status.hormuzActive ? ' — <span class="gii-hormuz-active">ACTIVE</span>' : '') + '</div>';
     html += '</div>';
 
@@ -427,7 +434,7 @@
     html += '</div>';
 
     // ── Row 7: Agent status panel ──
-    // AGENT_DEFS is now defined at module level above render() — 29 agents total
+    // AGENT_DEFS is now defined at module level above render() — 32 agents total
 
     function _relTime(ts) {
       if (!ts) return '—';
@@ -482,7 +489,11 @@
       }
 
       var noteText = st.error || st.note || '';
-      if (noteText.length > 60) noteText = noteText.substring(0, 57) + '…';
+      if (noteText.length > 60) {
+        // Log full error/note to console so it's not silently lost
+        if (st.error) console.warn('[GII-UI] ' + def.name + ' error (full):', noteText);
+        noteText = noteText.substring(0, 57) + '…';
+      }
 
       // Special case: scalper slot busy indicator
       if ((def.name === 'scalper' || def.name === 'scalper-session') && st.activeScalp) {
@@ -592,9 +603,10 @@
 
   function _getHormuzPattern() {
     var maritime = window.GII_AGENT_MARITIME;
-    if (!maritime) return { tankerInsurance: false, aisRerouting: false, navalMovement: false, irgcRhetoric: false, totalScore: 0 };
+    // totalScore: null = agent not ready (display '—'); totalScore: 0 = agent ready but no pattern active
+    if (!maritime) return { tankerInsurance: false, aisRerouting: false, navalMovement: false, irgcRhetoric: false, totalScore: null };
     try { return maritime.getHormuzPattern(); } catch (e) {
-      return { tankerInsurance: false, aisRerouting: false, navalMovement: false, irgcRhetoric: false, totalScore: 0 };
+      return { tankerInsurance: false, aisRerouting: false, navalMovement: false, irgcRhetoric: false, totalScore: null };
     }
   }
 
@@ -661,7 +673,7 @@
           if (sec < 3600) return Math.round(sec / 60) + 'm ago';
           return Math.round(sec / 3600) + 'h ago';
         })()
-      : 'pending first scan';
+      : (Math.floor((Date.now() - _uiStartTs) / 60000) >= 5 ? 'no scan — check scraper' : 'pending first scan');
 
     // Summary bar
     html += '<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:10px;align-items:center">';
@@ -714,7 +726,12 @@
       html += '<div style="font-size:9px;color:rgba(255,255,255,0.3);margin-top:4px">⚡ = active scraper running · bars turn red when spike threshold met</div>';
       html += '</div>';
     } else {
-      html += '<div style="color:rgba(255,255,255,0.35);font-size:10px;margin-bottom:10px">Volatility data pending first scan (≈2 min after page load)…</div>';
+      var _watchAgeMin = Math.floor((Date.now() - _uiStartTs) / 60000);
+      var _watchMsg = _watchAgeMin >= 5
+        ? 'No volatility data after ' + _watchAgeMin + ' min — check scraper manager status'
+        : 'Volatility data pending first scan (≈2 min after page load)…';
+      html += '<div style="color:' + (_watchAgeMin >= 5 ? 'var(--warn,#ffc107)' : 'rgba(255,255,255,0.35)') +
+              ';font-size:10px;margin-bottom:10px">' + _watchMsg + '</div>';
     }
 
     // Active instances table
