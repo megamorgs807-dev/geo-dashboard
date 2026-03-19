@@ -27,8 +27,8 @@
   /* ── CONFIG ──────────────────────────────────────────────────────────────── */
   var POLL_MS        = 3 * 60 * 1000;   // scan every 3 minutes
   var INIT_DELAY_MS  = 25 * 1000;       // wait for all agents to boot
-  var ROTATION_DELTA = 0.35;            // candidate must beat weakest open by 35% to rotate
-  var MIN_AGENTS     = 2;               // minimum agents agreeing to consider a candidate
+  var ROTATION_DELTA = 0.20;            // candidate must beat weakest open by 20% to rotate (was 35% — too sticky)
+  var MIN_AGENTS     = 3;               // minimum agents agreeing to consider a candidate (was 2 — allows false confluence)
   var MIN_SCORE      = 1.5;             // minimum raw score to appear on watchlist
   var MAX_WATCHLIST  = 20;             // top N candidates to track
   var MAX_LOG        = 50;             // rotation decisions log size

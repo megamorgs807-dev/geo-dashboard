@@ -577,8 +577,10 @@
       rawConf = _clamp(rawConf, 0, 95);
 
       // v61: bonus when multiple agents independently agree on same asset+direction
+      // Cap effective agreeCount at 3 — beyond that, agents are likely reacting to the
+      // same headline (false independence), so excess agreement inflates confidence.
       var agreeCount = (agentContrib[key] || []).length;
-      if (agreeCount > 1) rawConf = _clamp(rawConf + (agreeCount - 1) * 3, 0, 95);
+      if (agreeCount > 1) rawConf = _clamp(rawConf + (Math.min(agreeCount, 3) - 1) * 3, 0, 95);
 
       // Module 4: apply market lag boost if detected
       if (_lagBoost > 1.0) rawConf = _clamp(rawConf * _lagBoost, 0, 95);
@@ -587,7 +589,9 @@
       // after the entry agent's max +8 boost (57 + 8 = 65). Avoids dead-end signals.
       if (rawConf < 57) return;
 
-      var impactMult = _clamp(_volatilityBoost * conv.boost, 1.0, 3.0);
+      // Cap at 2.0× (was 3.0×) — at 3× a normal 2% risk trade silently became 6% risk
+      // during high-volatility + convergence spikes. 2× is the safe ceiling.
+      var impactMult = _clamp(_volatilityBoost * conv.boost, 1.0, 2.0);
 
       var reasonParts = ['GII'];
       if (conv.level) reasonParts.push(conv.agentCount + '-agent ' + conv.level + ' convergence');

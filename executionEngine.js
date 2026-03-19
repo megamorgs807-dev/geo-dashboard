@@ -433,6 +433,8 @@
   var _closedSessionOnly    = false; // UI toggle: show only this-session closed trades
   var _sessionStartBalance  = null;  // balance at session start — for daily loss limit
   var _lossStreak           = { long: 0, short: 0 };  // v61: per-direction streak — long losses don't penalise short sizing
+  var _winStreak            = { long: 0, short: 0 };  // symmetric to _lossStreak — 3 consecutive wins → +15% size
+  var _lastPriceTs          = {};  // trade_id → ms of last successful price fetch (stale-price watchdog)
   var _wsConnected          = false; // Binance WebSocket status
   var _wsBtcWs              = null;  // WebSocket instance (BTC real-time)
   var _backendPrices = {};  // symbol → price, populated by _pollBackendPrices() every 25 s (H4)
@@ -1357,16 +1359,28 @@
 
     // v61: per-direction loss streak — long losses don't penalise short sizing
     var _dirKey    = (sig.dir || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
-    var _dirStreak = _lossStreak[_dirKey] || 0;
-    var streakMult = _dirStreak >= 3 ? 0.50 : _dirStreak >= 2 ? 0.75 : 1.0;
+    var _dirStreak    = _lossStreak[_dirKey] || 0;
+    var _dirWinStreak = _winStreak[_dirKey]  || 0;
+    var streakMult    = _dirStreak >= 3 ? 0.50 : _dirStreak >= 2 ? 0.75 : 1.0;
+    var winStreakMult  = _dirWinStreak >= 3 ? 1.15 : 1.0;  // +15% after 3 consecutive wins
+    if (winStreakMult > 1.0) {
+      log('RISK', sig.asset + ' win-streak ×' + winStreakMult.toFixed(2) +
+          ' (' + _dirWinStreak + ' wins) — boosting position size', 'green');
+    }
     if (streakMult < 1.0) {
       // Logged on open so the user can see why size is reduced
     }
 
-    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult * kellyMult * streakMult;
+    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult * kellyMult * streakMult * winStreakMult;
     // Hard cap: prevents compounding from creating unrealistically large positions
     // e.g. at $147k balance, 3% = $4,410 per trade — way more than intended
-    if (_cfg.max_risk_usd > 0) riskAmt = Math.min(riskAmt, _cfg.max_risk_usd);
+    // Dynamic cap: scales with balance above $10k (0.5% of balance, min = config floor).
+    // Prevents permanent $50 ceiling as the system proves itself and balance grows.
+    // At $1k balance → cap=$50, at $20k → cap=$100, at $100k → cap=$500.
+    var _dynamicCap = (_cfg.max_risk_usd > 0)
+      ? Math.max(_cfg.max_risk_usd, _cfg.virtual_balance * 0.005)
+      : 0;
+    if (_dynamicCap > 0) riskAmt = Math.min(riskAmt, _dynamicCap);
 
     // Scalper-specific risk cap: scraper/scalper signals are short-timeframe with
     // fast-moving entries — cap them at $15 max to prevent a single BTC scalp
@@ -1445,6 +1459,7 @@
       source:           sig.source           || _inferSource(sig.reason || ''),
       kelly_mult:       +kellyMult.toFixed(2),       // EV sizing multiplier applied (for display/audit)
       streak_mult:      +streakMult.toFixed(2),      // loss-streak sizing reduction
+      win_streak_mult:  +winStreakMult.toFixed(2),   // win-streak sizing boost
       // v61: signal metadata for smart partial TP and trailing logic
       signal_conf:  sig.conf  || 0,
       entry_type:   sig.entryType || ((sig.reason || '').toLowerCase().indexOf('breakout') !== -1 ? 'breakout' : 'other'),
@@ -1773,11 +1788,17 @@
     }
 
     // v61: per-direction loss streak (long/short tracked independently)
+    // win-streak: symmetric boost — 3 consecutive wins → +15% position size
     var _tradeDir = (trade.direction || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
     if (trade.pnl_usd > 0) {
       if (_lossStreak[_tradeDir] > 0) log('RISK', _tradeDir.toUpperCase() + ' loss streak ended at ' + _lossStreak[_tradeDir] + ' — full size restored', 'green');
       _lossStreak[_tradeDir] = 0;
+      _winStreak[_tradeDir] = (_winStreak[_tradeDir] || 0) + 1;
+      if (_winStreak[_tradeDir] === 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ' + _winStreak[_tradeDir] + ' — position size +15%', 'green');
+      else if (_winStreak[_tradeDir] > 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ' + _winStreak[_tradeDir] + ' — maintaining +15% size', 'green');
     } else {
+      if (_winStreak[_tradeDir] >= 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ended at ' + _winStreak[_tradeDir] + ' — size boost removed', 'dim');
+      _winStreak[_tradeDir] = 0;
       _lossStreak[_tradeDir]++;
       if (_lossStreak[_tradeDir] >= 3)      log('RISK', _tradeDir.toUpperCase() + ' streak ' + _lossStreak[_tradeDir] + ' losses — position size halved', 'red');
       else if (_lossStreak[_tradeDir] >= 2) log('RISK', _tradeDir.toUpperCase() + ' streak ' + _lossStreak[_tradeDir] + ' losses — position size at 75%', 'amber');
@@ -1948,8 +1969,23 @@
         // Use cached price as display fallback so unrealised P&L always renders
         var displayPrice = price || _priceCache[normaliseAsset(trade.asset)] || null;
         if (displayPrice) _livePrice[trade.trade_id] = displayPrice;
-        if (!price) { renderUI(); return; }  // no live price — skip TP/SL checks
+        if (!price) {
+          // Stale-price watchdog: if no fresh price AND cache is > 10 min old, force-close.
+          // Prevents ghost trades accumulating funding costs during feed outages.
+          var _cacheAge = _priceCacheTs[normaliseAsset(trade.asset)]
+            ? (Date.now() - _priceCacheTs[normaliseAsset(trade.asset)])
+            : (Date.now() - new Date(trade.timestamp_open || 0).getTime());
+          if (_cacheAge > 10 * 60 * 1000) {
+            var _fallback = _priceCache[normaliseAsset(trade.asset)] || trade.entry_price;
+            log('TRADE', trade.asset + ' STALE-PRICE-TIMEOUT: no fresh price for ' +
+                Math.round(_cacheAge / 60000) + 'min — closing at last known $' +
+                (_fallback || 0).toFixed(2), 'amber');
+            closeTrade(trade.trade_id, _fallback || trade.entry_price || 0, 'STALE-PRICE-TIMEOUT');
+          }
+          renderUI(); return;
+        }
 
+        _lastPriceTs[trade.trade_id] = Date.now();  // record successful price fetch
         _livePrice[trade.trade_id] = price;
         var saved = false;  // track if we need to saveTrades() this cycle
 
@@ -2427,22 +2463,31 @@
       var el = document.getElementById('eeCfg_' + f);
       if (el) el.checked = !!_cfg[f];
     });
-    // Streak indicator
+    // Streak indicator — shows loss streak warning OR win streak boost
     var streakEl = document.getElementById('eeStreakBadge');
     if (streakEl) {
-      var _totalStreak = (_lossStreak.long || 0) + (_lossStreak.short || 0);
-      var _maxStreak   = Math.max(_lossStreak.long || 0, _lossStreak.short || 0);
-      if (_totalStreak === 0) {
+      var _totalLoss = (_lossStreak.long || 0) + (_lossStreak.short || 0);
+      var _maxLoss   = Math.max(_lossStreak.long || 0, _lossStreak.short || 0);
+      var _maxWin    = Math.max(_winStreak.long  || 0, _winStreak.short  || 0);
+      if (_totalLoss === 0 && _maxWin < 3) {
         streakEl.textContent = '';
         streakEl.style.display = 'none';
-      } else {
+      } else if (_totalLoss > 0) {
         streakEl.style.display = 'inline';
         var streakParts = [];
         if (_lossStreak.long  > 0) streakParts.push('L×' + _lossStreak.long);
         if (_lossStreak.short > 0) streakParts.push('S×' + _lossStreak.short);
-        var mult = _maxStreak >= 3 ? '½ size' : '¾ size';
+        var mult = _maxLoss >= 3 ? '½ size' : '¾ size';
         streakEl.textContent = '⚠ ' + streakParts.join(' ') + ' — ' + mult;
-        streakEl.style.color = _maxStreak >= 3 ? 'var(--red)' : 'var(--amber)';
+        streakEl.style.color = _maxLoss >= 3 ? 'var(--red)' : 'var(--amber)';
+      } else {
+        // Win streak — show boost badge
+        streakEl.style.display = 'inline';
+        var winParts = [];
+        if (_winStreak.long  >= 3) winParts.push('L×' + _winStreak.long);
+        if (_winStreak.short >= 3) winParts.push('S×' + _winStreak.short);
+        streakEl.textContent = '🔥 ' + winParts.join(' ') + ' — +15% size';
+        streakEl.style.color = 'var(--green)';
       }
     }
     // WebSocket status
@@ -4087,7 +4132,7 @@
     // First monitor at 9s: HL-Feed connects at 6s + ~1-2s for WS handshake and first
     // allMids message. Waiting until 9s ensures the first stop/TP check has real prices.
     setTimeout(monitorTrades, 9000);
-    setInterval(monitorTrades, 30000);  // then every 30 s
+    setInterval(monitorTrades, 15000);  // every 15s (was 30s) — tighter TP/SL for scalper trades
     _startBinanceWS();                  // BTC fallback feed — yields to HL when live
 
     /* Re-scan loop: every 5 minutes re-process the last IC signal batch.

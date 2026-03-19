@@ -470,8 +470,10 @@
       // ── Elite TA additions ───────────────────────────────────────────────
       // Stochastic RSI
       if (ind.stochRsi) {
-        if (ind.stochRsi.k < 20 && ind.stochRsi.d < 20)            { score += 0.10; reasons.push('StochRSI-OS'); }
-        else if (ind.stochRsi.crossUp && ind.stochRsi.k < 40)      { score += 0.07; reasons.push('StochRSI-xUp'); }
+        // Reduced 0.10→0.05: StochRSI is derivative of RSI (already scored above),
+        // adding 0.10 was double-dipping rather than independent signal
+        if (ind.stochRsi.k < 20 && ind.stochRsi.d < 20)            { score += 0.05; reasons.push('StochRSI-OS'); }
+        else if (ind.stochRsi.crossUp && ind.stochRsi.k < 40)      { score += 0.04; reasons.push('StochRSI-xUp'); }
       }
       // Divergence
       if (ind.divergence) {
@@ -505,8 +507,9 @@
 
       // ── Elite TA additions ───────────────────────────────────────────────
       if (ind.stochRsi) {
-        if (ind.stochRsi.k > 80 && ind.stochRsi.d > 80)            { score += 0.10; reasons.push('StochRSI-OB'); }
-        else if (ind.stochRsi.crossDown && ind.stochRsi.k > 60)    { score += 0.07; reasons.push('StochRSI-xDn'); }
+        // Reduced 0.10→0.05: same as LONG side — StochRSI is RSI derivative, not independent
+        if (ind.stochRsi.k > 80 && ind.stochRsi.d > 80)            { score += 0.05; reasons.push('StochRSI-OB'); }
+        else if (ind.stochRsi.crossDown && ind.stochRsi.k > 60)    { score += 0.04; reasons.push('StochRSI-xDn'); }
       }
       if (ind.divergence) {
         if (ind.divergence.bearDiv)  { score += 0.12; reasons.push('bear-div'); }
@@ -523,6 +526,7 @@
     // ── ADX regime gating ────────────────────────────────────────────────────
     // In trending markets: mean-reversion against trend is dangerous
     // In ranging markets: breakout signals are likely false
+    // ADX cusp (20–25): no directional energy — worst entry conditions, penalise all setups
     if (regime === 'trending' && entryType === 'mean_reversion') {
       var trendAligned = (dir === 'long' && ind.emaBullish) || (dir === 'short' && ind.emaBearish);
       if (!trendAligned) { score *= 0.55; reasons.push('trend-regime-penalty'); }
@@ -533,6 +537,9 @@
       } else {
         score += 0.06; reasons.push('ranging-boost');  // mean-reversion thrives here
       }
+    }
+    if (regime === 'mixed' && ind.adx && ind.adx.adx > 20 && ind.adx.adx < 25) {
+      score *= 0.85; reasons.push('adx-cusp-penalty');  // ADX 20-25 = transitional, no conviction
     }
 
     // ── Brain shared-learning boost ──────────────────────────────────────────
