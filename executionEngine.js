@@ -2489,7 +2489,6 @@
           '<span class="ee-tc-mode ' + (t.mode === 'LIVE' ? 'live' : 'sim') + '">' + t.mode + '</span>' +
         '</div>' +
         '<div class="ee-tc-prices">' +
-          (t.entry_price === 100 ? '<div style="font-size:9px;color:#ff9500;margin-bottom:4px">⚠️ Entry price unavailable at open — P&amp;L unreliable. Consider closing &amp; re-entering.</div>' : '') +
           'Entry: <b>' + _num(t.entry_price) + '</b>' +
           ' &nbsp; <span class="ee-tc-sl">SL: ' + _num(t.stop_loss) + '</span>' +
           ' &nbsp; <span class="ee-tc-tp">TP: ' + _num(t.take_profit) + '</span>' +
