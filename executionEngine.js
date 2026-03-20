@@ -65,7 +65,8 @@
     trailing_stop_enabled: false,        // audit: DISABLED — gii-exit _progressiveTrailCheck owns stop management
                                          // (milestone-based: 1R→BE, 1.5R→+0.5R). Crude 1% trail conflicted with it.
     trailing_stop_pct:     1.0,          // kept for reference (not active while trailing_stop_enabled=false)
-    break_even_enabled:    true,         // move stop to entry once 50% to TP (still active as fallback)
+    break_even_enabled:    true,         // move stop to entry once break_even_trigger_pct% to TP
+    break_even_trigger_pct: 50,          // % of distance to TP at which stop moves to entry (default 50%)
     partial_tp_enabled:    true,         // take partial profit at TP1 (midpoint to TP)
     daily_loss_limit_pct:  10,           // audit: lowered 50%→10% — 50% was not a real circuit breaker
     event_gate_enabled:    true,         // block new trades near major calendar events
@@ -439,7 +440,8 @@
   /* ── State ─────────────────────────────────────────────────────────────────── */
   var _cfg         = {};   // active config (merged DEFAULTS + localStorage)
   var _trades      = [];   // all trades: open + closed
-  var _cooldown    = {};   // asset → timestamp of last signal processed
+  var _cooldown         = {};   // 'ASSET_DIR' → timestamp of last open (direction-aware)
+  var _reversalCooldown = {};   // 'ASSET_DIR' → expiry ms — longer block after opposite-direction SL
   var _log         = [];   // activity log entries
   var _seq         = 0;    // ID sequence counter
   var _livePrice   = {};   // trade_id → most-recently fetched market price
@@ -1191,9 +1193,25 @@
         return { ok: false, reason: 'Correlated position open: ' + corrConflict.asset + ' ' + corrConflict.direction };
     }
 
-    var lastTs = _cooldown[sig.asset];
+    // Direction-aware cooldown: keyed on asset+direction so a BTC SHORT can enter
+    // independently of a BTC LONG cooldown (previously asset-only key caused both
+    // directions to share one slot).
+    var _cdAsset = normaliseAsset(sig.asset);
+    var _cdKey   = _cdAsset + '_' + sig.dir;
+    var lastTs = _cooldown[_cdKey];
     if (lastTs && (Date.now() - lastTs) < _cfg.cooldown_ms)
-      return { ok: false, reason: 'Cooldown active for ' + sig.asset };
+      return { ok: false, reason: 'Cooldown active for ' + sig.asset + ' ' + sig.dir };
+
+    // Reversal cooldown: after a stop-loss, block the OPPOSITE direction for 5 min.
+    // Prevents whipsaw entries where BTC LONG stops out and a SHORT opens seconds later
+    // right at the stop zone (worst possible fill + likely dead-cat reversal).
+    var REVERSAL_COOLDOWN_MS = 5 * 60 * 1000;
+    var _revKey = _cdAsset + '_' + sig.dir;  // the direction we WANT to enter
+    if (_reversalCooldown[_revKey] && Date.now() < _reversalCooldown[_revKey]) {
+      var _revSec = Math.ceil((_reversalCooldown[_revKey] - Date.now()) / 1000);
+      return { ok: false, reason: 'Reversal cooldown: ' + sig.asset + ' ' + sig.dir +
+               ' blocked for ' + _revSec + 's after opposite-direction SL' };
+    }
 
     // Exposure = total risk dollars at stake (units × |entry−stop| per trade).
     // Using notional size_usd here would falsely block every trade because
@@ -1444,6 +1462,47 @@
       riskAmt = riskAmt * 0.50;
       log('RISK', sig.asset + ' crypto size discount: $' + _beforeCrypto.toFixed(2) + ' → $' + riskAmt.toFixed(2) + ' (50% vol cap)', 'dim');
     }
+
+    // VIX-scaled position sizing for risk-on assets.
+    // High VIX = wider intra-day swings = stops hit more often by noise = smaller size.
+    // Only applied to risk-on assets (not defensive/safe-haven, which BENEFIT from high VIX).
+    var _vixRiskAssets = { 'BTC':1, 'ETH':1, 'SOL':1, 'SPY':1, 'QQQ':1, 'TSLA':1, 'NVDA':1,
+                           'AAPL':1, 'MSFT':1, 'AMZN':1, 'GOOGL':1, 'META':1 };
+    if (_vixRiskAssets[normaliseAsset(sig.asset)]) {
+      var _vixNow = 20;
+      try {
+        if (window.GII_AGENT_MACRO && typeof GII_AGENT_MACRO.status === 'function') {
+          _vixNow = GII_AGENT_MACRO.status().vix || 20;
+        }
+      } catch (e) {}
+      var _vixSizeMult = _vixNow >= 35 ? 0.50   // extreme vol: half size
+                       : _vixNow >= 25 ? 0.70   // elevated vol: 70%
+                       : _vixNow >= 20 ? 0.85   // mild elevation: 85%
+                       : 1.0;                   // calm market: full size
+      if (_vixSizeMult < 1.0) {
+        var _bfVix = riskAmt;
+        riskAmt = riskAmt * _vixSizeMult;
+        log('RISK', sig.asset + ' VIX ' + _vixNow.toFixed(0) + ' size ×' + _vixSizeMult +
+            ': $' + _bfVix.toFixed(2) + ' → $' + riskAmt.toFixed(2), 'amber');
+      }
+    }
+
+    // Correlation load multiplier: if many risk-on LONG trades are already open,
+    // downsize new entries — the portfolio is already fully exposed to that theme.
+    // Defensive trades (GLD, JPY, TLT…) are not counted because they naturally hedge.
+    var _riskOnOpen = openTrades().filter(function (t) {
+      return t.direction === 'LONG' && _vixRiskAssets[normaliseAsset(t.asset)];
+    }).length;
+    var _corrLoadMult = _riskOnOpen >= 4 ? 0.50   // 4+ risk-on longs: halve new exposure
+                      : _riskOnOpen >= 3 ? 0.70   // 3 risk-on longs: 70%
+                      : 1.0;
+    if (_corrLoadMult < 1.0 && _vixRiskAssets[normaliseAsset(sig.asset)] && sig.dir === 'LONG') {
+      var _bfCorr = riskAmt;
+      riskAmt = riskAmt * _corrLoadMult;
+      log('RISK', sig.asset + ' corr-load (' + _riskOnOpen + ' risk-on longs open) ×' + _corrLoadMult +
+          ': $' + _bfCorr.toFixed(2) + ' → $' + riskAmt.toFixed(2), 'amber');
+    }
+
     var slDist   = Math.abs(entryPrice - stopLoss);
 
     // Risk-of-ruin guard: scale down so total max drawdown stays ≤ 20% of balance
@@ -1581,7 +1640,7 @@
     saveCfg();
 
     _trades.unshift(trade);
-    _cooldown[sig.asset] = Date.now();
+    _cooldown[normaliseAsset(sig.asset) + '_' + dir] = Date.now();
     saveTrades();
     _apiPostTrade(trade);   // async push to SQLite (fire-and-forget)
 
@@ -1844,6 +1903,17 @@
       _lossStreak[_tradeDir]++;
       if (_lossStreak[_tradeDir] >= 3)      log('RISK', _tradeDir.toUpperCase() + ' streak ' + _lossStreak[_tradeDir] + ' losses — position size halved', 'red');
       else if (_lossStreak[_tradeDir] >= 2) log('RISK', _tradeDir.toUpperCase() + ' streak ' + _lossStreak[_tradeDir] + ' losses — position size at 75%', 'amber');
+    }
+
+    // Reversal cooldown: after a stop-loss, block the opposite direction on this asset
+    // for 5 minutes to prevent immediately flipping into a whipsaw trade.
+    // (Normal per-direction cooldown was already set in openTrade.)
+    if (reason === 'STOP_LOSS' || reason === 'GII-EXIT:SL') {
+      var _slAsset  = normaliseAsset(trade.asset);
+      var _oppDir   = trade.direction === 'LONG' ? 'SHORT' : 'LONG';
+      var _revExpiry = Date.now() + 5 * 60 * 1000;  // 5-minute reversal block
+      _reversalCooldown[_slAsset + '_' + _oppDir] = _revExpiry;
+      log('RISK', trade.asset + ' stop-loss → ' + _oppDir + ' reversal blocked for 5 min', 'amber');
     }
 
     renderUI();
@@ -2114,11 +2184,15 @@
           }
         }
 
-        // ── Break-even stop: move stop to entry once 50% to TP ──────────────
+        // ── Break-even stop: move stop to entry at configurable % of distance to TP ──
+        // Threshold controlled by break_even_trigger_pct config (default 50%).
+        // Lower values (e.g. 35%) lock in profit sooner on volatile assets;
+        // higher values (e.g. 65%) let trades breathe before committing to BE.
         if (_cfg.break_even_enabled && !trade.break_even_done && !trade.partial_tp_taken) {
+          var _beTrigPct = (_cfg.break_even_trigger_pct || 50) / 100;
           var halfDist = isLong
-            ? 0.5 * (trade.take_profit - trade.entry_price)
-            : 0.5 * (trade.entry_price - trade.take_profit);
+            ? _beTrigPct * (trade.take_profit - trade.entry_price)
+            : _beTrigPct * (trade.entry_price - trade.take_profit);
           var beTrigger = isLong
             ? trade.entry_price + halfDist
             : trade.entry_price - halfDist;
@@ -4241,9 +4315,15 @@
           return normaliseAsset(t.asset) === asset ||
                  (t.original_asset && normaliseAsset(t.original_asset) === asset);
         })) return false;
-        // Skip if still in cooldown (trade was recently closed or opened)
-        var cd = _cooldown[asset] || _cooldown[normaliseAsset(s.original_asset || '')];
-        return !cd || (now - cd) > _cfg.cooldown_ms;
+        // Skip if still in direction-aware cooldown
+        var _rsSigDir  = s.dir || 'LONG';
+        var _rsCdKey   = asset + '_' + _rsSigDir;
+        var _rsOrigKey = normaliseAsset(s.original_asset || '') + '_' + _rsSigDir;
+        var cd = _cooldown[_rsCdKey] || _cooldown[_rsOrigKey];
+        if (cd && (now - cd) < _cfg.cooldown_ms) return false;
+        // Also skip if reversal cooldown is active for this direction
+        if (_reversalCooldown[_rsCdKey] && now < _reversalCooldown[_rsCdKey]) return false;
+        return true;
       });
       if (freshSigs.length) {
         log('SCAN', 'Periodic re-scan — ' + freshSigs.length + '/' + _lastSignals.length + ' signal(s) eligible', 'dim');

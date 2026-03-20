@@ -249,7 +249,19 @@
     var candScore = topCandidate.score;
     var relDelta  = weakScore > 0 ? (candScore - weakScore) / weakScore : 1;
 
-    if (relDelta >= ROTATION_DELTA) {
+    /* Reversal confirmation: if the candidate would flip the weakest trade's
+       direction on the SAME asset, require a larger outperformance margin.
+       A plain 20% score advantage is not enough evidence to reverse a live position;
+       +15pp extra (35% total) guards against contra-signal whipsaws.
+       Cross-asset rotations use the normal ROTATION_DELTA threshold. */
+    var REVERSAL_EXTRA_DELTA = 0.15;
+    var isReversal = topCandidate.asset === weakest.trade.asset &&
+                     topCandidate.dir    !== weakest.trade.direction;
+    var requiredDelta = isReversal
+      ? ROTATION_DELTA + REVERSAL_EXTRA_DELTA   // 0.35 for reversals
+      : ROTATION_DELTA;                          // 0.20 for normal rotations
+
+    if (relDelta >= requiredDelta) {
       var reason = 'PORTFOLIO: ' + topCandidate.asset + '(score ' + candScore.toFixed(2) +
                    ') beats ' + weakest.trade.asset + '(score ' + weakScore.toFixed(2) +
                    ') by ' + Math.round(relDelta * 100) + '%';
@@ -272,6 +284,11 @@
       } catch (e) {}
     } else {
       _stats.skipped++;
+      if (isReversal && relDelta >= ROTATION_DELTA && relDelta < requiredDelta) {
+        _log('Reversal of ' + weakest.trade.asset + ' blocked: ' + topCandidate.dir +
+             ' score delta ' + Math.round(relDelta * 100) + '% < ' +
+             Math.round(requiredDelta * 100) + '% required for direction flip');
+      }
     }
   }
 

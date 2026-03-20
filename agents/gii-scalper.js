@@ -742,6 +742,27 @@
           return;
         }
 
+        /* Brain history validation: if BTC+direction has ≥5 completed trades and
+           a win rate below 45%, reduce confidence by 25% to make the signal harder
+           to pass EE's min_confidence gate. The scalper brain tracks per-asset
+           outcomes via noteSignal/noteResult — this closes the feedback loop so
+           chronically losing setups are automatically down-weighted. */
+        if (window.GII_SCALPER_BRAIN && typeof GII_SCALPER_BRAIN.inheritFeedback === 'function') {
+          try {
+            var _brainHistory = GII_SCALPER_BRAIN.inheritFeedback('BTC');
+            if (_brainHistory && _brainHistory[bestDir]) {
+              var _bh = _brainHistory[bestDir];
+              if (_bh.total >= 5 && _bh.winRate < 0.45) {
+                var _bfConf = sig.confidence;
+                sig.confidence = Math.max(MIN_CONF, sig.confidence * 0.75);
+                console.info('[GII SCALPER] Brain penalty: BTC ' + bestDir + ' WR=' +
+                  Math.round(_bh.winRate * 100) + '% (' + _bh.total + ' trades) → conf ' +
+                  _bfConf.toFixed(2) + ' → ' + sig.confidence.toFixed(2));
+              }
+            }
+          } catch (e) {}
+        }
+
         _signals = [sig];
         _activeScalp = { asset: 'BTC', bias: bestDir, signalTs: Date.now() };
         _status.note = 'Signal emitted: ' + bestDir.toUpperCase() + ' BTC conf=' + sig.confidence;
