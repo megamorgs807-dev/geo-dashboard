@@ -34,7 +34,10 @@
                                        // exits on noise. Require a genuinely decisive reversal.
   var PM_EDGE_DEAD_THRESHOLD  = 0.03; // Polymarket edge < 3% → thesis gone
   var OPPOSITION_AGENTS_CLOSE      = 5;  // This many agents opposing → force close (raised 4→5)
-  var OPPOSITION_AGENTS_TRAIL      = 3;  // This many agents opposing → tighten stop (raised 2→3)
+  var OPPOSITION_AGENTS_TRAIL      = 2;  // This many agents opposing → tighten stop
+                                         // Reverted 3→2: trailing stop is profit protection —
+                                         // making it harder to trigger causes winning trades to
+                                         // give back more profit before stop tightens.
   var OPPOSITION_CATEGORIES_CLOSE  = 3;  // Must span 3+ distinct categories for force close
   var OPPOSITION_CATEGORIES_TRAIL  = 2;  // Must span 2+ distinct categories for trail
 
@@ -56,9 +59,16 @@
   /* Emergency thresholds */
   var VIX_EMERGENCY    = 42;   // Force close risk-asset longs above this
   var GTI_EMERGENCY    = 82;   // Force close risk-asset longs above this
-  var MIN_HOLD_MS      = 30 * 60 * 1000; // Never exit within 30 min of entry (raised 8→30 min)
-                                         // Geopolitical trades need time to develop. 8 min was
-                                         // noise — a region-collapse signal at 10 min is meaningless.
+  /* Source-specific minimum hold times.
+     Data analysis: GII trades held past 30min have WORSE expectancy (-$4.54 vs -$1.92)
+     and a 3.3× higher SL hit rate. Do NOT extend GII hold time.
+     IC trades have genuine edge (+$2.63 expectancy) and benefit from longer runs —
+     ic-region-collapsed fires on GII 91/92 times, so IC is rarely affected anyway.
+     Scalper trades are short-term by design — 5 min minimum is sufficient. */
+  var MIN_HOLD_MS_GII      = 8  * 60 * 1000;  // GII/geo: 8 min (data shows longer = worse)
+  var MIN_HOLD_MS_IC       = 60 * 60 * 1000;  // IC: 60 min (genuine edge, needs time to develop)
+  var MIN_HOLD_MS_SCALPER  = 5  * 60 * 1000;  // Scalper: 5 min (short-term by design)
+  var MIN_HOLD_MS          = MIN_HOLD_MS_GII;  // fallback default
 
   /* Trailing stop: tighten to this fraction of current profit */
   var TRAIL_LOCK_FRACTION = 0.75;   // lock in 75% of paper profit when tightening
@@ -546,10 +556,18 @@
     var asset   = trade.asset;
     var source  = trade.source || (trade.thesis && trade.thesis.source) || 'ic';
 
-    /* Noise filter: never exit within MIN_HOLD_MS of opening.
-       EE stores the open timestamp as trade.timestamp_open (ISO string). */
+    /* Source-specific noise filter: hold time before exits are permitted.
+       IC trades have genuine edge and benefit from longer survival — 60min.
+       GII data shows longer hold = worse expectancy — keep at 8min.
+       Scalper is short-term — 5min. */
+    var _srcLower = source.toLowerCase();
+    var _minHold = (_srcLower === 'ic')
+      ? MIN_HOLD_MS_IC
+      : (_srcLower === 'scalper' || _srcLower === 'scalper-session')
+        ? MIN_HOLD_MS_SCALPER
+        : MIN_HOLD_MS_GII;
     var ageMs = Date.now() - new Date(trade.timestamp_open || 0).getTime();
-    if (ageMs < MIN_HOLD_MS) { _stats.skipped++; return; }
+    if (ageMs < _minHold) { _stats.skipped++; return; }
 
     /* 1. Emergency checks (highest priority, all trade types) */
     var emergency = _emergencyCheck(trade);
