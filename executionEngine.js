@@ -1401,11 +1401,12 @@
     var _dirStreak    = _lossStreak[_dirKey] || 0;
     var _dirWinStreak = _winStreak[_dirKey]  || 0;
     var streakMult    = _dirStreak >= 3 ? 0.50 : _dirStreak >= 2 ? 0.75 : 1.0;
-    var winStreakMult  = _dirWinStreak >= 3 ? 1.15 : 1.0;  // +15% after 3 consecutive wins
-    if (winStreakMult > 1.0) {
-      log('RISK', sig.asset + ' win-streak ×' + winStreakMult.toFixed(2) +
-          ' (' + _dirWinStreak + ' wins) — boosting position size', 'green');
-    }
+    // Win-streak tracking kept for display purposes but no longer applied to sizing.
+    // Win streaks in markets are largely random — after 3 wins you're not "hot",
+    // you may just have had favourable conditions. Amplifying size at that point
+    // increases exposure precisely when a mean-reversion is likely.
+    // Kelly already captures genuine edge; this was double-counting.
+    var winStreakMult = 1.0;   // informational only — see _winStreak for badge display
     if (streakMult < 1.0) {
       // Logged on open so the user can see why size is reduced
     }
@@ -1428,7 +1429,7 @@
                : _ddFromPeak >= 5 ? 0.50    // -5 to -8%:  cut to 50%
                : 1.0;
 
-    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult * kellyMult * streakMult * winStreakMult * _ddMult;
+    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult * kellyMult * streakMult * _ddMult;
     if (_ddMult < 1.0) {
       log('RISK', sig.asset + ' peak-DD -' + _ddFromPeak.toFixed(1) + '% → size ×' + _ddMult + ' (' + (_ddMult * 100) + '%)', 'amber');
     }
@@ -1888,17 +1889,16 @@
       } catch (e) { /* notification may fail silently */ }
     }
 
-    // v61: per-direction loss streak (long/short tracked independently)
-    // win-streak: symmetric boost — 3 consecutive wins → +15% position size
+    // Per-direction streak tracking — loss streak reduces size; win streak is display-only
     var _tradeDir = (trade.direction || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
     if (trade.pnl_usd > 0) {
       if (_lossStreak[_tradeDir] > 0) log('RISK', _tradeDir.toUpperCase() + ' loss streak ended at ' + _lossStreak[_tradeDir] + ' — full size restored', 'green');
       _lossStreak[_tradeDir] = 0;
       _winStreak[_tradeDir] = (_winStreak[_tradeDir] || 0) + 1;
-      if (_winStreak[_tradeDir] === 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ' + _winStreak[_tradeDir] + ' — position size +15%', 'green');
-      else if (_winStreak[_tradeDir] > 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ' + _winStreak[_tradeDir] + ' — maintaining +15% size', 'green');
+      if (_winStreak[_tradeDir] === 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ' + _winStreak[_tradeDir] + ' 🔥 (informational — no size change)', 'green');
+      else if (_winStreak[_tradeDir] > 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ' + _winStreak[_tradeDir] + ' 🔥', 'green');
     } else {
-      if (_winStreak[_tradeDir] >= 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ended at ' + _winStreak[_tradeDir] + ' — size boost removed', 'dim');
+      if (_winStreak[_tradeDir] >= 3) log('RISK', _tradeDir.toUpperCase() + ' win streak ended at ' + _winStreak[_tradeDir], 'dim');
       _winStreak[_tradeDir] = 0;
       _lossStreak[_tradeDir]++;
       if (_lossStreak[_tradeDir] >= 3)      log('RISK', _tradeDir.toUpperCase() + ' streak ' + _lossStreak[_tradeDir] + ' losses — position size halved', 'red');
@@ -2630,7 +2630,7 @@
         var winParts = [];
         if (_winStreak.long  >= 3) winParts.push('L×' + _winStreak.long);
         if (_winStreak.short >= 3) winParts.push('S×' + _winStreak.short);
-        streakEl.textContent = '🔥 ' + winParts.join(' ') + ' — +15% size';
+        streakEl.textContent = '🔥 ' + winParts.join(' ') + ' win streak';
         streakEl.style.color = 'var(--green)';
       }
     }

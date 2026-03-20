@@ -154,72 +154,6 @@
     return null;
   }
 
-  /* Sympathetic stop tightening — correlation groups for contagion risk.
-     When a trade in one group hits its stop-loss, tighten stops on all other
-     open trades in the same group. The logic: if BTC breaks down, other risk
-     assets (TSLA, NVDA, SPY) are likely under pressure too — tightening stops
-     early locks in partial profits or reduces the loss on correlated names.
-     Two groups:
-       Defensive / safe-haven: positive correlation within the group
-       Risk-on: positive correlation within the group                           */
-  var _CORR_GROUPS = [
-    ['GLD', 'XAU', 'SLV', 'JPY', 'CHF', 'VIX', 'TLT', 'GAS'],
-    ['BTC', 'ETH', 'SOL', 'SPY', 'QQQ', 'TSM', 'NVDA', 'TSLA', 'SMH', 'FXI']
-  ];
-
-  function _sympatheticTighten(closedTrade) {
-    if (!window.EE || typeof EE.openTrades !== 'function') return;
-    var closedAsset = (closedTrade.asset || '').toUpperCase();
-
-    // Find which correlation group the closed asset belongs to
-    var corrGroup = null;
-    _CORR_GROUPS.forEach(function (g) {
-      if (g.indexOf(closedAsset) !== -1) corrGroup = g;
-    });
-    if (!corrGroup) return;   // asset not in a known correlation group
-
-    var allOpen = EE.openTrades();
-    allOpen.forEach(function (t) {
-      if (t.trade_id === closedTrade.trade_id) return;  // skip the just-closed trade
-      if (corrGroup.indexOf((t.asset || '').toUpperCase()) === -1) return;  // not correlated
-
-      var price = _getPrice(t.asset);
-      if (!price) return;
-
-      var isLong    = t.direction === 'LONG';
-      var inProfit  = isLong ? price > t.entry_price : price < t.entry_price;
-      var newStop;
-
-      if (inProfit) {
-        // Profitable trade: lock in 50% of paper profit
-        var profitDist = Math.abs(price - t.entry_price);
-        newStop = isLong
-          ? t.entry_price + profitDist * 0.50
-          : t.entry_price - profitDist * 0.50;
-      } else {
-        // Losing trade: tighten SL by 20% of the remaining distance to entry
-        var slToEntry  = Math.abs(t.entry_price - t.stop_loss);
-        newStop = isLong
-          ? t.stop_loss + slToEntry * 0.20
-          : t.stop_loss - slToEntry * 0.20;
-      }
-
-      // Sanity: new stop must be on the correct side of current price
-      if (isLong && newStop >= price) return;
-      if (!isLong && newStop <= price) return;
-
-      // Only tighten — never widen the stop
-      var isTighter = isLong ? newStop > t.stop_loss : newStop < t.stop_loss;
-      if (!isTighter) return;
-
-      try { EE.updateOpenTrade(t.trade_id, { stop_loss: +newStop.toFixed(6) }); } catch (e) { return; }
-      _log('TIGHTEN_STOP', t.trade_id, t.asset,
-        'sympathetic-tighten: ' + closedAsset + ' hit SL → ' + t.asset + ' stop moved to ' + newStop.toFixed(4),
-        { newStop: newStop, closedPeer: closedAsset });
-      _stats.tightened++;
-    });
-  }
-
   /* Calculate current unrealised P&L% for a trade */
   function _pnlPct(trade) {
     var price = _getPrice(trade.asset);
@@ -616,7 +550,6 @@
       _log('FORCE_CLOSE', tradeId, asset, emergency.reason, { detail: emergency.detail });
       try { EE.forceCloseTrade(tradeId, 'GII-EXIT:' + emergency.reason); } catch (e) {}
       _stats.closed++;
-      _sympatheticTighten(trade);   // tighten correlated open positions after emergency close
       return;
     }
 
@@ -638,7 +571,6 @@
         _log('FORCE_CLOSE', tradeId, asset, thesisResult.reason, { detail: thesisResult.detail });
         try { EE.forceCloseTrade(tradeId, 'GII-EXIT:' + thesisResult.reason); } catch (e) {}
         _stats.closed++;
-        _sympatheticTighten(trade);   // tighten correlated open positions after this close
         return;
       }
       if (thesisResult.action === 'TIGHTEN_STOP') {
@@ -659,7 +591,6 @@
         _log('FORCE_CLOSE', tradeId, asset, oppResult.reason, { detail: oppResult.detail });
         try { EE.forceCloseTrade(tradeId, 'GII-EXIT:' + oppResult.reason); } catch (e) {}
         _stats.closed++;
-        _sympatheticTighten(trade);   // tighten correlated open positions after this close
         return;
       }
       if (oppResult.action === 'TIGHTEN_STOP') {
