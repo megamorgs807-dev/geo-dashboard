@@ -553,10 +553,33 @@
           }
 
           /* Minimum score advantage required to justify rotation.
-             Prevents churning on noise: a new signal must beat the weakest by
-             at least 25% relative margin (e.g. 5.0 vs 4.0 = 25% — rotate;
-             5.0 vs 4.8 = 4% — keep incumbent). */
-          var ROTATION_MIN_DELTA = 0.25;
+             Raised 25%→60%: rotation is a high-cost action (closes a live trade).
+             The bar must be high. A new signal scoring 6.0 vs incumbent 5.0 = 20% — block.
+             A new signal scoring 8.0 vs incumbent 5.0 = 60% — rotate.
+             Audit data showed ROTATION_MIN_DELTA=0.25 triggered ~50 XLE rotations alone,
+             destroying $150+ in incumbents before they could reach their targets. */
+          var ROTATION_MIN_DELTA = 0.60;
+
+          /* P&L protection: check if an incumbent trade is currently profitable.
+             A trade that is in profit must NEVER be force-closed by rotation — it is
+             actively realizing edge. Block the new signal instead.
+             Uses EE price cache which is the same source as trade monitoring. */
+          function _incumbentInProfit(t) {
+            try {
+              if (window.EE && typeof EE.getLastPrice === 'function') {
+                var _lp = EE.getLastPrice(t.asset);
+                if (!_lp || !t.entry_price) return false;
+                return t.direction === 'LONG' ? _lp > t.entry_price : _lp < t.entry_price;
+              }
+            } catch (e) {}
+            return false;  // can't determine — treat as not in profit (safe default)
+          }
+
+          /* Minimum trade age before it can be rotated out.
+             A trade opened 20 minutes ago has not yet had time to develop.
+             Geopolitical trades typically need hours to manifest — 4h minimum
+             ensures the incumbent gets a genuine opportunity before eviction. */
+          var ROTATION_MIN_AGE_MS = 4 * 60 * 60 * 1000;
 
           /* Region rotation */
           var regionTrades = eeOpen.filter(function (t) { return t.region === sig.region; });
@@ -565,9 +588,28 @@
               return _tradeScore(a) - _tradeScore(b);
             })[0];
             var weakestRegionScore = weakestRegion ? _tradeScore(weakestRegion) : 0;
-            /* Require new signal to beat weakest by at least 25% relative delta */
             if (weakestRegion && newScore > weakestRegionScore * (1 + ROTATION_MIN_DELTA)) {
-              /* New signal beats weakest by meaningful margin — rotate it out */
+              /* Score clears the bar — but only rotate if incumbent is NOT in profit AND old enough */
+              var _regionAge = Date.now() - new Date(weakestRegion.timestamp_open || 0).getTime();
+              if (_incumbentInProfit(weakestRegion)) {
+                /* Incumbent is in profit — protect it, block incoming signal instead */
+                _stats.rejected++;
+                _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+                  reason: 'rotation blocked: ' + weakestRegion.asset + ' incumbent in profit (score ' +
+                    newScore.toFixed(2) + ' vs ' + weakestRegionScore.toFixed(2) + ')', ts: now });
+                if (_rejected.length > 50) _rejected.pop();
+                return;
+              }
+              if (_regionAge < ROTATION_MIN_AGE_MS) {
+                /* Incumbent too young — protect it, block incoming signal */
+                _stats.rejected++;
+                _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+                  reason: 'rotation blocked: ' + weakestRegion.asset + ' too young (' +
+                    Math.round(_regionAge / 60000) + 'min < ' + (ROTATION_MIN_AGE_MS / 60000) + 'min min)', ts: now });
+                if (_rejected.length > 50) _rejected.pop();
+                return;
+              }
+              /* Safe to rotate — losing trade, old enough, clearly outscored */
               try { EE.forceCloseTrade(weakestRegion.trade_id,
                 'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + weakestRegionScore.toFixed(2) + ')'); } catch (e) {}
               _stats.rotated++;
@@ -576,7 +618,7 @@
               _stats.rejected++;
               _rejected.unshift({ asset: sig.asset, dir: sig.dir,
                 reason: 'region cap: ' + sig.region + ' score delta insufficient (' +
-                  (weakestRegion ? weakestRegionScore.toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ', need +25%)', ts: now });
+                  (weakestRegion ? weakestRegionScore.toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ', need +60%)', ts: now });
               if (_rejected.length > 50) _rejected.pop();
               return;
             }
@@ -593,8 +635,24 @@
                 return _tradeScore(a) - _tradeScore(b);
               })[0];
               var weakestSectorScore = weakestSector ? _tradeScore(weakestSector) : 0;
-              /* Require 25% relative delta before rotating sector position */
               if (weakestSector && newScore > weakestSectorScore * (1 + ROTATION_MIN_DELTA)) {
+                /* Score clears bar — apply same P&L + age protection as region rotation */
+                var _sectorAge = Date.now() - new Date(weakestSector.timestamp_open || 0).getTime();
+                if (_incumbentInProfit(weakestSector)) {
+                  _stats.rejected++;
+                  _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+                    reason: 'sector rotation blocked: ' + weakestSector.asset + ' incumbent in profit', ts: now });
+                  if (_rejected.length > 50) _rejected.pop();
+                  return;
+                }
+                if (_sectorAge < ROTATION_MIN_AGE_MS) {
+                  _stats.rejected++;
+                  _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+                    reason: 'sector rotation blocked: ' + weakestSector.asset + ' too young (' +
+                      Math.round(_sectorAge / 60000) + 'min)', ts: now });
+                  if (_rejected.length > 50) _rejected.pop();
+                  return;
+                }
                 try { EE.forceCloseTrade(weakestSector.trade_id,
                   'GII-ENTRY:rotated-by-' + sig.asset + '(score ' + newScore.toFixed(2) + '>' + weakestSectorScore.toFixed(2) + ')'); } catch (e) {}
                 _stats.rotated++;
@@ -602,7 +660,7 @@
                 _stats.rejected++;
                 _rejected.unshift({ asset: sig.asset, dir: sig.dir,
                   reason: 'sector cap: ' + assetSector + ' score delta insufficient (' +
-                    (weakestSector ? weakestSectorScore.toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ', need +25%)', ts: now });
+                    (weakestSector ? weakestSectorScore.toFixed(2) : '?') + ' vs ' + newScore.toFixed(2) + ', need +60%)', ts: now });
                 if (_rejected.length > 50) _rejected.pop();
                 return;
               }

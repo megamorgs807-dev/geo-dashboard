@@ -25,11 +25,16 @@
   var INIT_DELAY_MS = 18 * 1000;    // wait for EE + other agents to fully boot
 
   /* Thesis invalidation thresholds */
-  var IC_PROB_DROP_THRESHOLD  = 25;   // IC region prob below this → close IC/GII trades
-  var POSTERIOR_REVERSAL_DELTA = 0.30; // Bayesian posterior dropped this much from entry → close
+  var IC_PROB_DROP_THRESHOLD  = 15;   // IC region prob below this → close IC/GII trades
+                                      // Raised from 25→15: keyword freq ≠ price momentum.
+                                      // News cycle quietens before market move exhausts —
+                                      // at 25% too many trades were closed while still valid.
+  var POSTERIOR_REVERSAL_DELTA = 0.45; // Bayesian posterior dropped this much from entry → close
+                                       // Raised 0.30→0.45: a 30pt drop was triggering premature
+                                       // exits on noise. Require a genuinely decisive reversal.
   var PM_EDGE_DEAD_THRESHOLD  = 0.03; // Polymarket edge < 3% → thesis gone
-  var OPPOSITION_AGENTS_CLOSE      = 4;  // This many agents opposing → force close
-  var OPPOSITION_AGENTS_TRAIL      = 2;  // This many agents opposing → tighten stop
+  var OPPOSITION_AGENTS_CLOSE      = 5;  // This many agents opposing → force close (raised 4→5)
+  var OPPOSITION_AGENTS_TRAIL      = 3;  // This many agents opposing → tighten stop (raised 2→3)
   var OPPOSITION_CATEGORIES_CLOSE  = 3;  // Must span 3+ distinct categories for force close
   var OPPOSITION_CATEGORIES_TRAIL  = 2;  // Must span 2+ distinct categories for trail
 
@@ -51,7 +56,9 @@
   /* Emergency thresholds */
   var VIX_EMERGENCY    = 42;   // Force close risk-asset longs above this
   var GTI_EMERGENCY    = 82;   // Force close risk-asset longs above this
-  var MIN_HOLD_MS      = 8 * 60 * 1000;  // Never exit within 8 min of entry (noise filter)
+  var MIN_HOLD_MS      = 30 * 60 * 1000; // Never exit within 30 min of entry (raised 8→30 min)
+                                         // Geopolitical trades need time to develop. 8 min was
+                                         // noise — a region-collapse signal at 10 min is meaningless.
 
   /* Trailing stop: tighten to this fraction of current profit */
   var TRAIL_LOCK_FRACTION = 0.75;   // lock in 75% of paper profit when tightening
