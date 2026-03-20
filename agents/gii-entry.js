@@ -24,8 +24,25 @@
   var QUEUE_TTL_MS  = 8 * 60 * 1000; // discard pending signals older than 8 min
 
   /* Minimum confluence score to approve entry */
-  var MIN_SCORE_GEO    = 4.0;   // IC/GII geopolitical trades — lowered 4.5→4.0 for more qualifying events
-  var MIN_SCORE_SCALPER = 3.0;  // Scalper trades — raised 2.0→3.0 to filter weak single-corroboration combos
+  var MIN_SCORE_GEO    = 4.0;   // IC geopolitical trades — threshold for OSINT-driven signals
+  var MIN_SCORE_GII    = 8.0;   // GII multi-agent trades — raised from 4.0 to 8.0.
+                                 // Audit finding: GII confluence score has zero predictive power
+                                 // across all score bands (4-5: 10.6% WR; 8+: 12.5% WR).
+                                 // At 8.0 floor + asset restriction, GII acts as a high-bar
+                                 // confirmation filter rather than an independent trade generator.
+  var MIN_SCORE_SCALPER = 3.0;  // Scalper trades
+
+  /* IC-adjacent assets: the only assets where geopolitical/OSINT catalysts
+     produce moves large enough to reach 2.5R. Evidence from 315-trade audit:
+     - TSLA: +$73.37 total (IC source), expectancy +$9.17, R:R 5.47
+     - VXX:  +$11.90 total (IC source), expectancy +$1.98, R:R 27.3
+     GII signals on XLE, BRENT, QQQ, TSM, FXI, GLD produced no positive expectancy
+     — those assets absorb geopolitical catalysts too slowly for 2.5R targets.
+     GII signals restricted to this list. IC signals have no asset restriction. */
+  var GII_ALLOWED_ASSETS = {
+    'TSLA': true, 'VXX': true, 'LMT': true, 'RTX': true,
+    'NVDA': true, 'BTC': true, 'ETH': true, 'XAR': true, 'SMH': true
+  };
 
   /* Minimum number of distinct agent categories that must agree */
   var MIN_CATEGORIES = 2;
@@ -479,7 +496,27 @@
       var item      = byAsset[key];
       var sig       = item.sig;
       var isScalper = item.source === 'scalper' || item.source === 'scalper-session';
-      var minScore  = isScalper ? MIN_SCORE_SCALPER : MIN_SCORE_GEO;
+      var isIC      = item.source === 'ic';
+      var isGII     = !isScalper && !isIC;   // gii, gii-core, or untagged geo signals
+
+      /* Capital allocation gate: GII signals are restricted to IC-adjacent
+         high-beta assets and require a much higher confluence score.
+         Audit (315 trades): GII has -$2.31 expectancy, score has no predictive value.
+         IC has +$2.63 expectancy, concentrated in TSLA/VXX.
+         GII signals on XLE/BRENT/TSM/QQQ etc. have produced no demonstrated edge. */
+      if (isGII) {
+        if (!GII_ALLOWED_ASSETS[sig.asset]) {
+          _stats.rejected++;
+          _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+            reason: 'GII asset gate: ' + sig.asset + ' not in IC-adjacent list (no demonstrated edge)', ts: now });
+          if (_rejected.length > 50) _rejected.pop();
+          return;
+        }
+      }
+
+      var minScore = isScalper ? MIN_SCORE_SCALPER
+                   : isGII    ? MIN_SCORE_GII
+                   :            MIN_SCORE_GEO;
 
       /* Veto check first (fast) */
       var vetoReason = _veto(item);
