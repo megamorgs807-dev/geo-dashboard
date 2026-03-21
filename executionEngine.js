@@ -1530,18 +1530,25 @@
      * Total IC portfolio exposure is hard-capped at 15 % of virtual_balance.
      * ----------------------------------------------------------------------- */
     var _sigSrc = (sig.source || _inferSource(sig.reason || '')).toLowerCase();
-    if (_sigSrc === 'ic' && window.ICRiskEngine) {
-      /* Exposure cap: reject if open IC notional already ≥ 15 % of account */
+    if (_sigSrc === 'ic') {
+      /* Exposure cap: always enforced for IC signals regardless of whether
+         ICRiskEngine has loaded. Prevents cap bypass if engine script is slow
+         to initialise or fails silently. */
       var _openICUSD = openTrades().filter(function (t) {
         return (t.source || '').toLowerCase() === 'ic';
       }).reduce(function (s, t) { return s + Math.abs(t.size_usd || 0); }, 0);
 
-      if (ICRiskEngine.isAtMaxICExposure(_cfg.virtual_balance, _openICUSD)) {
+      var _icCapUSD = _cfg.virtual_balance * 0.15;
+      var _icAtCap  = window.ICRiskEngine
+                        ? ICRiskEngine.isAtMaxICExposure(_cfg.virtual_balance, _openICUSD)
+                        : (_openICUSD >= _icCapUSD);   // fallback: raw calculation
+
+      if (_icAtCap) {
         log('RISK', sig.asset + ' IC exposure cap: $' + _openICUSD.toFixed(2) +
-            ' open ≥ $' + (_cfg.virtual_balance * 0.15).toFixed(2) + ' cap — signal skipped', 'amber');
+            ' open ≥ $' + _icCapUSD.toFixed(2) + ' cap — signal skipped', 'amber');
         riskAmt = 0;
-      } else {
-        /* Dynamic multiplier based on rolling IC edge */
+      } else if (window.ICRiskEngine) {
+        /* Dynamic multiplier based on rolling IC edge (only when engine is live) */
         var _icMult = ICRiskEngine.getICRiskMultiplier(normaliseAsset(sig.asset));
         if (_icMult !== 1.0) {
           var _beforeIC = riskAmt;

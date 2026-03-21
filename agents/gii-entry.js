@@ -45,7 +45,11 @@
   };
 
   /* Minimum number of distinct agent categories that must agree */
-  var MIN_CATEGORIES = 2;
+  var MIN_CATEGORIES = 3;   /* raised from 2 → 3: requires genuine multi-source confluence */
+
+  /* Minimum ms between approvals for the same asset (prevents runaway re-fire
+     after a trade closes and the same escalation chain immediately re-queues) */
+  var APPROVED_COOLDOWN_MS = 30 * 60 * 1000;  // 30 minutes
 
   /* Defensive / risk asset lists — canonical source is GII.defensiveAssets() /
      GII.riskAssets(). Static fallbacks used only if GII loads after this IIFE. */
@@ -94,11 +98,12 @@
   var MAX_TRADES_PER_EVENT = 3;
 
   /* ── STATE ──────────────────────────────────────────────────────────────── */
-  var _queue      = [];   // pending signals awaiting scoring
-  var _approved   = [];   // last 50 approved signals (audit log)
-  var _rejected   = [];   // last 50 rejected signals (audit log)
-  var _lastPoll   = 0;
-  var _stats      = { submitted: 0, approved: 0, rejected: 0, vetoed: 0, rotated: 0 };
+  var _queue        = [];   // pending signals awaiting scoring
+  var _approved     = [];   // last 50 approved signals (audit log)
+  var _rejected     = [];   // last 50 rejected signals (audit log)
+  var _lastPoll     = 0;
+  var _lastApproved = {};   // asset → timestamp of last approval (runaway-loop guard)
+  var _stats        = { submitted: 0, approved: 0, rejected: 0, vetoed: 0, rotated: 0 };
 
   /* ── QUEUE ──────────────────────────────────────────────────────────────── */
   function _submit(signals, sourceTag) {
@@ -499,6 +504,18 @@
       var isIC      = item.source === 'ic';
       var isGII     = !isScalper && !isIC;   // gii, gii-core, or untagged geo signals
 
+      /* Per-asset approved cooldown — blocks re-approval of same asset within
+         30 minutes of last approval. Prevents runaway escalation chains from
+         opening a new trade immediately after a trade closes on same asset. */
+      if ((now - (_lastApproved[sig.asset] || 0)) < APPROVED_COOLDOWN_MS) {
+        var _coolMinsLeft = Math.ceil((APPROVED_COOLDOWN_MS - (now - (_lastApproved[sig.asset] || 0))) / 60000);
+        _stats.rejected++;
+        _rejected.unshift({ asset: sig.asset, dir: sig.dir,
+          reason: 'approved-cooldown: ' + _coolMinsLeft + 'min remaining', ts: now });
+        if (_rejected.length > 50) _rejected.pop();
+        return;
+      }
+
       /* Capital allocation gate: GII signals are restricted to IC-adjacent
          high-beta assets and require a much higher confluence score.
          Audit (315 trades): GII has -$2.31 expectancy, score has no predictive value.
@@ -761,6 +778,7 @@
       }
 
       toEmit.push(enriched);
+      _lastApproved[sig.asset] = now;   // stamp 30-min cooldown on this asset
       _stats.approved++;
       _approved.unshift({
         asset: sig.asset, dir: sig.dir,
