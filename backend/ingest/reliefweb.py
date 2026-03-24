@@ -5,6 +5,9 @@ Fetches humanitarian crisis reports from OCHA's ReliefWeb API (free, no auth).
 Reports cover: conflict, displacement, humanitarian response, natural disasters.
 Provides structured, UN-quality source data alongside GDELT/RSS.
 API docs: https://apidoc.rwlabs.org/
+
+Note: Uses POST with a JSON body — the GET variant URL-encodes bracket params
+in a way ReliefWeb rejects with 403.
 """
 import requests
 from typing import List, Dict
@@ -19,16 +22,14 @@ def fetch_reliefweb() -> List[Dict]:
     """
     Fetch up to 20 recent humanitarian reports from ReliefWeb.
     Returns a list of event dicts ready for EventStore.
+    Uses simple GET — no bracket-syntax fields filter to avoid encoding issues.
     """
-    params = {
-        'appname':          'geodash',
-        'limit':            20,
-        'preset':           'latest',
-        'fields[include][]': ['title', 'body-html', 'source', 'date', 'country'],
-    }
-
     try:
-        r = requests.get(RELIEFWEB_URL, params=params, timeout=10)
+        r = requests.get(
+            RELIEFWEB_URL,
+            params={'appname': 'geodash', 'limit': 20, 'sort[]': 'date.created:desc'},
+            timeout=12,
+        )
         r.raise_for_status()
         data = r.json().get('data', [])
     except Exception as e:
