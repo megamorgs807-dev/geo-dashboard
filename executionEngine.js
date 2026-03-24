@@ -567,6 +567,18 @@
     'NOK':    'NOK'
   };
 
+  // OANDA rate mapping: Frankfurter base → { OANDA pair key, inverse flag }
+  // inverse=true means OANDA stores the pair as USD/BASE, so 1/mid = BASE/USD
+  var _OANDA_FX_MAP = {
+    'EUR': { key: 'EUR_USD', inverse: false },
+    'GBP': { key: 'GBP_USD', inverse: false },
+    'AUD': { key: 'AUD_USD', inverse: false },
+    'NZD': { key: 'NZD_USD', inverse: false },
+    'CHF': { key: 'USD_CHF', inverse: true  },
+    'JPY': { key: 'USD_JPY', inverse: true  },
+    'CAD': { key: 'USD_CAD', inverse: true  },
+  };
+
   var _priceCache       = {};   // token → last known price (any source)
   var _priceCacheTs     = {};   // token → ms timestamp of last successful fetch
   var _CACHE_TTL        = 15000; // 15 s — shorter than 30-s monitor cycle so prices are fresh
@@ -1048,9 +1060,29 @@
     tryProxy();
   }
 
-  /* Frankfurter API — ECB-sourced forex spot rates, no API key needed */
+  /* Frankfurter API — ECB-sourced forex spot rates, no API key needed.
+     If OANDA Rates agent is connected, use its real-time prices instead
+     and skip Frankfurter entirely (OANDA is ~30s fresh vs ECB once-daily). */
   function _fetchFrankfurter(token, base, cb) {
     if (_cacheFresh(token)) { cb(_priceCache[token] || null); return; }
+
+    // ── OANDA path (real-time, 30s refresh) ────────────────────────────────
+    if (window.OANDA_RATES && OANDA_RATES.isConnected()) {
+      var fxInfo = _OANDA_FX_MAP[base];
+      if (fxInfo) {
+        var oRate = OANDA_RATES.getRate(fxInfo.key);
+        if (oRate && oRate.mid > 0) {
+          var oPrice = fxInfo.inverse ? (1 / oRate.mid) : oRate.mid;
+          var isFirstO = !_priceCache[token];
+          _cacheSet(token, oPrice);
+          if (isFirstO) log('PRICE', 'OANDA → ' + base + '/USD ' + oPrice.toFixed(base === 'JPY' ? 6 : 4), 'dim');
+          cb(oPrice);
+          return;
+        }
+      }
+    }
+
+    // ── Frankfurter fallback (ECB once-daily) ───────────────────────────────
     fetch('https://api.frankfurter.app/latest?base=' + base + '&symbols=USD')
       .then(function (r) { if (!r.ok) throw 0; return r.json(); })
       .then(function (data) {

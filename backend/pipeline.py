@@ -18,11 +18,14 @@ from uw_store import get_uw_store
 from ingest.gdelt      import fetch_gdelt
 from ingest.rss_feeds  import fetch_rss
 from ingest.reddit     import fetch_reddit
+from ingest.reliefweb  import fetch_reliefweb
 from ingest.market_data import fetch_market_prices
 from ingest.unusual_whales import (
     fetch_flow_alerts, fetch_darkpool, fetch_congress_trades,
     fetch_market_tide, fetch_iv_ranks,
 )
+from ingest.worldbank  import fetch_worldbank
+from ingest.imf        import fetch_imf
 # ── Runtime key overrides (set via dashboard without restart) ─────────────────
 _uw_key_override:  str = ''
 
@@ -67,6 +70,10 @@ _cycle_n = 0
 # When > 0, GDELT is skipped even on its scheduled cycle.
 _gdelt_backoff = 0
 
+# Macro refresh tracking — World Bank + IMF fetched once at startup then every 6h
+_macro_last_fetch = 0        # Unix timestamp of last successful macro fetch
+_MACRO_REFRESH_SECS = 6 * 3600
+
 # Rolling price-change history for correlation computation (last 30 cycles)
 _price_history: deque = deque(maxlen=30)
 
@@ -108,13 +115,14 @@ async def _ingest_events(run_gdelt: bool = True) -> List[Dict]:
     tasks = [
         _run_sync(fetch_rss),
         _run_sync(fetch_reddit),
+        _run_sync(fetch_reliefweb),
     ]
     if run_gdelt:
         tasks.append(_run_sync(fetch_gdelt))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
     events = []
-    names  = ['RSS', 'Reddit'] + (['GDELT'] if run_gdelt else [])
+    names  = ['RSS', 'Reddit', 'ReliefWeb'] + (['GDELT'] if run_gdelt else [])
     for name, r in zip(names, results):
         if isinstance(r, Exception):
             print(f'[PIPELINE] {name} raised: {r}')
@@ -132,6 +140,31 @@ async def _ingest_market() -> Dict:
         print(f'[PIPELINE] market data raised: {result}')
         return {}
     return result or {}
+
+
+async def _ingest_macro() -> None:
+    """
+    Fetch World Bank and IMF macro data.
+    Called once at startup and then every _MACRO_REFRESH_SECS (6h).
+    Results are stored in each module's internal cache and served via REST.
+    """
+    global _macro_last_fetch
+    now = time.time()
+    if now - _macro_last_fetch < _MACRO_REFRESH_SECS and _macro_last_fetch > 0:
+        return   # not due yet
+
+    print('[PIPELINE] macro refresh starting (WorldBank + IMF)…')
+    wb_result, imf_result = await asyncio.gather(
+        _run_sync(fetch_worldbank),
+        _run_sync(fetch_imf),
+        return_exceptions=True,
+    )
+    if isinstance(wb_result, Exception):
+        print(f'[PIPELINE] WorldBank raised: {wb_result}')
+    if isinstance(imf_result, Exception):
+        print(f'[PIPELINE] IMF raised: {imf_result}')
+    _macro_last_fetch = time.time()
+    print('[PIPELINE] macro refresh complete')
 
 
 def _regime_multiplier(market: Dict) -> float:
@@ -368,10 +401,16 @@ async def start_pipeline():
     """
     print(f'[PIPELINE] starting — cycle every {CYCLE_SECONDS}s')
 
+    # Kick off macro data fetch at startup (non-blocking — runs alongside first cycle)
+    asyncio.create_task(_ingest_macro())
+
     while True:
         try:
             await _pipeline_cycle()
         except Exception as e:
             print(f'[PIPELINE] unexpected error in cycle: {e}')
+
+        # Refresh macro data if 6h has elapsed (checked inside, no-ops if not due)
+        asyncio.create_task(_ingest_macro())
 
         await asyncio.sleep(CYCLE_SECONDS)

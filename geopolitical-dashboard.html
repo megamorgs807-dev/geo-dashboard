@@ -5255,8 +5255,8 @@
     <!-- Future broker connections -->
     <div class="ee-config-section" style="margin-bottom:16px">
       <div class="ee-panel-title">
-        Broker Connections
-        <span style="font-weight:normal;font-size:8px;color:var(--dim)">HL active &middot; Alpaca ready &middot; others coming soon</span>
+        Broker &amp; Data Connections
+        <span style="font-weight:normal;font-size:8px;color:var(--dim)">HL active &middot; Alpaca ready &middot; OANDA rates optional</span>
       </div>
       <div class="ee-broker-grid">
         <div class="ee-broker-card">
@@ -5274,6 +5274,12 @@
           <!-- Rendered by TTBroker.renderCard() on load -->
           <div class="ee-broker-name">TickTrader</div>
           <div class="ee-broker-assets">Forex majors &middot; Any TickTrader broker</div>
+          <div style="font-size:7px;color:var(--dim);margin-bottom:4px">Loading&hellip;</div>
+        </div>
+        <div id="oandaRatesCard" class="ee-broker-card">
+          <!-- Rendered by OANDA_RATES.renderCard() on load -->
+          <div class="ee-broker-name">OANDA Rates</div>
+          <div class="ee-broker-assets">Real-time FX rates &middot; Replaces ECB/Frankfurter</div>
           <div style="font-size:7px;color:var(--dim);margin-bottom:4px">Loading&hellip;</div>
         </div>
         <div class="ee-broker-card">
@@ -13180,6 +13186,10 @@ function _modalKeyHandler(e) {
 
 <!-- Alpaca Broker adapter — loaded before EE so venue router is available -->
 <script src="agents/alpaca-broker.js?v=2"></script>
+
+<!-- OANDA Rates agent — real-time FX rates via OANDA v20 API.
+     Loaded before executionEngine so _fetchFrankfurter can use OANDA_RATES. -->
+<script src="agents/oanda-rates.js?v=1"></script>
 
 <!-- IC Risk Engine — must load before executionEngine so ICRiskEngine is available
      when the first IC signal is sized. Self-contained; reads localStorage directly. -->

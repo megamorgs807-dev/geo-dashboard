@@ -1,6 +1,8 @@
-/* GII Macro Agent — gii-macro.js v2
+/* GII Macro Agent — gii-macro.js v3
  * Monitors macro-financial signals (VIX, DXY, US10Y, regime)
- * Reads: /api/market, /api/regime
+ * + World Bank country macro indicators (GDP, inflation, debt)
+ * + IMF WEO forecasts (GDP growth, inflation projections)
+ * Reads: /api/market, /api/regime, /api/worldbank, /api/imf
  * Exposes: window.GII_AGENT_MACRO
  */
 (function () {
@@ -18,9 +20,17 @@
     regime: null,
     regimeScore: null,
     riskMode: 'NEUTRAL',
-    online: false
+    online: false,
+    wbLastFetch: null,
+    imfLastFetch: null,
+    wbCountries: 0,
+    imfCountries: 0
   };
   var _accuracy = { total: 0, correct: 0, winRate: null };
+
+  // Cached macro data
+  var _wbData  = null;
+  var _imfData = null;
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -228,13 +238,164 @@
     } catch (e) {}
   }
 
+  // ── World Bank macro analysis ──────────────────────────────────────────────
+
+  function _analyseWorldBank(data) {
+    if (!data || typeof data !== 'object') return;
+    var countries = Object.keys(data);
+    _status.wbCountries  = countries.length;
+    _status.wbLastFetch  = Date.now();
+
+    // Iran: deep recession + hyperinflation → energy / supply disruption risk
+    var irn = data['IRN'] || {};
+    if (irn.gdp_growth != null && irn.inflation != null) {
+      if (irn.gdp_growth < -3 && irn.inflation > 30) {
+        _pushSignal({
+          source: 'worldbank',
+          asset: 'WTI',
+          bias: 'long',
+          confidence: _clamp(0.45 + Math.min(0.20, irn.inflation / 200), 0.40, 0.68),
+          reasoning: 'Iran GDP ' + irn.gdp_growth.toFixed(1) + '% + inflation ' +
+            irn.inflation.toFixed(0) + '% → economic stress, oil supply risk',
+          region: 'MENA',
+          evidenceKeys: ['iran', 'oil', 'inflation', 'gdp', 'worldbank']
+        });
+        _pushSignal({
+          source: 'worldbank',
+          asset: 'GLD',
+          bias: 'long',
+          confidence: 0.42,
+          reasoning: 'Iran macro stress → regional instability → gold safe-haven bid',
+          region: 'MENA',
+          evidenceKeys: ['iran', 'gold', 'macro stress', 'worldbank']
+        });
+      }
+    }
+
+    // China: GDP slowdown → tech/semiconductor caution
+    var chn = data['CHN'] || {};
+    if (chn.gdp_growth != null && chn.gdp_growth < 4.5) {
+      _pushSignal({
+        source: 'worldbank',
+        asset: 'TSM',
+        bias: 'short',
+        confidence: _clamp(0.30 + (4.5 - chn.gdp_growth) * 0.05, 0.25, 0.62),
+        reasoning: 'China GDP ' + chn.gdp_growth.toFixed(1) + '% (slowing) → semi demand headwind',
+        region: 'ASIA',
+        evidenceKeys: ['china', 'gdp', 'semiconductors', 'worldbank']
+      });
+    }
+
+    // Russia: GDP contraction confirms energy/defense premium
+    var rus = data['RUS'] || {};
+    if (rus.gdp_growth != null && rus.gdp_growth < -1) {
+      _pushSignal({
+        source: 'worldbank',
+        asset: 'LMT',
+        bias: 'long',
+        confidence: 0.45,
+        reasoning: 'Russia GDP ' + rus.gdp_growth.toFixed(1) + '% → conflict cost drag, defense long',
+        region: 'EUROPE',
+        evidenceKeys: ['russia', 'gdp', 'defense', 'worldbank']
+      });
+    }
+
+    // Ukraine: GDP collapse + war economy → energy supply chain risk
+    var ukr = data['UKR'] || {};
+    if (ukr.gdp_growth != null && ukr.gdp_growth < -5) {
+      _pushSignal({
+        source: 'worldbank',
+        asset: 'WTI',
+        bias: 'long',
+        confidence: 0.40,
+        reasoning: 'Ukraine GDP ' + ukr.gdp_growth.toFixed(1) + '% → war severity, Europe energy risk',
+        region: 'EUROPE',
+        evidenceKeys: ['ukraine', 'gdp', 'energy', 'worldbank']
+      });
+    }
+
+    // Sudan/Ethiopia: severe crises → humanitarian risk index
+    ['SDN', 'ETH'].forEach(function(iso) {
+      var c = data[iso] || {};
+      if (c.inflation != null && c.inflation > 50) {
+        _pushSignal({
+          source: 'worldbank',
+          asset: 'GLD',
+          bias: 'long',
+          confidence: 0.35,
+          reasoning: iso + ' inflation ' + c.inflation.toFixed(0) + '% → humanitarian crisis, GLD bid',
+          region: 'AFRICA',
+          evidenceKeys: [iso.toLowerCase(), 'inflation', 'crisis', 'worldbank']
+        });
+      }
+    });
+  }
+
+
+  // ── IMF WEO forecast analysis ──────────────────────────────────────────────
+
+  function _analyseIMF(data) {
+    if (!data || typeof data !== 'object') return;
+    _status.imfCountries = Object.keys(data).length;
+    _status.imfLastFetch = Date.now();
+
+    // Iran IMF forecast: persistently negative GDP outlook
+    var irn = data['IRN'] || {};
+    if (irn.gdp_growth != null && irn.gdp_growth < 0) {
+      _pushSignal({
+        source: 'imf',
+        asset: 'WTI',
+        bias: 'long',
+        confidence: 0.40,
+        reasoning: 'IMF WEO: Iran GDP forecast ' + irn.gdp_growth.toFixed(1) +
+          '% → sustained economic stress, oil supply risk',
+        region: 'MENA',
+        evidenceKeys: ['iran', 'imf', 'forecast', 'oil']
+      });
+    }
+
+    // China IMF forecast: sub-4% growth → sustained tech sector headwind
+    var chn = data['CHN'] || {};
+    if (chn.gdp_growth != null && chn.gdp_growth < 4.0) {
+      _pushSignal({
+        source: 'imf',
+        asset: 'TSM',
+        bias: 'short',
+        confidence: _clamp(0.30 + (4.0 - chn.gdp_growth) * 0.06, 0.25, 0.58),
+        reasoning: 'IMF WEO: China GDP forecast ' + chn.gdp_growth.toFixed(1) +
+          '% → semi demand cycle headwind',
+        region: 'ASIA',
+        evidenceKeys: ['china', 'imf', 'forecast', 'semiconductors']
+      });
+    }
+
+    // High global inflation forecasts → gold hedge
+    var highInflCount = 0;
+    Object.keys(data).forEach(function(iso) {
+      var c = data[iso];
+      if (c && c.inflation != null && c.inflation > 15) highInflCount++;
+    });
+    if (highInflCount >= 3) {
+      _pushSignal({
+        source: 'imf',
+        asset: 'GLD',
+        bias: 'long',
+        confidence: _clamp(0.35 + highInflCount * 0.04, 0.35, 0.60),
+        reasoning: highInflCount + ' monitored countries with IMF inflation forecast >15% → gold hedge',
+        region: 'GLOBAL',
+        evidenceKeys: ['imf', 'inflation', 'gold', 'forecast', 'macro']
+      });
+    }
+  }
+
+
   // ── public poll ────────────────────────────────────────────────────────────
 
   var _API = (typeof window !== 'undefined' && window.GEO_API_BASE) || 'http://localhost:8765';
 
   function poll() {
     _status.lastPoll = Date.now();
-    // Always fetch both endpoints independently — don't abandon on market error.
+    // Always fetch all endpoints independently — don't abandon on any one error.
     // _analyseMarket handles null market; GTI fallback runs regardless of backend.
     _fetchJSON(_API + '/api/market', function (err, market) {
       _status.online = !err;
@@ -252,15 +413,32 @@
         }
       });
     });
+
+    // World Bank + IMF macro data (updated 6h on backend — fetch every poll cycle,
+    // but the backend cache means these are effectively free after first load)
+    _fetchJSON(_API + '/api/worldbank', function (err, wb) {
+      if (!err && wb && typeof wb === 'object') {
+        _wbData = wb;
+        _analyseWorldBank(wb);
+      }
+    });
+    _fetchJSON(_API + '/api/imf', function (err, imf) {
+      if (!err && imf && typeof imf === 'object') {
+        _imfData = imf;
+        _analyseIMF(imf);
+      }
+    });
   }
 
   // ── public API ─────────────────────────────────────────────────────────────
 
   window.GII_AGENT_MACRO = {
     poll: poll,
-    signals: function () { return _signals.slice(); },
-    status: function () { return Object.assign({}, _status); },
-    accuracy: function () { return Object.assign({}, _accuracy); }
+    signals:   function () { return _signals.slice(); },
+    status:    function () { return Object.assign({}, _status); },
+    accuracy:  function () { return Object.assign({}, _accuracy); },
+    worldbank: function () { return _wbData  ? Object.assign({}, _wbData)  : null; },
+    imf:       function () { return _imfData ? Object.assign({}, _imfData) : null; }
   };
 
   window.addEventListener('load', function () {

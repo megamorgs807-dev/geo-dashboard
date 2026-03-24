@@ -23,6 +23,8 @@ from config import HOST, PORT, SSE_KEEPALIVE, UW_API_KEY
 from event_store import get_store
 from uw_store import get_uw_store
 import trades_store
+from ingest.worldbank import get_cache as get_wb_cache
+from ingest.imf       import get_cache as get_imf_cache
 
 # ── UW runtime key (set via POST /api/uw/key, persisted to uw_config.json) ───
 _UW_CONFIG_FILE  = os.path.join(os.path.dirname(__file__), 'uw_config.json')
@@ -574,6 +576,28 @@ async def api_correlation():
         'matrix':    matrix,
         'ts':        int(time.time() * 1000),
     })
+
+
+# ── Macro data endpoints (World Bank + IMF) ───────────────────────────────────
+
+@app.get('/api/worldbank')
+async def api_worldbank():
+    """
+    Return cached World Bank macro indicators for conflict-relevant countries.
+    Updated once at startup and every 6 hours by the pipeline.
+    Keys per country: gdp_growth, inflation, ca_balance, govt_debt.
+    """
+    return JSONResponse(content=get_wb_cache())
+
+
+@app.get('/api/imf')
+async def api_imf():
+    """
+    Return cached IMF WEO forecast data for conflict-relevant countries.
+    Updated once at startup and every 6 hours by the pipeline.
+    Keys per country: gdp_growth, inflation (and *_year variants).
+    """
+    return JSONResponse(content=get_imf_cache())
 
 
 # ── Trades API ────────────────────────────────────────────────────────────────
