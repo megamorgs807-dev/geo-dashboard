@@ -76,8 +76,9 @@
 
   /* ── Sector map — used for max_per_sector concentration cap ──────────────── */
   var EE_SECTOR_MAP = {
-    /* Energy — not on HL spot (flagged) */
-    'WTI':'energy',   'BRENT':'energy', 'XLE':'energy',  'XOM':'energy',   'GAS':'energy',
+    /* Energy — WTI, BRENT, GAS on HL perps; XLE/XOM flagged (no HL token) */
+    'WTI':'energy',   'BRENT':'energy', 'XLE':'energy',  'XOM':'energy',
+    'GAS':'energy',   'NATGAS':'energy',
     /* Precious */
     'XAU':'precious', 'GLD':'precious', 'SLV':'precious', 'SILVER':'precious',
     /* Defense — not on HL spot (flagged) */

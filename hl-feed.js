@@ -60,7 +60,8 @@
 
     /* Commodity perps — confirmed live on HL */
     'WTI':      ['WTI', 'OIL', 'CRUDE'],  // WTI crude oil perp (deployed by cash, allMids key = 'WTI')
-    'BRENTOIL': ['BRENT', 'BRENTOIL'],   // Brent crude oil perp (allMids key = 'BRENTOIL')
+    'BRENTOIL': ['BRENT', 'BRENTOIL'],    // Brent crude oil perp (allMids key = 'BRENTOIL')
+    'NATGAS':   ['GAS', 'NATGAS'],        // Natural gas perp (allMids key = 'NATGAS')
 
     /* Spot equity/ETF tokens — @N pair-index, full USD price (Mar 2026 spotMeta)
        Prices ~10-20% of real stock price on some tokens due to oracle/synthetic
@@ -113,7 +114,11 @@
     'META':    'equity',  'QQQ':     'equity',
     'MSFT':    'equity',
     'SLV':     'precious','SILVER':  'precious','XAG': 'precious',
-    'GLD':     'precious' // Gold ETF spot token
+    'GLD':     'precious', // Gold ETF spot token
+    /* Energy commodity perps */
+    'WTI':     'energy',  'OIL':    'energy',  'CRUDE':   'energy',
+    'BRENT':   'energy',  'BRENTOIL':'energy',
+    'GAS':     'energy',  'NATGAS': 'energy'
   };
 
   /* ── Build static coverage set and reverse-map at init ─────────────────────
@@ -344,8 +349,9 @@
       { eeName:'QQQ',   hlTicker:'@288',  assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:false, notes:'Nasdaq 100 ETF token, ~$600' },
       { eeName:'MSFT',  hlTicker:'@289',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Microsoft, ~$399 (accurate)' },
       /* NOT on HL — will be flagged by HL gate */
-      { eeName:'WTI',   hlTicker:'WTI',   assetClass:'commodity', region:'GLOBAL', sector:'energy',  onHL:true,  fullPrice:true,  notes:'WTI crude perp deployed by cash — live on HL' },
-      { eeName:'BRENT', hlTicker:'BRENTOIL', assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true, fullPrice:true,  notes:'Brent crude perp — allMids key BRENTOIL' },
+      { eeName:'WTI',    hlTicker:'WTI',     assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'WTI crude perp deployed by cash — live on HL' },
+      { eeName:'BRENT',  hlTicker:'BRENTOIL',assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'Brent crude perp — allMids key BRENTOIL' },
+      { eeName:'GAS',    hlTicker:'NATGAS',  assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'Natural gas perp — allMids key NATGAS' },
       { eeName:'LMT',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token — flag for Alpaca/TD' },
       { eeName:'RTX',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },
       { eeName:'NOC',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },

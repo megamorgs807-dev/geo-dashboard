@@ -71,13 +71,16 @@
     'SILVER': { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
     'XAG':    { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
     'XAU':    { hlAsset: 'GLD',    sector: 'precious', maxLev: 3 },
-    /* Energy — both crude perps confirmed on HL */
+    /* Energy — crude and natural gas perps confirmed on HL */
     'BRENT':    { hlAsset: 'BRENTOIL', sector: 'energy', maxLev: 5 },
     'BRENTOIL': { hlAsset: 'BRENTOIL', sector: 'energy', maxLev: 5 },
     /* WTI confirmed on HL as perp deployed by cash (allMids key = 'WTI') */
     'WTI':    { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
     'OIL':    { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
     'CRUDE':  { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
+    /* Natural gas perp confirmed on HL (allMids key = 'NATGAS') */
+    'GAS':    { hlAsset: 'NATGAS', sector: 'energy',   maxLev: 5 },
+    'NATGAS': { hlAsset: 'NATGAS', sector: 'energy',   maxLev: 5 },
     /* Crypto perps */
     'BTC':    { hlAsset: 'BTC',    sector: 'crypto',   maxLev: 3 },
     'ETH':    { hlAsset: 'ETH',    sector: 'crypto',   maxLev: 3 },
