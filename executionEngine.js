@@ -114,7 +114,9 @@
   }
   function _saveFlaggedTrades() {
     try { localStorage.setItem(FLAG_STORE_KEY, JSON.stringify(_flaggedTrades.slice(0, FLAG_MAX))); }
-    catch (e) {}
+    catch (e) {
+      console.warn('[EE] _saveFlaggedTrades FAILED — flagged trade log not persisted (storage full or unavailable).', e);
+    }
   }
 
   /* Create a flag record from a signal and persist it */
@@ -460,7 +462,8 @@
   var _ddFromPeak           = 0;     // current % drawdown from peak — read by buildTrade for size scaling
   var _wsConnected          = false; // Binance WebSocket status
   var _wsBtcWs              = null;  // WebSocket instance (BTC real-time)
-  var _backendPrices = {};  // symbol → price, populated by _pollBackendPrices() every 25 s (H4)
+  var _backendPrices        = {};   // symbol → price, populated by _pollBackendPrices() every 25 s (H4)
+  var _backendPriceInterval = null; // stored so a second _apiInit call can't create a duplicate interval
   var _sessionStart  = null; // ISO timestamp — set on init, reset on analyticsReset/fullReset
   var _priceFeedHealth = {}; // source → { ok: bool, lastOk: ms, lastFail: ms }
 
@@ -783,8 +786,10 @@
         if (!r.ok) throw new Error('status ' + r.status);
         _apiOnline = true;
         _backendChecked = true;
-        _pollBackendPrices();                    // H4: prime the price cache immediately
-        setInterval(_pollBackendPrices, 25000);  // H4: refresh every 25 s
+        _pollBackendPrices();                                          // H4: prime the price cache immediately
+        if (!_backendPriceInterval) {                                  // guard: never create a second interval
+          _backendPriceInterval = setInterval(_pollBackendPrices, 25000);  // H4: refresh every 25 s
+        }
         return _apiFetch('/api/trades');
       })
       .then(function (r) { return r.json(); })
