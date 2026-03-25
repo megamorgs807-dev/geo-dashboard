@@ -13401,17 +13401,18 @@ function _modalKeyHandler(e) {
 <script src="agents/gii-entry.js?v=14"></script>
 <script src="agents/gii-exit.js?v=12"></script>
 <script src="agents/gii-portfolio.js?v=4"></script>
-<script src="agents/gii-routing.js?v=10"></script>
+<script src="agents/gii-routing.js?v=11"></script>
 <script src="gii-meta.js?v=2"></script>
-<script src="gii-ui.js?v=15"></script>
+<script src="gii-ui.js?v=16"></script>
 <script src="gii-debug.js?v=5"></script>
 <script src="gii-gatekeeper.js?v=3"></script>
 
-<!-- HL-Feed — Hyperliquid real-time price WebSocket (GAS/NatGas, Gold, Silver, crypto, equities) -->
-<!-- Loaded last so EE.injectPrice() is available when the WS opens 6 s post-load.       -->
-<!-- Market Observer — observation-first parallel scanner. Must load after hl-feed.js -->
+<!-- HL-Feed — Hyperliquid real-time price WebSocket — must load BEFORE signal agents -->
+<script src="hl-feed.js?v=7"></script>
+
+<!-- Market Observer + signal agents — all load after hl-feed so HLFeed is defined -->
 <script src="agents/market-observer.js?v=1"></script>
-<script src="agents/technicals-agent.js?v=2"></script>
+<script src="agents/technicals-agent.js?v=3"></script>
 <script src="agents/macro-events-agent.js?v=2"></script>
 <script src="agents/crypto-signals-agent.js?v=2"></script>
 <script src="agents/correlation-agent.js?v=2"></script>
@@ -13420,6 +13421,16 @@ function _modalKeyHandler(e) {
 <script src="agents/event-momentum-agent.js?v=1"></script>
 <script src="agents/macro-cross-agent.js?v=1"></script>
 <script>
+  // Bridge: route gii-technicals.js (GII_TA_SIGNAL events) into EE.onSignals().
+  // gii-technicals dispatches these events but previously nothing consumed them.
+  window.addEventListener('GII_TA_SIGNAL', function (e) {
+    try {
+      if (window.EE && typeof EE.onSignals === 'function' && e.detail) {
+        EE.onSignals([e.detail]);
+      }
+    } catch (err) {}
+  });
+
   // Keep Market Observer header badges in sync
   setInterval(function () {
     if (!window.GII_AGENT_MARKET_OBSERVER) return;
@@ -13430,7 +13441,6 @@ function _modalKeyHandler(e) {
     if (be) be.textContent = (st.eeSignalsTotal || 0) + ' EE signals';
   }, 5000);
 </script>
-<script src="hl-feed.js?v=7"></script>
 <script>
   // Update EE backup count display after all scripts have loaded
   setTimeout(function() {

@@ -71,12 +71,12 @@
     'SILVER': { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
     'XAG':    { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
     'XAU':    { hlAsset: 'GLD',    sector: 'precious', maxLev: 3 },
-    /* Energy — WTI/BRENT crude perps DELISTED from HL (Mar 2026); route via OANDA */
-    'BRENT':    { hlAsset: 'BRENT',    sector: 'energy', maxLev: 5 },
-    'BRENTOIL': { hlAsset: 'BRENTOIL', sector: 'energy', maxLev: 5 },
-    'WTI':    { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
-    'OIL':    { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
-    'CRUDE':  { hlAsset: 'WTI',    sector: 'energy',   maxLev: 5 },
+    /* Energy — WTI/BRENT crude perps DELISTED from HL (Mar 2026); routed via OANDA */
+    'BRENT':    { hlAsset: null, oandaInstrument: 'BCO_USD',   sector: 'energy', maxLev: 5 },
+    'BRENTOIL': { hlAsset: null, oandaInstrument: 'BCO_USD',   sector: 'energy', maxLev: 5 },
+    'WTI':      { hlAsset: null, oandaInstrument: 'WTICO_USD', sector: 'energy', maxLev: 5 },
+    'OIL':      { hlAsset: null, oandaInstrument: 'WTICO_USD', sector: 'energy', maxLev: 5 },
+    'CRUDE':    { hlAsset: null, oandaInstrument: 'WTICO_USD', sector: 'energy', maxLev: 5 },
     /* Natural gas perp still live on HL (allMids key = 'GAS') */
     'GAS':    { hlAsset: 'GAS',    sector: 'energy',   maxLev: 5 },
     'NATGAS': { hlAsset: 'GAS',    sector: 'energy',   maxLev: 5 },

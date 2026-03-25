@@ -1,10 +1,13 @@
-/* Technicals Agent — technicals-agent.js v1
+/* HL Technicals Scanner — technicals-agent.js v2
  *
- * Runs RSI(14), MACD(12,26,9), and MA20 technical analysis on tradeable
- * assets and forwards directional signals to the Execution Engine.
+ * Runs RSI(14), MACD(12,26,9), and MA20 technical analysis on HL+Alpaca
+ * assets using live HL price feed data and forwards signals to the EE.
+ *
+ * NOTE: This agent uses window.GII_AGENT_TA_SCANNER (not GII_AGENT_TECHNICALS)
+ * to avoid colliding with gii-technicals.js which uses the same global name.
  *
  * Price data  : window.HLFeed (primary) + window.AlpacaBroker (secondary)
- * Output      : window.GII_AGENT_TECHNICALS + feeds EE.onSignals()
+ * Output      : window.GII_AGENT_TA_SCANNER + feeds EE.onSignals()
  *
  * Timing:
  *   - Price samples collected every 60s into _priceHistory (max 60 = 1hr)
@@ -17,9 +20,9 @@
  *   GII alignment bonus → +10 pts
  *   Minimum score to emit → 60
  *
- * Cooldown: same asset+direction not re-emitted within 4 hours.
+ * Cooldown: same asset+direction not re-emitted within 1.5 hours.
  *
- * Exposes: window.GII_AGENT_TECHNICALS { status, signals, scan }
+ * Exposes: window.GII_AGENT_TA_SCANNER { status, signals, scan }
  */
 (function () {
   'use strict';
@@ -528,7 +531,7 @@
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  window.GII_AGENT_TECHNICALS = {
+  window.GII_AGENT_TA_SCANNER = {
 
     /*
      * Returns a status summary object.

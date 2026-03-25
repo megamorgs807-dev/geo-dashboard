@@ -249,7 +249,7 @@
     { name: 'forecast',         global: 'GII_AGENT_FORECAST'       },
     { name: 'intel-master ✦',   global: 'GII_INTEL_MASTER'         },
     { name: 'market-observer ◎', global: 'GII_AGENT_MARKET_OBSERVER'  },
-    { name: 'technicals ◎',      global: 'GII_AGENT_TECHNICALS'       },
+    { name: 'ta-scanner ◎',      global: 'GII_AGENT_TA_SCANNER'       },
     { name: 'macro-events ◎',    global: 'GII_AGENT_MACRO_EVENTS'     },
     { name: 'crypto-signals ◎',  global: 'GII_AGENT_CRYPTO_SIGNALS'   },
     { name: 'correlation ◎',     global: 'GII_AGENT_CORRELATION'      },
