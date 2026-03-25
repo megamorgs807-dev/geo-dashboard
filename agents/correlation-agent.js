@@ -1,4 +1,4 @@
-/* Correlation Agent — correlation-agent.js v1
+/* Correlation Agent — correlation-agent.js v2
  *
  * Monitors correlated asset pairs and signals when the lagging asset has
  * diverged significantly from its lead, expecting mean reversion / catch-up.
@@ -7,16 +7,22 @@
  *   Every 5 minutes, record prices for all lead+lag assets (max 24 samples = 2h).
  *   Calculate the 1-hour return for both assets in each pair.
  *   Divergence = lead_return - lag_return.
- *   If |divergence| >= pair.minDivPct and lag is available (HLFeed), emit a signal:
+ *   If |divergence| >= pair.minDivPct and lag is available, emit a signal:
  *     - Lead UP, lag lagging → lag LONG  (catch-up expected)
  *     - Lead DOWN, lag didn't fall as much → lag SHORT (delayed sell-off expected)
+ *
+ * v2 changes:
+ *   - Price lookup now checks HL first, then OANDA_RATES for energy assets
+ *     (BRENTOIL/WTI were delisted from HL in Mar 2026 but live on OANDA)
+ *   - BRENTOIL/XLE pair replaced with BRENTOIL/GAS (XLE is Alpaca-async only)
+ *   - SILVER alias works correctly via HL @265 token
  *
  * Scoring:
  *   Base confidence from pair definition.
  *   +0.05 if divergence is 2× the minimum threshold.
  *   +0.03 if any GII agent has a matching view on the lead asset.
  *
- * Cooldown: 4 hours per pair (keyed by pair name).
+ * Cooldown: 2 hours per pair (keyed by pair name).
  *
  * Exposes: window.GII_AGENT_CORRELATION
  */
@@ -40,6 +46,47 @@
     'GII_AGENT_MARITIME', 'GII_AGENT_TECHNICALS', 'GII_AGENT_MARKET_OBSERVER'
   ];
 
+  // ── OANDA fallback for energy assets delisted from HL (Mar 2026) ────────────
+  // BRENTOIL and WTI crude perps no longer stream via HLFeed.
+  // OANDA_RATES.getRate() is synchronous (cached last-known rate) so safe to use
+  // inside the scan loop without async plumbing.
+  var _OANDA_ENERGY_MAP = {
+    'BRENTOIL': 'BCO_USD',
+    'BRENT':    'BCO_USD',
+    'WTI':      'WTICO_USD',
+    'OIL':      'WTICO_USD',
+    'CRUDE':    'WTICO_USD'
+  };
+
+  // Returns price for an asset from any available source (HL first, then OANDA).
+  function _getPriceAny(asset) {
+    var up = asset.toUpperCase();
+    // Try HL first
+    if (window.HLFeed && typeof HLFeed.isAvailable === 'function' && HLFeed.isAvailable(up)) {
+      var d = HLFeed.getPrice(up);
+      if (d && d.price) return d.price;
+    }
+    // Fallback: OANDA_RATES for energy assets
+    var oandaInst = _OANDA_ENERGY_MAP[up];
+    if (oandaInst && window.OANDA_RATES && typeof OANDA_RATES.getRate === 'function') {
+      var r = OANDA_RATES.getRate(oandaInst);
+      if (r && r.mid) return r.mid;
+    }
+    return null;
+  }
+
+  // Returns true if we can get a live price for this asset from any source.
+  function _isAvailAny(asset) {
+    var up = asset.toUpperCase();
+    if (window.HLFeed && typeof HLFeed.isAvailable === 'function' && HLFeed.isAvailable(up)) return true;
+    var oandaInst = _OANDA_ENERGY_MAP[up];
+    if (oandaInst && window.OANDA_RATES && typeof OANDA_RATES.getRate === 'function') {
+      var r = OANDA_RATES.getRate(oandaInst);
+      return !!(r && r.mid);
+    }
+    return false;
+  }
+
   // Correlated pairs to monitor.
   // lead     : asset whose move should be followed
   // lag      : asset expected to catch up
@@ -48,16 +95,16 @@
   // minDivPct: minimum divergence (%) to trigger a signal
   // conf     : base confidence score
   var PAIRS = [
-    { lead:'GLD',      lag:'GDX',    name:'Gold/Miners',    sector:'metals', minDivPct:1.2, conf:0.74 },
-    { lead:'GLD',      lag:'SLV',    name:'Gold/Silver',    sector:'metals', minDivPct:1.5, conf:0.70 },
-    { lead:'BTC',      lag:'ETH',    name:'BTC/ETH',        sector:'crypto', minDivPct:2.0, conf:0.72 },
-    { lead:'BTC',      lag:'SOL',    name:'BTC/SOL',        sector:'crypto', minDivPct:2.5, conf:0.68 },
-    { lead:'BTC',      lag:'XRP',    name:'BTC/XRP',        sector:'crypto', minDivPct:2.5, conf:0.67 },
-    { lead:'SPY',      lag:'QQQ',    name:'SPY/QQQ',        sector:'equity', minDivPct:0.8, conf:0.68 },
-    { lead:'BRENTOIL', lag:'XLE',    name:'Oil/Energy ETF', sector:'energy', minDivPct:1.5, conf:0.71 },
-    { lead:'BRENTOIL', lag:'WTI',    name:'Brent/WTI',      sector:'energy', minDivPct:0.8, conf:0.73 },
-    { lead:'GLD',      lag:'SILVER', name:'Gold/Silver2',   sector:'metals', minDivPct:1.5, conf:0.70 },
-    { lead:'ETH',      lag:'SOL',    name:'ETH/SOL',        sector:'crypto', minDivPct:2.0, conf:0.67 }
+    { lead:'GLD',      lag:'SLV',      name:'Gold/Silver',    sector:'metals', minDivPct:1.5, conf:0.70 },
+    { lead:'BTC',      lag:'ETH',      name:'BTC/ETH',        sector:'crypto', minDivPct:2.0, conf:0.72 },
+    { lead:'BTC',      lag:'SOL',      name:'BTC/SOL',        sector:'crypto', minDivPct:2.5, conf:0.68 },
+    { lead:'BTC',      lag:'XRP',      name:'BTC/XRP',        sector:'crypto', minDivPct:2.5, conf:0.67 },
+    { lead:'SPY',      lag:'QQQ',      name:'SPY/QQQ',        sector:'equity', minDivPct:0.8, conf:0.68 },
+    { lead:'BRENTOIL', lag:'WTI',      name:'Brent/WTI',      sector:'energy', minDivPct:0.8, conf:0.73 },
+    { lead:'BRENTOIL', lag:'GAS',      name:'Oil/NatGas',     sector:'energy', minDivPct:2.0, conf:0.65 },
+    { lead:'ETH',      lag:'SOL',      name:'ETH/SOL',        sector:'crypto', minDivPct:2.0, conf:0.67 },
+    { lead:'BTC',      lag:'HYPE',     name:'BTC/HYPE',       sector:'crypto', minDivPct:3.0, conf:0.65 },
+    { lead:'GLD',      lag:'PAXG',     name:'Gold/PAXG',      sector:'metals', minDivPct:1.0, conf:0.72 }
   ];
 
   // ── private state ────────────────────────────────────────────────────────────
@@ -146,37 +193,30 @@
     _lastPoll = Date.now();
     _online   = true;
 
-    if (!window.HLFeed) {
-      // HLFeed not loaded yet — skip silently, will retry next interval
-      return;
-    }
-
     var newSignals = [];
 
     for (var i = 0; i < PAIRS.length; i++) {
       var pair = PAIRS[i];
 
-      // ── 1. Availability check: both assets must be live ──────────────────────
-      var leadAvail = (typeof HLFeed.isAvailable === 'function')
-                      ? HLFeed.isAvailable(pair.lead) : false;
-      var lagAvail  = (typeof HLFeed.isAvailable === 'function')
-                      ? HLFeed.isAvailable(pair.lag)  : false;
+      // ── 1. Availability check: both assets must have a live price ────────────
+      // _isAvailAny() checks HLFeed first, then OANDA_RATES for energy assets.
+      var leadAvail = _isAvailAny(pair.lead);
+      var lagAvail  = _isAvailAny(pair.lag);
 
       if (!leadAvail || !lagAvail) continue;
 
       // ── 2. Get current prices ─────────────────────────────────────────────────
-      var leadData = (typeof HLFeed.getPrice === 'function')
-                     ? HLFeed.getPrice(pair.lead) : null;
-      var lagData  = (typeof HLFeed.getPrice === 'function')
-                     ? HLFeed.getPrice(pair.lag)  : null;
+      // _getPriceAny() checks HLFeed first, then OANDA_RATES for energy assets.
+      var leadPrice = _getPriceAny(pair.lead);
+      var lagPrice  = _getPriceAny(pair.lag);
 
-      // Skip if either feed is missing or has no price
-      if (!leadData || !leadData.price) continue;
-      if (!lagData  || !lagData.price)  continue;
+      // Skip if either price is missing
+      if (!leadPrice) continue;
+      if (!lagPrice)  continue;
 
       // ── 3. Record samples ─────────────────────────────────────────────────────
-      _record(pair.lead, leadData.price);
-      _record(pair.lag,  lagData.price);
+      _record(pair.lead, leadPrice);
+      _record(pair.lag,  lagPrice);
 
       // ── 4. Calculate 1-hour returns ───────────────────────────────────────────
       var leadRet = _calcReturn(pair.lead);

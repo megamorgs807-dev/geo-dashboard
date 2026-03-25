@@ -2128,9 +2128,26 @@
       // Runs before the enabled check so every signal is routed or captured.
       // Priority: HL perps first (lowest cost), then Alpaca (US equities),
       // then TickTrader (forex majors), else flag for future integration.
+      //
+      // CIRCUIT BREAKER: if HL WebSocket has been silent for >5 minutes we
+      // treat HL as unavailable for new trades — prices are too stale to size
+      // positions reliably. Open trades already being monitored are unaffected.
+      // Signal falls through to the next available venue (Alpaca/OANDA).
+      var _hlStale = (function () {
+        if (!window.HLFeed) return false;
+        try {
+          var st = HLFeed.status();
+          if (!st.lastTs) return false;                   // never connected — not stale
+          return (Date.now() - st.lastTs) > 300000;       // > 5 minutes since last tick
+        } catch (e) { return false; }
+      })();
+      if (_hlStale) {
+        log('SYSTEM', 'HL price feed stale (>5 min) — bypassing HL venue for ' + sig.asset, 'warn');
+      }
+
       var _asset = normaliseAsset(sig.asset);
       var _venue;
-      if (window.HLFeed && HLFeed.covers(_asset)) {
+      if (!_hlStale && window.HLFeed && HLFeed.covers(_asset)) {
         _venue = 'HL';
       } else if (window.AlpacaBroker && AlpacaBroker.covers(_asset)) {
         _venue = 'ALPACA';
