@@ -1871,10 +1871,16 @@
     if (trade.venue === 'ALPACA' && window.AlpacaBroker && AlpacaBroker.isConnected()) {
       var _alpSide = trade.direction === 'LONG' ? 'buy' : 'sell';
       var _MIN_ALPACA_NOTIONAL = 5; // Alpaca minimum order size
+      var _buyPow = AlpacaBroker.status().buyingPow;
       if (trade.size_usd < _MIN_ALPACA_NOTIONAL) {
         log('ALPACA', trade.asset + ' order skipped — size $' + trade.size_usd.toFixed(2) +
           ' below Alpaca $' + _MIN_ALPACA_NOTIONAL + ' minimum', 'amber');
         trade.broker_status = 'SKIPPED_MIN_SIZE';
+        saveTrades();
+      } else if (_buyPow !== null && _buyPow !== undefined && _buyPow < trade.size_usd) {
+        log('ALPACA', trade.asset + ' order skipped — insufficient buying power ($' +
+          _buyPow.toFixed(2) + ' available, $' + trade.size_usd.toFixed(2) + ' needed)', 'amber');
+        trade.broker_status = 'SKIPPED_BUYING_POWER';
         saveTrades();
       } else
       AlpacaBroker.placeOrderWithConfirmation(
@@ -4658,6 +4664,23 @@
     // Autosave safety net — belt-and-suspenders every 7 s (guarded against double-load)
     if (!window._eeSaveInterval) {
       window._eeSaveInterval = setInterval(function () { saveTrades(); saveCfg(); }, 7000);
+    }
+
+    // monitorTrades watchdog — checks every 2 min that the monitor interval is still firing.
+    // If _eeLastMonitor is >2 min stale, something killed the interval (e.g. browser tab
+    // throttling, JS error). Logs a warning and attempts to restart the interval.
+    if (!window._eeWatchdogInterval) {
+      window._eeWatchdogInterval = setInterval(function () {
+        var _WATCHDOG_LIMIT = 2 * 60 * 1000; // 2 minutes
+        var _lastFire = window._eeLastMonitor || 0;
+        if (_lastFire && Date.now() - _lastFire > _WATCHDOG_LIMIT) {
+          log('SYSTEM', '⚠ monitorTrades heartbeat stale (' +
+            Math.round((Date.now() - _lastFire) / 1000) + 's ago) — restarting monitor interval', 'red');
+          if (window._eeMonitorInterval) clearInterval(window._eeMonitorInterval);
+          window._eeMonitorInterval = setInterval(monitorTrades, 15000);
+          monitorTrades(); // fire immediately to catch any missed SL/TP checks
+        }
+      }, 2 * 60 * 1000);
     }
 
     // Record starting balance for P&L timeline
