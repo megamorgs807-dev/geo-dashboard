@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   ALPACA-BROKER v1 — Alpaca Markets adapter (paper + live)
+   ALPACA-BROKER v2 — Alpaca Markets adapter (paper + live)
    ═══════════════════════════════════════════════════════════════════════════
    Handles US stocks and ETFs not available on Hyperliquid.
 
@@ -360,6 +360,20 @@
         .catch(function (e) { console.warn('[Alpaca] auto-reconnect failed:', e.message); });
     }, 4000);  // 4s delay — let DOM settle before making auth requests
   }
+
+  // Periodic auth health-check: detect expired/revoked API keys every 5 min
+  setInterval(function () {
+    if (!_cfg.connected || !_cfg.apiKey) return;
+    AlpacaBroker.getAccount()
+      .catch(function (e) {
+        var msg = e && e.message ? e.message : '';
+        if (msg.indexOf('403') !== -1 || msg.indexOf('401') !== -1 || msg.toLowerCase().indexOf('forbidden') !== -1) {
+          _cfg.connected = false;
+          console.warn('[Alpaca] Auth check failed — API key may be expired or revoked:', msg);
+          renderCard();
+        }
+      });
+  }, 5 * 60 * 1000);
 
   // Render card once DOM is ready
   if (document.readyState === 'loading') {

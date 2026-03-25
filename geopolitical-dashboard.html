@@ -13334,18 +13334,18 @@ function _modalKeyHandler(e) {
 <script src="agents/ticktrader-broker.js?v=2"></script>
 
 <!-- Alpaca Broker adapter — loaded before EE so venue router is available -->
-<script src="agents/alpaca-broker.js?v=4"></script>
+<script src="agents/alpaca-broker.js?v=5"></script>
 
 <!-- OANDA Rates agent — real-time FX rates via OANDA v20 API.
      Loaded before executionEngine so _fetchFrankfurter can use OANDA_RATES. -->
-<script src="agents/oanda-rates.js?v=1"></script>
+<script src="agents/oanda-rates.js?v=2"></script>
 
 <!-- IC Risk Engine — must load before executionEngine so ICRiskEngine is available
      when the first IC signal is sized. Self-contained; reads localStorage directly. -->
 <script src="agents/ic-risk-engine.js?v=2"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=92"></script>
+<script src="executionEngine.js?v=93"></script>
 
 <!-- GII Core — loaded before agents so window.GII (defensiveAssets, riskAssets, etc.) is
      available when agent IIFEs execute. Agents all guard GII calls, so order is safe. -->

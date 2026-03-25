@@ -164,11 +164,16 @@
 
     /**
      * Look up a live rate.
+     * Returns null if no rate is found OR if the rate is older than 5 minutes
+     * (prevents stale oil/FX prices from triggering false correlation signals).
      * @param {string} pair  e.g. 'EURUSD', 'EUR_USD', or 'EUR/USD'
      * @returns {{ bid, ask, mid, spread, tradeable, ts } | null}
      */
     getRate: function(pair) {
-      return _rates[_toKey(pair)] || null;
+      var r = _rates[_toKey(pair)];
+      if (!r) return null;
+      if (r.ts && (Date.now() - r.ts) > 300000) return null;  // >5 min stale
+      return r;
     },
 
     /** Return all currently-known rates. */

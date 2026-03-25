@@ -618,7 +618,12 @@
   }
 
   function saveCfg() {
-    try { localStorage.setItem(CFG_KEY, JSON.stringify(_cfg)); } catch (e) {}
+    try {
+      localStorage.setItem(CFG_KEY, JSON.stringify(_cfg));
+    } catch (e) {
+      console.warn('[EE] saveCfg FAILED — config not persisted (storage full or unavailable). ' +
+                   'Risk params, cooldowns and balance may revert on reload.', e);
+    }
   }
 
   /* ── Trades — synchronous localStorage (immediate) ───────────────────────── */
@@ -678,7 +683,11 @@
   }
 
   function saveSigLog() {
-    try { localStorage.setItem(SIGLOG_KEY, JSON.stringify(_signalLog)); } catch (e) {}
+    try {
+      localStorage.setItem(SIGLOG_KEY, JSON.stringify(_signalLog));
+    } catch (e) {
+      console.warn('[EE] saveSigLog FAILED — signal history not persisted.', e);
+    }
   }
 
   /* ── P&L History (localStorage) ─────────────────────────────────────────── */
@@ -692,7 +701,11 @@
   }
 
   function savePnlHistory() {
-    try { localStorage.setItem(PNL_HISTORY_KEY, JSON.stringify(_pnlHistory)); } catch (e) {}
+    try {
+      localStorage.setItem(PNL_HISTORY_KEY, JSON.stringify(_pnlHistory));
+    } catch (e) {
+      console.warn('[EE] savePnlHistory FAILED — P&L history not persisted.', e);
+    }
   }
 
   function _recordPnlSnapshot(event, pnl_usd) {
@@ -739,7 +752,11 @@
   function _apiPostTrade(trade) {
     if (!_apiOnline) return;
     _apiFetch('/api/trades', { method: 'POST', body: JSON.stringify(trade) })
-      .catch(function () { _apiOnline = false; });
+      .catch(function (e) {
+        _apiOnline = false;
+        log('SYSTEM', '⚠ Backend sync failed — trade ' + trade.id + ' not saved to DB. '
+          + 'Backend may be down. (' + (e && e.message ? e.message : 'network error') + ')', 'warn');
+      });
   }
 
   /* PATCH an existing trade in the API (e.g. after close) */
@@ -748,7 +765,11 @@
     _apiFetch('/api/trades/' + encodeURIComponent(tradeId), {
       method: 'PATCH',
       body:   JSON.stringify(updates)
-    }).catch(function () { _apiOnline = false; });
+    }).catch(function (e) {
+      _apiOnline = false;
+      log('SYSTEM', '⚠ Backend sync failed — could not update trade ' + tradeId + '. '
+        + 'Backend may be down. (' + (e && e.message ? e.message : 'network error') + ')', 'warn');
+    });
   }
 
   /* ── API startup: check online, load DB trades, migrate localStorage ──────── */
@@ -1762,7 +1783,10 @@
           log('ALPACA', trade.asset + ' order placed: ' + order.id + ' (' + order.status + ')', 'cyan');
         })
         .catch(function (e) {
-          log('ALPACA', '⚠ Order failed for ' + trade.asset + ': ' + e.message, 'amber');
+          trade.broker_status = 'REJECTED';
+          trade.broker_error  = e.message || 'unknown error';
+          saveTrades();
+          log('ALPACA', '⚠ Order REJECTED for ' + trade.asset + ': ' + (e.message || 'unknown error'), 'amber');
         });
     }
 
