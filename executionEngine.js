@@ -2527,6 +2527,17 @@
           _logSignal(sig, 'SKIPPED', 'post-fetch recheck: ' + recheck.reason);
           return;
         }
+        // Stale-price guard: if the price in cache is older than 10 minutes,
+        // refuse to open — stale prices cause badly-sized positions (e.g. GLD
+        // fallback to Gold Futures ~$4456 when HL disconnects).
+        var _staleTok = normaliseAsset(sig.asset);
+        var _priceAge = _priceCacheTs[_staleTok] ? (Date.now() - _priceCacheTs[_staleTok]) : Infinity;
+        var _STALE_LIMIT = 10 * 60 * 1000;  // 10 minutes
+        if (_priceAge > _STALE_LIMIT) {
+          _logSignal(sig, 'SKIPPED', 'Stale price (' + Math.round(_priceAge / 60000) + ' min old) — refusing trade on ' + sig.asset);
+          log('TRADE', sig.asset + ' skipped: price is ' + Math.round(_priceAge / 60000) + ' min old (limit 10 min). Re-scan will retry when feed recovers.', 'amber');
+          return;
+        }
         _logSignal(sig, 'TRADED', null);
         openTrade(sig, price);
       });

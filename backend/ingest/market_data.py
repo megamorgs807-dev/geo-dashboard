@@ -21,7 +21,7 @@ from config import COINGECKO_URL, BROWSER_HEADERS
 STOOQ_SYMBOLS: Dict[str, str] = {
     'WTI':   'CL.F',    # WTI Crude Oil (front-month futures)
     'BRENT': 'BR.F',    # Brent Crude Oil Futures
-    'GLD':   'GC.F',    # Gold Futures
+    'GLD':   'GLD.US',  # SPDR Gold Shares ETF (correct ~$417 price, not Gold Futures ~$4456)
     'WHT':   'ZW.F',    # Wheat Futures
     'GAS':   'NG.F',    # Natural Gas Futures
     'LMT':   'LMT.US',  # Lockheed Martin
