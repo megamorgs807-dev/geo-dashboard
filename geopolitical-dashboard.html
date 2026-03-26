@@ -5114,6 +5114,7 @@
       <div class="ee-hdr-right">
         <span class="ee-badge" id="eeBadgeMode">SIMULATION</span>
         <span class="ee-badge" id="eeBadgeEnabled">AUTO OFF</span>
+        <span class="ee-badge" id="macroRegimeBadge" style="color:#555" title="Macro regime loading...">REGIME —</span>
         <span class="ee-badge" id="eeBadgeBalance">$10,000</span>
         <span class="ee-badge" id="eeBadgeOpen">0 OPEN</span>
         <span class="ee-badge" id="eeBadgePnl">+$0 P&amp;L</span>
@@ -13344,10 +13345,13 @@ function _modalKeyHandler(e) {
      when the first IC signal is sized. Self-contained; reads localStorage directly. -->
 <script src="agents/ic-risk-engine.js?v=2"></script>
 
+<!-- Macro Regime Classifier — loaded before EE so canExecute() can gate on regime -->
+<script src="agents/macro-regime.js?v=1"></script>
+
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=101"></script>
+<script src="executionEngine.js?v=102"></script>
 <!-- Smoke tests — EETests.run() in console to validate core EE behaviour -->
-<script src="tests/ee-smoke-tests.js?v=1"></script>
+<script src="tests/ee-smoke-tests.js?v=2"></script>
 
 <!-- GII Core — loaded before agents so window.GII (defensiveAssets, riskAssets, etc.) is
      available when agent IIFEs execute. Agents all guard GII calls, so order is safe. -->

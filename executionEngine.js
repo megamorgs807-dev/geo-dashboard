@@ -47,7 +47,7 @@
     stop_loss_pct:         1.5,          // % distance from entry — tighter than original 3%, better capital preservation
     take_profit_ratio:     2.5,          // R:R multiplier — improved from 2:1, more profit per win
     max_open_trades:       8,            // raised to allow more concurrent positions
-    max_per_region:        3,            // raised to allow more regional exposure
+    max_per_region:        5,            // raised — most signals are GLOBAL region so 3 fills up fast
     max_per_sector:        3,            // max open trades per asset sector
     max_exposure_pct:      30,           // max % of balance in open positions
     cooldown_ms:           120000,       // 2 min cooldown between same-asset signals
@@ -1343,6 +1343,13 @@
     var maxExp   = _cfg.virtual_balance * _cfg.max_exposure_pct / 100;
     if (exposure >= maxExp)
       return { ok: false, reason: 'Max exposure ' + _cfg.max_exposure_pct + '% reached' };
+
+    // Macro regime gate: block risk-asset LONGs in RISK_OFF; raise bar in TRANSITIONING
+    if (window.MacroRegime) {
+      var _regimeCheck = MacroRegime.checkSignal(sig);
+      if (!_regimeCheck.ok)
+        return { ok: false, reason: _regimeCheck.reason };
+    }
 
     // Session daily loss limit (configurable, replaces hard-coded 10% check)
     var _effectiveStart = _sessionStartBalance || _cfg.virtual_balance;
