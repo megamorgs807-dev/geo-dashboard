@@ -37,37 +37,59 @@
   // Asset-class move & range thresholds
   var THRESHOLDS = {
     crypto  : { movePct: 2.5, rangeMulti: 2.5 },
-    precious: { movePct: 1.2, rangeMulti: 2.0 },
-    energy  : { movePct: 1.2, rangeMulti: 2.0 },
+    precious: { movePct: 0.8, rangeMulti: 2.0 },
+    energy  : { movePct: 1.0, rangeMulti: 2.0 },
     equity  : { movePct: 0.8, rangeMulti: 2.0 },
     etf     : { movePct: 1.0, rangeMulti: 2.0 },
-    fx      : { movePct: 0.4, rangeMulti: 2.0 },
+    fx      : { movePct: 0.3, rangeMulti: 2.0 },
+    index   : { movePct: 0.5, rangeMulti: 2.0 },
     agri    : { movePct: 1.5, rangeMulti: 2.0 }
   };
 
-  // Static asset-class map (covers all HL + Alpaca assets)
+  // Static asset-class map (covers all HL + Alpaca + OANDA assets)
   var ASSET_CLASS = {
+    // Crypto
     BTC:'crypto', BITCOIN:'crypto', ETH:'crypto', ETHEREUM:'crypto',
     SOL:'crypto', XRP:'crypto', BNB:'crypto', ADA:'crypto',
+    // Metals — ETFs + OANDA spot
     GLD:'precious', SLV:'precious', XAG:'precious', SILVER:'precious', GOLD:'precious',
+    XAU_USD:'precious', XAG_USD:'precious', XAUUSD:'precious', XAGUSD:'precious',
+    // Energy — ETFs + OANDA CFDs
     BRENT:'energy', BRENTOIL:'energy', WTI:'energy', OIL:'energy', CRUDE:'energy',
     GAS:'energy', NATGAS:'energy',
+    BCO_USD:'energy', WTICO_USD:'energy', NATGAS_USD:'energy',
+    // US equities
     SPY:'equity', QQQ:'equity', AAPL:'equity', TSLA:'equity',
     GOOGL:'equity', META:'equity', AMZN:'equity', MSFT:'equity',
     HOOD:'equity', CRCL:'equity',
+    // ETFs
     XAR:'etf', GDX:'etf', XLE:'etf', SOXX:'etf',
     LIT:'etf', XME:'etf', INDA:'etf', SMH:'etf',
+    // Agriculture
     WEAT:'agri', CORN:'agri',
-    EURUSD:'fx', USDJPY:'fx', GBPUSD:'fx', USDCHF:'fx', AUDUSD:'fx'
+    // Forex — both formats (plain + OANDA underscore)
+    EURUSD:'fx', EUR_USD:'fx', USDJPY:'fx', USD_JPY:'fx',
+    GBPUSD:'fx', GBP_USD:'fx', USDCHF:'fx', USD_CHF:'fx',
+    AUDUSD:'fx', AUD_USD:'fx', USDCAD:'fx', USD_CAD:'fx',
+    NZDUSD:'fx', NZD_USD:'fx', GBPJPY:'fx', GBP_JPY:'fx',
+    EURJPY:'fx', EUR_JPY:'fx', EURGBP:'fx', EUR_GBP:'fx',
+    // Indices (OANDA CFDs)
+    SPX500_USD:'index', NAS100_USD:'index', UK100_GBP:'index',
+    GER40_EUR:'index', JP225_USD:'index'
   };
 
   // Cross-asset correlation pairs
   // If lead moves > threshold and lag hasn't followed, flag lag as LAG opportunity
   var CORR_PAIRS = [
-    { lead:'BTC',   lag:'ETH',  leadThr:2.0 },
-    { lead:'BTC',   lag:'SOL',  leadThr:2.5 },
-    { lead:'GLD',   lag:'SLV',  leadThr:0.8 },
-    { lead:'SPY',   lag:'QQQ',  leadThr:0.6 }
+    { lead:'BTC',       lag:'ETH',       leadThr:2.0 },
+    { lead:'BTC',       lag:'SOL',       leadThr:2.5 },
+    { lead:'GLD',       lag:'SLV',       leadThr:0.8 },
+    { lead:'SPY',       lag:'QQQ',       leadThr:0.6 },
+    // OANDA pairs
+    { lead:'XAU_USD',   lag:'XAG_USD',   leadThr:0.7 },  // gold leads silver
+    { lead:'BCO_USD',   lag:'WTICO_USD', leadThr:0.8 },  // Brent leads WTI
+    { lead:'SPX500_USD',lag:'NAS100_USD',leadThr:0.5 },  // S&P leads Nasdaq
+    { lead:'EUR_USD',   lag:'GBP_USD',   leadThr:0.3 }   // EUR often leads GBP
   ];
 
   // GII agents to check for alignment
@@ -138,6 +160,15 @@
           }
         });
       }
+    }
+    // OANDA — forex, metals, energy, indices
+    if (window.OANDA_RATES && OANDA_RATES.isConnected()) {
+      var oRates = OANDA_RATES.getAllRates();
+      Object.keys(oRates).forEach(function (key) {
+        if (!list.find(function(x){ return x.asset === key; })) {
+          list.push({ asset:key, venue:'OANDA' });
+        }
+      });
     }
     _tradeableList = list;
     return list;
@@ -283,6 +314,10 @@
         var ap = AlpacaBroker.getPrice(asset);
         if (ap) price = ap;
       }
+      if (!price && window.OANDA_RATES && OANDA_RATES.isConnected()) {
+        var or = OANDA_RATES.getRate(asset);
+        if (or && or.mid) price = or.mid;
+      }
       if (!price) return;
 
       _record(asset, price);
@@ -337,9 +372,13 @@
 
     // ── Scanner 3: Cross-asset Lag ────────────────────────────────────────────
     CORR_PAIRS.forEach(function (pair) {
-      if (!window.HLFeed) return;
-      var ld = HLFeed.getPrice(pair.lead);
-      var lagD = HLFeed.getPrice(pair.lag);
+      function _getAnyPrice(sym) {
+        if (window.HLFeed) { var p = HLFeed.getPrice(sym); if (p && p.price) return { price: p.price }; }
+        if (window.OANDA_RATES && OANDA_RATES.isConnected()) { var r = OANDA_RATES.getRate(sym); if (r && r.mid) return { price: r.mid }; }
+        return null;
+      }
+      var ld   = _getAnyPrice(pair.lead);
+      var lagD = _getAnyPrice(pair.lag);
       if (!ld || !lagD) return;
 
       _record(pair.lead, ld.price);

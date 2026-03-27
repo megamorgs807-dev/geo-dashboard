@@ -82,10 +82,20 @@
 
   /* ── Regime scoring ──────────────────────────────────────────────────
      Score 0-100. Higher = more risk-off.
-     Threshold: >= 60 → RISK_OFF, 35-59 → TRANSITIONING, < 35 → RISK_ON  */
+     Threshold: >= 70 → RISK_OFF (raised from 60 — less hair-trigger),
+                40-69 → TRANSITIONING, < 40 → RISK_ON                    */
   function _score_regime(vix, dxy, us10y) {
     var s = 0;
     var notes = [];
+
+    /* ─ VIX sanity cap — clamp at 60 to prevent data glitches triggering false RISK_OFF.
+       Real VIX all-time high is ~89.53 (March 2020); anything above 65 in normal markets
+       is almost certainly a stale or erroneous feed value. ─ */
+    if (vix > 60) {
+      console.warn('[MacroRegime] VIX ' + vix.toFixed(1) + ' clamped to 60 — likely data error (real ATH ~89.5)');
+      notes.push('VIX data-clamped: raw=' + vix.toFixed(1) + ' → 60');
+      vix = 60;
+    }
 
     /* ─ VIX level — high VIX alone forces RISK_OFF immediately ─ */
     if (vix >= 60)      { s += 80; notes.push('VIX crisis level (' + vix.toFixed(1) + ')'); }
@@ -157,8 +167,8 @@
         _score   = result.score;
         _details = { vix: vix, dxy: dxy, us10y: us10y, notes: result.notes };
 
-        if      (_score >= 60) _regime = 'RISK_OFF';
-        else if (_score >= 35) _regime = 'TRANSITIONING';
+        if      (_score >= 70) _regime = 'RISK_OFF';      // raised 60→70
+        else if (_score >= 40) _regime = 'TRANSITIONING'; // raised 35→40
         else                   _regime = 'RISK_ON';
 
         /* Fire event if regime changed */
@@ -217,19 +227,29 @@
       var asset = (sig.asset || '').toUpperCase();
       var dir   = (sig.dir   || '').toUpperCase();
 
+      // Scalper and short-timeframe signals are exempt from regime gating.
+      // They have tight stops, <5min hold times, and profit from volatility —
+      // RISK_OFF conditions are exactly when scalp setups appear.
+      var _isScalper = sig.reason && (
+        sig.reason.indexOf('SCALPER') === 0 ||
+        sig.reason.indexOf('GII:') === 0
+      );
+      if (_isScalper) return { ok: true };
+
       if (_regime === 'RISK_OFF') {
-        /* Block new LONG positions on risk assets */
+        // Only block risk-asset LONGs in genuine crisis (score >= 70).
+        // Extreme Fear (low F&G) is a contrarian buy signal — don't block everything.
         if (dir === 'LONG' && RISK_ASSETS.has(asset)) {
           return { ok: false, reason: 'RISK_OFF regime (score ' + _score + ') — LONG on ' + asset + ' blocked; only safe-havens or shorts allowed' };
         }
       }
 
       if (_regime === 'TRANSITIONING') {
-        /* Require higher confidence during uncertain regime */
-        var cfgMin = (window.EE && EE.getConfig) ? EE.getConfig().min_confidence : 60;
-        var required = cfgMin + 10;
+        // Reduced premium 10%→5%: less friction during uncertain conditions
+        var cfgMin = (window.EE && EE.getConfig) ? EE.getConfig().min_confidence : 55;
+        var required = cfgMin + 5;
         if ((sig.conf || 0) < required) {
-          return { ok: false, reason: 'TRANSITIONING regime — conf ' + sig.conf + '% < ' + required + '% (normal ' + cfgMin + '% + 10% regime premium)' };
+          return { ok: false, reason: 'TRANSITIONING regime — conf ' + sig.conf + '% < ' + required + '% (normal ' + cfgMin + '% + 5% premium)' };
         }
       }
 

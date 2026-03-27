@@ -41,30 +41,29 @@
   var DEFAULTS = {
     mode:                  'SIMULATION', // 'SIMULATION' | 'LIVE'
     enabled:               true,         // auto-execution always on by default
-    min_confidence:        60,           // minimum IC confidence % to auto-execute
+    min_confidence:        55,           // lowered 60→55: more trades get through on good signals
     virtual_balance:       1000,         // starting virtual balance (USD)
-    risk_per_trade_pct:    2,            // % of balance risked per trade — v61: reduced from 3% to limit concurrent exposure
-    stop_loss_pct:         1.5,          // % distance from entry — tighter than original 3%, better capital preservation
-    take_profit_ratio:     2.5,          // R:R multiplier — improved from 2:1, more profit per win
-    max_open_trades:       8,            // raised to allow more concurrent positions
-    max_per_region:        5,            // raised — most signals are GLOBAL region so 3 fills up fast
-    max_per_sector:        5,            // max open trades per asset sector
-    max_exposure_pct:      30,           // max % of balance in open positions
-    cooldown_ms:           120000,       // 2 min cooldown between same-asset signals
+    risk_per_trade_pct:    3,            // raised 2→3%: more aggressive growth on small account
+    stop_loss_pct:         1.5,          // % distance from entry
+    take_profit_ratio:     2.5,          // R:R multiplier
+    max_open_trades:       12,           // raised 8→12: more concurrent positions
+    max_per_region:        6,            // raised 5→6
+    max_per_sector:        6,            // raised 5→6
+    max_exposure_pct:      45,           // raised 30→45%: more total exposure allowed
+    cooldown_ms:           60000,        // halved 2min→1min: faster re-entry on same asset
     broker:                'SIMULATION', // future: 'BINANCE' | 'ALPACA' | 'POLYMARKET'
     auto_start:            true,         // if false, auto-execution stays OFF on page load
     max_siglog:            200,          // max entries kept in signal log
     // ── Risk management additions ──────────────────────────────────────────────
-    trailing_stop_enabled: false,        // audit: DISABLED — gii-exit _progressiveTrailCheck owns stop management
-                                         // (milestone-based: 1R→BE, 1.5R→+0.5R). Crude 1% trail conflicted with it.
-    trailing_stop_pct:     1.0,          // kept for reference (not active while trailing_stop_enabled=false)
+    trailing_stop_enabled: false,        // DISABLED — gii-exit _progressiveTrailCheck owns stop management
+    trailing_stop_pct:     1.0,          // kept for reference (not active)
     break_even_enabled:    true,         // move stop to entry once break_even_trigger_pct% to TP
-    break_even_trigger_pct: 50,          // % of distance to TP at which stop moves to entry (default 50%)
+    break_even_trigger_pct: 50,          // % of distance to TP at which stop moves to entry
     partial_tp_enabled:    true,         // take partial profit at TP1 (midpoint to TP)
-    daily_loss_limit_pct:  10,           // audit: lowered 50%→10% — 50% was not a real circuit breaker
+    daily_loss_limit_pct:  15,           // raised 10→15%: slightly looser circuit breaker
     event_gate_enabled:    true,         // block new trades near major calendar events
     event_gate_hours:      0.5,          // hours before event to block (0.5 = 30min)
-    max_risk_usd:          50            // v61: hard cap reduced from $75 → $50 — kicks in earlier at ~$2.5k balance
+    max_risk_usd:          100           // raised 50→100: higher per-trade cap for leverage
   };
 
   /* ── Sector map — used for max_per_sector concentration cap ──────────────── */
@@ -252,6 +251,34 @@
         : 'No rotations yet';
     }
   }
+
+  /* ── Adaptive confirmation tiers ───────────────────────────────────────────
+     Specialist agents with high confidence can execute without second confirmation.
+     Generalist/geopolitical signals always require corroboration (srcCount >= 2).
+
+     FAST TRACK  — specialist source + conf >= 88%: execute immediately, single-source OK.
+                   confMult applies 1.5–1.75× sizing based on confidence level.
+     STANDARD    — 2+ sources (srcCount >= 2): full execution.
+     BLOCKED     — single source, conf < 88%, non-specialist: blocked as before.
+
+     Source category map: confirms complementarity. If srcCount >= 2 but both sources
+     are the same category (e.g. two social-sentiment agents), it counts as 1 category.
+     Full cross-category corroboration is the gold standard.                          */
+  var SPECIALIST_SOURCES = {
+    'forex-fundamentals': 'fundamental',
+    'technicals':         'technical',
+    'ta-scanner':         'technical',
+    'market-obs':         'market-structure',
+    'market-observer':    'market-structure',
+    'macro-cross':        'macro-cross',
+    'macro-events':       'macro-event',
+    'crypto-signals':     'on-chain',
+    'onchain':            'on-chain',
+    'momentum':           'momentum',
+    'correlation':        'correlation',
+    'cot':                'fundamental',
+    'funding-rate':       'on-chain'
+  };
 
   /* ── Asset remap table ─────────────────────────────────────────────────────
      Maps signal asset names that are not directly tradeable to their real-market
@@ -1318,11 +1345,30 @@
     if (sig.conf < _cfg.min_confidence)
       return { ok: false, reason: 'Conf ' + sig.conf + '% < threshold ' + _cfg.min_confidence + '%' };
 
-    // Source corroboration: require at least 2 independent data sources for non-scalper signals.
-    // Single-source signals (srcCount=1) have high false-positive rate — audit found no win-rate benefit.
+    // Adaptive confirmation tiers:
+    //   Fast Track  — specialist agent + conf >= 88%: single-source execution allowed.
+    //   Standard    — srcCount >= 2: corroborated by 2+ independent sources.
+    //   Blocked     — single source, conf < 88%, or non-specialist.
+    // Scalper/GII signals are always exempt (they have their own scoring pipeline).
     var _isSrcScalper = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
-    if (!_isSrcScalper && (sig.srcCount === undefined || sig.srcCount < 2))
-      return { ok: false, reason: 'srcCount ' + (sig.srcCount === undefined ? 'missing' : sig.srcCount) + ' — signal not corroborated by 2+ sources' };
+    if (!_isSrcScalper) {
+      var _needsCorroboration = sig.srcCount === undefined || sig.srcCount < 2;
+      if (_needsCorroboration) {
+        // Check if it qualifies for Fast Track
+        var _sigSrcName  = (sig.source || _inferSource(sig.reason || '')).toLowerCase();
+        var _isSpecialist = !!SPECIALIST_SOURCES[_sigSrcName];
+        var _sigConfNow  = sig.conf || 0;  // already 0-100 after normalisation
+        if (_isSpecialist && _sigConfNow >= 88) {
+          // Fast Track: specialist agent, very high confidence — execute without second confirmation.
+          // confMult will apply 1.5-1.75× sizing boost for this confidence level.
+          log('RISK', sig.asset + ' fast-track: ' + _sigSrcName + ' specialist conf=' + _sigConfNow +
+              '% — single-source execution allowed', 'green');
+        } else {
+          return { ok: false, reason: 'srcCount ' + (sig.srcCount === undefined ? 'missing' : sig.srcCount) +
+                   ' — not corroborated (need 2+ sources, or specialist conf≥88%). Source: ' + _sigSrcName };
+        }
+      }
+    }
 
     var open = openTrades();
 
@@ -1348,14 +1394,19 @@
     if (_pendingOpen[normaliseAsset(sig.asset)])
       return { ok: false, reason: 'Price fetch already in progress for ' + sig.asset };
 
-    // Correlation guard: block if a correlated asset is already open in the same direction
-    var corrGroup = _getCorrGroup(normaliseAsset(sig.asset));
-    if (corrGroup) {
-      var corrConflict = open.find(function (t) {
-        return corrGroup.indexOf(normaliseAsset(t.asset)) !== -1 && t.direction === sig.dir;
-      });
-      if (corrConflict)
-        return { ok: false, reason: 'Correlated position open: ' + corrConflict.asset + ' ' + corrConflict.direction };
+    // Correlation guard: block if a correlated asset is already open in the same direction.
+    // Scalper signals are exempt — they have tight stops and short hold times,
+    // so running BTC and ETH scalps simultaneously is acceptable.
+    var _isSrcScalperCorr = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
+    if (!_isSrcScalperCorr) {
+      var corrGroup = _getCorrGroup(normaliseAsset(sig.asset));
+      if (corrGroup) {
+        var corrConflict = open.find(function (t) {
+          return corrGroup.indexOf(normaliseAsset(t.asset)) !== -1 && t.direction === sig.dir;
+        });
+        if (corrConflict)
+          return { ok: false, reason: 'Correlated position open: ' + corrConflict.asset + ' ' + corrConflict.direction };
+      }
     }
 
     // Direction-aware cooldown: keyed on asset+direction so a BTC SHORT can enter
@@ -1410,16 +1461,29 @@
       }
     }
 
-    // Pre-event gate: block new trades within event_gate_hours of major calendar events
+    // Pre-event gate: block new trades within event_gate_hours of HIGH-IMPACT calendar events.
+    // Asset/region-aware: an event in one region doesn't block unrelated assets.
+    //   importance >= 5 (market-moving): blocks ALL signals — systemic global risk.
+    //   importance >= 4 (major):         blocks if event region matches signal region.
+    //   importance >= 3 (medium-high):   blocks only if event asset matches signal asset.
+    // This prevents a minor EU event from blocking BTC or JPY pairs.
     if (_cfg.event_gate_enabled) {
       var calAgent = window.GII_AGENT_CALENDAR;
       if (calAgent && typeof calAgent.upcoming === 'function') {
         try {
           var upcoming = calAgent.upcoming();
           var gateHours = _cfg.event_gate_hours || 0.5;
+          var _sigRegion  = (sig.region || '').toUpperCase();
+          var _sigAsset   = normaliseAsset(sig.asset);
           var blocked = upcoming.filter(function (ev) {
-            // ev.days is days until event; 0 = today, negative = past
-            return ev.importance >= 3 && ev.days >= 0 && ev.days <= (gateHours / 24);
+            if (ev.days < 0 || ev.days > gateHours / 24) return false;
+            var imp = ev.importance || 0;
+            if (imp >= 5) return true;                          // market-moving: block everything
+            var evRegion = (ev.region || '').toUpperCase();
+            var evAsset  = (ev.asset  || '').toUpperCase();
+            if (imp >= 4 && evRegion && evRegion === _sigRegion) return true;  // major event, same region
+            if (imp >= 3 && evAsset  && evAsset  === _sigAsset)  return true;  // any event, same asset
+            return false;
           });
           if (blocked.length) {
             var ev0 = blocked[0];
@@ -1591,7 +1655,7 @@
       var kelly = (W * R - (1 - W)) / R;
       var baseKelly = Math.max(0.01, (0.5 * R - 0.5) / R);  // BE kelly at 50% win rate
       if (kelly > 0) {
-        kellyMult = Math.max(0.3, Math.min(1.5, kelly * 0.5 / baseKelly));
+        kellyMult = Math.max(0.3, Math.min(2.0, kelly * 0.5 / baseKelly));  // raised cap 1.5→2.0
         // Floor lowered 0.50→0.30: prior win rate now genuinely affects sizing.
         // At W=0.36 → kellyMult≈0.35 (was 0.50 — prior change was a no-op at 0.50 floor).
         // At W=0.55+ → kellyMult scales up naturally above 0.5. Responsive, not fixed.
@@ -1628,22 +1692,41 @@
     }
 
     // Peak drawdown size scaler: limits new exposure when the account is in a drawdown.
-    // Applied after Kelly/streak so the dd-mult stacks with existing protections.
-    var _ddMult = _ddFromPeak >= 8 ? 0.25   // -8 to -10%: cut to 25%
-               : _ddFromPeak >= 5 ? 0.50    // -5 to -8%:  cut to 50%
+    // Thresholds loosened to give the system more room to recover before cutting size.
+    var _ddMult = _ddFromPeak >= 12 ? 0.25   // -12%+: cut to 25%  (was -8%)
+               : _ddFromPeak >=  8 ? 0.50   // -8 to -12%: cut to 50% (was -5%)
                : 1.0;
 
-    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult * kellyMult * streakMult * _ddMult;
+    // Confidence-tiered sizing: scale position based on signal confidence.
+    // High-confidence signals get bigger allocations; weak signals are reduced.
+    // This lets the system be more opportunistic on strong setups without
+    // increasing risk on uncertain entries. The _dynamicCap still applies as
+    // a hard ceiling regardless of how high confMult pushes riskAmt.
+    //   conf < 0.55  → 0.75× (weak — reduce size)
+    //   conf 0.55–0.69 → 1.00× (standard)
+    //   conf 0.70–0.79 → 1.30× (good signal)
+    //   conf 0.80–0.89 → 1.75× (strong signal)
+    //   conf ≥ 0.90   → 2.50× (very strong — _dynamicCap still limits max)
+    var _sigConf = sig.conf || sig.confidence || 0;
+    var confMult = _sigConf >= 90 ? 2.50
+                 : _sigConf >= 80 ? 1.75
+                 : _sigConf >= 70 ? 1.30
+                 : (_sigConf > 0 && _sigConf < 55) ? 0.75
+                 : 1.0;
+    if (confMult !== 1.0) {
+      log('RISK', sig.asset + ' conf ' + _sigConf + '% → size ×' + confMult,
+          confMult > 1.0 ? 'green' : 'dim');
+    }
+
+    var riskAmt  = _cfg.virtual_balance * _cfg.risk_per_trade_pct / 100 * impactMult * kellyMult * streakMult * _ddMult * confMult;
     if (_ddMult < 1.0) {
       log('RISK', sig.asset + ' peak-DD -' + _ddFromPeak.toFixed(1) + '% → size ×' + _ddMult + ' (' + (_ddMult * 100) + '%)', 'amber');
     }
-    // Hard cap: prevents compounding from creating unrealistically large positions
-    // e.g. at $147k balance, 3% = $4,410 per trade — way more than intended
-    // Dynamic cap: scales with balance above $10k (0.5% of balance, min = config floor).
-    // Prevents permanent $50 ceiling as the system proves itself and balance grows.
-    // At $1k balance → cap=$50, at $20k → cap=$100, at $100k → cap=$500.
+    // Hard cap: prevents compounding from creating unrealistically large positions.
+    // Dynamic cap scales at 1% of balance (raised from 0.5%) to grow with the account.
+    // At $1k balance → cap=$100, at $10k → cap=$100, at $20k → cap=$200.
     var _dynamicCap = (_cfg.max_risk_usd > 0)
-      ? Math.max(_cfg.max_risk_usd, _cfg.virtual_balance * 0.005)
+      ? Math.max(_cfg.max_risk_usd, _cfg.virtual_balance * 0.01)
       : 0;
     if (_dynamicCap > 0) riskAmt = Math.min(riskAmt, _dynamicCap);
 
@@ -1657,6 +1740,34 @@
     if (_isScalperSig && riskAmt > SCALPER_RISK_CAP) {
       log('SCALPER', sig.asset + ' scalper risk capped $' + riskAmt.toFixed(2) + ' → $' + SCALPER_RISK_CAP, 'dim');
       riskAmt = SCALPER_RISK_CAP;
+    }
+
+    // Forex leverage gate — tiered by confidence on OANDA currency pairs.
+    // Only applies to pure FX pairs (not metals/energy/indices).
+    // Hard cap: 10% of balance per trade regardless of leverage tier.
+    //   conf 82–84%: 5×   — solid signal, meaningful amplification
+    //   conf 85–89%: 15×  — strong signal, aggressive sizing
+    //   conf ≥ 90%:  25×  — near OANDA's 30:1 limit, reserved for best setups
+    // Blocked in RISK_OFF regime (safe-haven flows override carry/momentum).
+    var _FX_PAIRS = {
+      'EUR_USD':1,'GBP_USD':1,'USD_JPY':1,'USD_CHF':1,'AUD_USD':1,
+      'USD_CAD':1,'NZD_USD':1,'GBP_JPY':1,'EUR_JPY':1,'EUR_GBP':1
+    };
+    var _fxLeveraged = false;
+    if (sig._venue === 'OANDA' && _FX_PAIRS[normaliseAsset(sig.asset)]) {
+      var _fxRegime = 'RISK_ON';
+      try { if (window.MacroRegime && MacroRegime.current) _fxRegime = MacroRegime.current().regime || 'RISK_ON'; } catch(e) {}
+      var _fxConf = sig.conf || 0;
+      if (_fxConf >= 82 && _fxRegime !== 'RISK_OFF') {
+        var _fxLevMult = _fxConf >= 90 ? 25 : _fxConf >= 85 ? 15 : 5;
+        var _fxLevAmt  = Math.min(riskAmt * _fxLevMult, _cfg.virtual_balance * 0.10);
+        if (_fxLevAmt > riskAmt) {
+          log('RISK', sig.asset + ' forex ' + _fxLevMult + '× lev (conf=' + _fxConf + '% ' + _fxRegime + '): $' +
+              riskAmt.toFixed(2) + ' → $' + _fxLevAmt.toFixed(2), 'green');
+          riskAmt = _fxLevAmt;
+          _fxLeveraged = true;
+        }
+      }
     }
 
     // Crypto volatility discount: BTC/ETH/SOL are 3-5× more volatile than equities/energy.
@@ -1840,6 +1951,8 @@
       kelly_mult:       +kellyMult.toFixed(2),       // EV sizing multiplier applied (for display/audit)
       streak_mult:      +streakMult.toFixed(2),      // loss-streak sizing reduction
       win_streak_mult:  +winStreakMult.toFixed(2),   // win-streak sizing boost
+      conf_mult:        +confMult.toFixed(2),        // confidence-tier sizing multiplier
+      forex_leveraged:  _fxLeveraged,             // true when 2× forex leverage was applied
       // v61: signal metadata for smart partial TP and trailing logic
       signal_conf:  sig.conf  || 0,
       entry_type:   sig.entryType || ((sig.reason || '').toLowerCase().indexOf('breakout') !== -1 ? 'breakout' : 'other'),

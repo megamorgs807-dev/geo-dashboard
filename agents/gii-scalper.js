@@ -731,16 +731,16 @@
           return;
         }
 
-        // Correlation guard: BTC and ETH move together (~0.88 correlation).
-        // If another scalper asset already has an active trade in the SAME direction,
-        // suppress this entry — it adds concentrated correlated exposure, not diversification.
-        // Opposite-direction entries (e.g. BTC long + ETH short) are fine — they partially hedge.
-        var _corrBlock = SCALPER_ASSETS.some(function (otherSym) {
+        // Correlation guard: allow up to 2 concurrent same-direction scalps.
+        // One active scalp no longer blocks all others — crypto assets diverge
+        // enough on short timeframes to run 2 positions simultaneously.
+        // A 3rd same-direction scalp is still blocked to prevent over-concentration.
+        var _sameDirCount = SCALPER_ASSETS.filter(function (otherSym) {
           return otherSym !== sym && _activeScalps[otherSym] && _activeScalps[otherSym].bias === bestDir;
-        });
-        if (_corrBlock) {
-          _status['note_' + sym] = 'Corr-blocked: same-direction ' + bestDir.toUpperCase() + ' already active in another asset';
-          console.info('[GII SCALPER] ' + sym + ' ' + bestDir.toUpperCase() + ' suppressed — correlated position already open');
+        }).length;
+        if (_sameDirCount >= 2) {
+          _status['note_' + sym] = 'Corr-blocked: ' + _sameDirCount + ' same-direction scalps already active';
+          console.info('[GII SCALPER] ' + sym + ' ' + bestDir.toUpperCase() + ' suppressed — ' + _sameDirCount + ' correlated positions already open');
           return;
         }
 

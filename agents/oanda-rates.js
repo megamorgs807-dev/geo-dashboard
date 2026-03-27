@@ -21,7 +21,17 @@
   var DEMO_URL    = 'https://api-fxpractice.oanda.com';
   var LIVE_URL    = 'https://api-fxtrade.oanda.com';
   var POLL_MS     = 30000;  // 30-second poll interval
-  var INSTRUMENTS = 'EUR_USD,GBP_USD,USD_JPY,USD_CHF,AUD_USD,USD_CAD,NZD_USD,GBP_JPY,EUR_JPY,EUR_GBP';
+  var INSTRUMENTS = [
+    // Forex majors + crosses
+    'EUR_USD','GBP_USD','USD_JPY','USD_CHF','AUD_USD','USD_CAD','NZD_USD',
+    'GBP_JPY','EUR_JPY','EUR_GBP',
+    // Metals
+    'XAU_USD','XAG_USD',
+    // Energy
+    'BCO_USD','WTICO_USD','NATGAS_USD',
+    // Indices
+    'SPX500_USD','NAS100_USD','UK100_GBP','GER40_EUR','JP225_USD'
+  ].join(',');
 
   var _cfg = { token: '', accountId: '', demo: true, connected: false };
   var _rates = {};    // { 'EUR_USD': { bid, ask, mid, spread, tradeable, ts } }

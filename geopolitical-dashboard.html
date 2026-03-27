@@ -2228,6 +2228,14 @@
     </div>
   </section>
 
+  <!-- ═══════════════════════════ LIVE PORTFOLIO PANEL ════════════════════════════ -->
+  <div id="livePortfolioWrap" class="nav-section" data-tab="trading" style="margin-bottom:12px">
+    <div class="sub-section-header" data-controls="livePortfolioInner">
+      📊 Live Portfolio &amp; Positions <span class="chevron">▼</span>
+    </div>
+    <div id="livePortfolioInner"></div>
+  </div>
+
   <!-- ═══════════════════════════ LIVE PERFORMANCE MONITOR ════════════════════════════ -->
   <div id="lpm-panel" class="nav-section" data-tab="trading"><div style="padding:8px 14px;color:#1e2a3a;font-size:10px;font-family:'Courier New',monospace">◈ LIVE PERFORMANCE MONITOR — Initialising...</div></div>
   <style>
@@ -13453,9 +13461,15 @@ window._TT_BOOTSTRAP = {
   }));
 })();
 </script>
-<script src="agents/oanda-rates.js?v=2"></script>
+<script src="agents/oanda-rates.js?v=3"></script>
 <!-- OANDA Broker adapter — forex, metals, energy, indices via OANDA v20 REST API -->
 <script src="agents/oanda-broker.js?v=1"></script>
+
+<!-- Live Portfolio Panel — broker health, open positions, P&L sparkline, events -->
+<script src="agents/live-portfolio.js?v=1"></script>
+
+<!-- Forex Fundamentals Agent — CSI, carry trade, unwind detection, session timing -->
+<script src="agents/forex-fundamentals.js?v=1"></script>
 
 <!-- IC Risk Engine — must load before executionEngine so ICRiskEngine is available
      when the first IC signal is sized. Self-contained; reads localStorage directly. -->
@@ -13480,7 +13494,7 @@ window._TT_BOOTSTRAP = {
 <script src="agents/econ-calendar.js?v=2"></script>
 
 <!-- Macro Regime Classifier — loaded before EE so canExecute() can gate on regime -->
-<script src="agents/macro-regime.js?v=1"></script>
+<script src="agents/macro-regime.js?v=3"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
 <script src="executionEngine.js?v=104"></script>
@@ -13529,7 +13543,7 @@ window._TT_BOOTSTRAP = {
 </script>
 <script src="agents/gii-technicals.js?v=2"></script>
 <script src="gii-scalper-brain.js?v=2"></script>
-<script src="agents/gii-scalper.js?v=13"></script>
+<script src="agents/gii-scalper.js?v=14"></script>
 <script src="agents/gii-scalper-session.js?v=6"></script>
 <script src="agents/gii-scraper-manager.js?v=6"></script>
 <script src="agents/gii-optimizer.js?v=1"></script>
@@ -13551,15 +13565,15 @@ window._TT_BOOTSTRAP = {
 <script src="hl-feed.js?v=7"></script>
 
 <!-- Market Observer + signal agents — all load after hl-feed so HLFeed is defined -->
-<script src="agents/market-observer.js?v=2"></script>
-<script src="agents/technicals-agent.js?v=3"></script>
+<script src="agents/market-observer.js?v=3"></script>
+<script src="agents/technicals-agent.js?v=4"></script>
 <script src="agents/macro-events-agent.js?v=2"></script>
 <script src="agents/crypto-signals-agent.js?v=2"></script>
 <script src="agents/correlation-agent.js?v=4"></script>
 <script src="agents/momentum-agent.js?v=2"></script>
 <script src="agents/onchain-signals-agent.js?v=1"></script>
 <script src="agents/event-momentum-agent.js?v=1"></script>
-<script src="agents/macro-cross-agent.js?v=1"></script>
+<script src="agents/macro-cross-agent.js?v=2"></script>
 <script>
   // Bridge: route gii-technicals.js (GII_TA_SIGNAL events) into EE.onSignals().
   // gii-technicals dispatches these events but previously nothing consumed them.

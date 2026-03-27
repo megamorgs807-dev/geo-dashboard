@@ -44,6 +44,10 @@
   // Assets tracked by HLFeed
   var HL_ASSETS = ['GLD', 'SLV', 'SPY', 'QQQ', 'BTC', 'SOL'];
 
+  // OANDA assets tracked in addition to HLFeed
+  var OANDA_ASSETS = ['XAU_USD', 'XAG_USD', 'BCO_USD', 'WTICO_USD', 'SPX500_USD', 'NAS100_USD',
+                      'EUR_USD', 'GBP_USD', 'USD_JPY', 'AUD_USD'];
+
   // ── private state ────────────────────────────────────────────────────────────
 
   var _priceHistory = {};  // { asset: [{price, ts}, …] }
@@ -120,8 +124,11 @@
   }
 
   function _tryEmit(batch, asset, bias, conf, reasoning, sector, extraKeys) {
-    // Tradeable check
-    if (!window.HLFeed || !HLFeed.isAvailable(asset)) return;
+    // Tradeable check — accept HL or OANDA assets
+    var hlOk    = window.HLFeed && typeof HLFeed.isAvailable === 'function' && HLFeed.isAvailable(asset);
+    var oandaOk = window.OANDA_RATES && typeof OANDA_RATES.isConnected === 'function' &&
+                  OANDA_RATES.isConnected() && !!OANDA_RATES.getRate(asset);
+    if (!hlOk && !oandaOk) return;
     // Cooldown check
     if (_onCooldown(asset, bias)) return;
     var sig = _mkSig(asset, bias, conf, reasoning, sector, extraKeys);
@@ -223,6 +230,76 @@
     // SPY big move, BTC flat → equity-specific; no crypto signal generated
   }
 
+  // 4b. Gold (OANDA XAU_USD) / Silver (OANDA XAG_USD) — using live OANDA prices
+  function _scanGoldSilverOanda(batch) {
+    var xauRet = _hlReturn('XAU_USD');
+    var xagRet = _hlReturn('XAG_USD');
+    if (xauRet === null || xagRet === null) return;
+    var xauFmt = (xauRet >= 0 ? '+' : '') + xauRet.toFixed(2) + '%';
+    var xagFmt = (xagRet >= 0 ? '+' : '') + xagRet.toFixed(2) + '%';
+    if (xauRet > 0.8 && xagRet < 0.2) {
+      _tryEmit(batch, 'XAG_USD', 'LONG', 0.68,
+        'XAU ' + xauFmt + ' (1h) but XAG only ' + xagFmt + ' — silver lagging gold rally',
+        'precious', ['gold-silver', 'precious']);
+    } else if (xagRet > 1.5 && xauRet < 0.4) {
+      _tryEmit(batch, 'XAU_USD', 'LONG', 0.67,
+        'XAG ' + xagFmt + ' leading with XAU only ' + xauFmt + ' — gold catch-up expected',
+        'precious', ['gold-silver', 'precious']);
+    }
+  }
+
+  // 5. Oil / Equity divergence — Brent vs SPX500
+  function _scanOilEquity(batch) {
+    var broRet = _hlReturn('BCO_USD');
+    var spxRet = _hlReturn('SPX500_USD');
+    if (broRet === null || spxRet === null) return;
+    var broFmt = (broRet >= 0 ? '+' : '') + broRet.toFixed(2) + '%';
+    var spxFmt = (spxRet >= 0 ? '+' : '') + spxRet.toFixed(2) + '%';
+    if (broRet > 1.5 && spxRet > 0) {
+      // Oil up strongly while equities also up → energy stocks should follow
+      _tryEmit(batch, 'XLE', 'LONG', 0.65,
+        'Brent ' + broFmt + ' with SPX ' + spxFmt + ' (1h) — energy sector bullish',
+        'energy', ['oil-equity', 'energy']);
+    } else if (broRet > 2.0 && spxRet < -0.5) {
+      // Oil surging but equities falling → stagflation signal
+      _tryEmit(batch, 'XAU_USD', 'LONG', 0.70,
+        'Brent ' + broFmt + ' vs SPX ' + spxFmt + ' — stagflation hedge, gold long',
+        'precious', ['oil-equity', 'stagflation', 'precious']);
+      _tryEmit(batch, 'SPX500_USD', 'SHORT', 0.66,
+        'Brent ' + broFmt + ' squeezing margins vs SPX ' + spxFmt,
+        'equity', ['oil-equity', 'stagflation', 'equity']);
+    } else if (broRet < -2.0 && spxRet > 0.5) {
+      // Oil falling, equities rising → growth optimism, risk-on
+      _tryEmit(batch, 'NAS100_USD', 'LONG', 0.65,
+        'Brent ' + broFmt + ' (lower input costs) with SPX ' + spxFmt + ' — tech risk-on',
+        'equity', ['oil-equity', 'equity']);
+    }
+  }
+
+  // 6. USD/JPY risk barometer
+  function _scanUsdJpy(batch) {
+    var jpyRet = _hlReturn('USD_JPY');
+    var xauRet = _hlReturn('XAU_USD');
+    if (jpyRet === null) return;
+    var jpyFmt = (jpyRet >= 0 ? '+' : '') + jpyRet.toFixed(2) + '%';
+    // USD/JPY falling = JPY strengthening = risk-off
+    if (jpyRet < -0.4) {
+      _tryEmit(batch, 'XAU_USD', 'LONG', 0.68,
+        'USD/JPY ' + jpyFmt + ' (1h) — yen strength signals risk-off, gold safe-haven bid',
+        'precious', ['jpy-risk', 'precious']);
+      _tryEmit(batch, 'BTC', 'SHORT', 0.64,
+        'USD/JPY ' + jpyFmt + ' — yen risk-off proxy, crypto outflows likely',
+        'crypto', ['jpy-risk', 'crypto']);
+    } else if (jpyRet > 0.4) {
+      // USD/JPY rising = USD strength / risk-on
+      if (xauRet !== null && xauRet < -0.3) {
+        _tryEmit(batch, 'BTC', 'LONG', 0.65,
+          'USD/JPY ' + jpyFmt + ' (risk-on) with gold soft — crypto risk-on rotation',
+          'crypto', ['jpy-risk', 'crypto']);
+      }
+    }
+  }
+
   // 4. Gold / Silver ratio (percentage-based)
   function _scanGoldSilver(batch) {
     var gldRet = _hlReturn('GLD');
@@ -268,17 +345,23 @@
       }
     }
 
-    // EUR/USD from OANDA
+    // OANDA assets — forex, metals, energy, indices
     if (window.OANDA_RATES &&
         typeof OANDA_RATES.isConnected === 'function' &&
         OANDA_RATES.isConnected()) {
       try {
-        var fxRate = OANDA_RATES.getRate('EURUSD');
-        if (fxRate && fxRate.mid && fxRate.mid > 0) {
-          _recordFX(fxRate.mid);
+        // Keep legacy EUR/USD in _fxHistory for backward compatibility
+        var fxRate = OANDA_RATES.getRate('EUR_USD') || OANDA_RATES.getRate('EURUSD');
+        if (fxRate && fxRate.mid && fxRate.mid > 0) _recordFX(fxRate.mid);
+
+        // Record all OANDA assets into the shared _priceHistory
+        for (var oi = 0; oi < OANDA_ASSETS.length; oi++) {
+          var sym = OANDA_ASSETS[oi];
+          var r   = OANDA_RATES.getRate(sym);
+          if (r && r.mid && r.mid > 0) _recordHL(sym, r.mid);
         }
       } catch (e) {
-        console.warn('[MACRO-X] OANDA_RATES.getRate error: ' + (e.message || String(e)));
+        console.warn('[MACRO-X] OANDA_RATES error: ' + (e.message || String(e)));
       }
     }
   }
@@ -309,8 +392,17 @@
     // 3. Crypto risk mode
     _scanCryptoRiskMode(batch);
 
-    // 4. Gold / Silver ratio
+    // 4. Gold / Silver ratio (HLFeed ETFs)
     _scanGoldSilver(batch);
+
+    // 4b. Gold / Silver via OANDA live prices
+    if (oandaOk) _scanGoldSilverOanda(batch);
+
+    // 5. Oil / Equity divergence (OANDA)
+    if (oandaOk) _scanOilEquity(batch);
+
+    // 6. USD/JPY risk barometer (OANDA)
+    if (oandaOk) _scanUsdJpy(batch);
 
     // Forward to Execution Engine
     if (batch.length && window.EE && typeof EE.onSignals === 'function') {

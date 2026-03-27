@@ -18,6 +18,9 @@ from config import COINGECKO_URL, BROWSER_HEADERS
 
 
 # ── Stooq symbol map: our ticker → Stooq symbol ──────────────────────────────
+# NOTE: VIX is intentionally excluded from Stooq — we use CBOE CDN directly
+# (see _fetch_cboe_vix_term). VX.F (VIX futures) on Stooq gets stuck at the
+# expired-contract price after each monthly roll, causing false RISK_OFF reads.
 STOOQ_SYMBOLS: Dict[str, str] = {
     'WTI':   'CL.F',    # WTI Crude Oil (front-month futures)
     'BRENT': 'BR.F',    # Brent Crude Oil Futures
@@ -28,7 +31,6 @@ STOOQ_SYMBOLS: Dict[str, str] = {
     'TSM':   'TSM.US',  # Taiwan Semiconductor
     'SPY':   'SPY.US',  # S&P 500 ETF
     'DXY':   'DX.F',    # US Dollar Index Futures
-    'VIX':   'VX.F',    # VIX Futures (front-month; proxy for CBOE VIX)
 }
 
 # US Treasury daily yield curve — 10-Year column
@@ -256,7 +258,10 @@ def _fetch_cboe_vix_term() -> Dict[str, Dict[str, Any]]:
         return _cboe_cache
 
     result: Dict[str, Dict[str, Any]] = {}
-    for ticker, sym in [('VIX9D', '_VIX9D'), ('VIX3M', '_VIX3M')]:
+    # VIX = spot CBOE VIX index (_VIX).  VX.F (Stooq futures) was removed because
+    # it freezes at the expired-contract price after each monthly roll, causing
+    # wildly incorrect readings (e.g. 96.3 when real VIX was 27.4).
+    for ticker, sym in [('VIX', '_VIX'), ('VIX9D', '_VIX9D'), ('VIX3M', '_VIX3M')]:
         try:
             url  = _CBOE_BASE.format(sym=sym)
             resp = requests.get(url, timeout=10, headers=BROWSER_HEADERS)
@@ -269,6 +274,11 @@ def _fetch_cboe_vix_term() -> Dict[str, Dict[str, Any]]:
             close  = float(latest.get('close', 0))
             prev   = float(series[-2].get('close', 0)) if len(series) >= 2 else None
             chg24h = round(close - prev, 2) if prev else None
+            # Sanity bounds — real VIX all-time high is ~89.5 (March 2020);
+            # reject anything above 90 as a bad data point
+            if close > 90:
+                print(f'[MARKET] CBOE {ticker}: price {close} rejected — exceeds realistic maximum (ATH ~89.5)')
+                continue
             result[ticker] = {'price': round(close, 2), 'chg24h': chg24h}
         except Exception as e:
             print(f'[MARKET] CBOE {ticker} error: {e}')

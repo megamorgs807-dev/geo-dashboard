@@ -42,6 +42,15 @@
   // Static Alpaca asset list (these may not be in HLFeed coverage)
   var ALPACA_LIST = ['SOXX','XAR','GDX','XLE','XME','WEAT','CORN','INDA','LIT'];
 
+  // OANDA instruments — forex, metals, energy, indices
+  var OANDA_LIST = [
+    'EUR_USD','GBP_USD','USD_JPY','USD_CHF','AUD_USD','USD_CAD','NZD_USD',
+    'GBP_JPY','EUR_JPY','EUR_GBP',
+    'XAU_USD','XAG_USD',
+    'BCO_USD','WTICO_USD','NATGAS_USD',
+    'SPX500_USD','NAS100_USD','UK100_GBP','GER40_EUR','JP225_USD'
+  ];
+
   // Asset-class map — determines sector tag and RSI thresholds
   var ASSET_CLASS = {
     'BTC':'crypto',    'ETH':'crypto',    'SOL':'crypto',   'XRP':'crypto',
@@ -54,7 +63,18 @@
     'BRENT':'energy',  'BRENTOIL':'energy','OIL':'energy',  'CRUDE':'energy',
     'WTI':'energy',    'NATGAS':'energy', 'GAS':'energy',
     'WEAT':'agri',     'CORN':'agri',     'WHT':'agri',
-    'INDA':'equity',   'LIT':'energy'
+    'INDA':'equity',   'LIT':'energy',
+    // OANDA forex
+    'EUR_USD':'fx',    'GBP_USD':'fx',    'USD_JPY':'fx',   'USD_CHF':'fx',
+    'AUD_USD':'fx',    'USD_CAD':'fx',    'NZD_USD':'fx',
+    'GBP_JPY':'fx',    'EUR_JPY':'fx',    'EUR_GBP':'fx',
+    // OANDA metals
+    'XAU_USD':'metals','XAG_USD':'metals',
+    // OANDA energy
+    'BCO_USD':'energy','WTICO_USD':'energy','NATGAS_USD':'energy',
+    // OANDA indices
+    'SPX500_USD':'equity','NAS100_USD':'equity','UK100_GBP':'equity',
+    'GER40_EUR':'equity', 'JP225_USD':'equity'
   };
 
   // RSI overbought / oversold levels by sector group
@@ -62,7 +82,8 @@
     crypto    : { os: 32, ob: 68 },
     equity    : { os: 35, ob: 65 },
     commodity : { os: 33, ob: 67 },  // covers energy / metals
-    default   : { os: 35, ob: 65 }   // fallback (agri, fx, etc.)
+    fx        : { os: 36, ob: 64 },  // forex — tighter range
+    default   : { os: 35, ob: 65 }
   };
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -93,6 +114,7 @@
     var sec = _sector(asset);
     if (sec === 'crypto')  return RSI_THRESH.crypto;
     if (sec === 'equity')  return RSI_THRESH.equity;
+    if (sec === 'fx')      return RSI_THRESH.fx;
     if (sec === 'energy' || sec === 'metals' || sec === 'commodity') {
       return RSI_THRESH.commodity;
     }
@@ -321,6 +343,18 @@
       }
     }
 
+    // OANDA assets — forex, metals, energy, indices (if connected)
+    if (window.OANDA_RATES && typeof OANDA_RATES.isConnected === 'function' &&
+        OANDA_RATES.isConnected()) {
+      for (var k = 0; k < OANDA_LIST.length; k++) {
+        var oa = OANDA_LIST[k];
+        if (!seen[oa]) {
+          seen[oa] = true;
+          list.push(oa);
+        }
+      }
+    }
+
     return list;
   }
 
@@ -346,6 +380,12 @@
       if (!price && window.AlpacaBroker && typeof AlpacaBroker.getPrice === 'function') {
         var ap = AlpacaBroker.getPrice(asset);
         if (ap) price = ap;
+      }
+
+      // Fallback: OANDA_RATES for forex, metals, energy, indices
+      if (!price && window.OANDA_RATES && OANDA_RATES.isConnected()) {
+        var or = OANDA_RATES.getRate(asset);
+        if (or && or.mid) price = or.mid;
       }
 
       if (price) _recordPrice(asset, price);
