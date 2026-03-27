@@ -198,7 +198,7 @@
         source       : 'onchain',
         asset        : asset,
         bias         : bias,
-        confidence   : 0.67,
+        confidence   : 67,
         reasoning    : 'Volume surge: ' + asset + ' 24h volume ' + volX +
                        '\u00d7 rolling avg \u2014 price 24h: ' + chgStr +
                        ' \u2192 ' + bias.toLowerCase() + ' momentum signal',
@@ -251,7 +251,7 @@
           source       : 'onchain',
           asset        : riskAssets[i],
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Total crypto market cap up ' + mcapChg24h.toFixed(1) +
                          '% in 24h \u2014 risk-on environment \u2192 ' + riskAssets[i] + ' LONG',
           region       : 'GLOBAL',
@@ -274,7 +274,7 @@
             source       : 'onchain',
             asset        : altAssets[j],
             bias         : 'LONG',
-            confidence   : 0.66,
+            confidence   : 66,
             reasoning    : 'BTC dominance fell ' + Math.abs(domShift).toFixed(1) +
                            '% to ' + btcDom.toFixed(1) + '% \u2014 alt season rotation' +
                            ' \u2192 ' + altAssets[j] + ' LONG',
@@ -292,7 +292,7 @@
           source       : 'onchain',
           asset        : 'BTC',
           bias         : 'LONG',
-          confidence   : 0.64,
+          confidence   : 64,
           reasoning    : 'BTC dominance rose ' + domShift.toFixed(1) +
                          '% to ' + btcDom.toFixed(1) + '% \u2014 risk-off rotation' +
                          ' into BTC \u2192 BTC LONG',
@@ -363,7 +363,7 @@
       source       : 'onchain',
       asset        : 'BTC',
       bias         : 'LONG',
-      confidence   : 0.65,
+      confidence   : 65,
       reasoning    : 'BTC on-chain transaction count elevated: ' + nTx.toLocaleString() +
                      ' tx (' + ratio.toFixed(2) + '\u00d7 rolling avg of ' + Math.round(avg).toLocaleString() +
                      ') \u2014 rising network activity \u2192 BTC LONG',

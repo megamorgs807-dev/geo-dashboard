@@ -95,16 +95,16 @@
   // minDivPct: minimum divergence (%) to trigger a signal
   // conf     : base confidence score
   var PAIRS = [
-    { lead:'GLD',      lag:'SLV',      name:'Gold/Silver',    sector:'metals', minDivPct:1.5, conf:0.70 },
-    { lead:'BTC',      lag:'ETH',      name:'BTC/ETH',        sector:'crypto', minDivPct:2.0, conf:0.72 },
-    { lead:'BTC',      lag:'SOL',      name:'BTC/SOL',        sector:'crypto', minDivPct:2.5, conf:0.68 },
-    { lead:'BTC',      lag:'XRP',      name:'BTC/XRP',        sector:'crypto', minDivPct:2.5, conf:0.67 },
-    { lead:'SPY',      lag:'QQQ',      name:'SPY/QQQ',        sector:'equity', minDivPct:0.8, conf:0.68 },
-    { lead:'BRENTOIL', lag:'WTI',      name:'Brent/WTI',      sector:'energy', minDivPct:0.8, conf:0.73 },
-    { lead:'BRENTOIL', lag:'GAS',      name:'Oil/NatGas',     sector:'energy', minDivPct:2.0, conf:0.65 },
-    { lead:'ETH',      lag:'SOL',      name:'ETH/SOL',        sector:'crypto', minDivPct:2.0, conf:0.67 },
-    { lead:'BTC',      lag:'HYPE',     name:'BTC/HYPE',       sector:'crypto', minDivPct:3.0, conf:0.65 },
-    { lead:'GLD',      lag:'PAXG',     name:'Gold/PAXG',      sector:'metals', minDivPct:1.0, conf:0.72 }
+    { lead:'GLD',      lag:'SLV',      name:'Gold/Silver',    sector:'metals', minDivPct:1.5, conf:70 },
+    { lead:'BTC',      lag:'ETH',      name:'BTC/ETH',        sector:'crypto', minDivPct:2.0, conf:72 },
+    { lead:'BTC',      lag:'SOL',      name:'BTC/SOL',        sector:'crypto', minDivPct:2.5, conf:68 },
+    { lead:'BTC',      lag:'XRP',      name:'BTC/XRP',        sector:'crypto', minDivPct:2.5, conf:67 },
+    { lead:'SPY',      lag:'QQQ',      name:'SPY/QQQ',        sector:'equity', minDivPct:0.8, conf:68 },
+    { lead:'BRENTOIL', lag:'WTI',      name:'Brent/WTI',      sector:'energy', minDivPct:0.8, conf:73 },
+    { lead:'BRENTOIL', lag:'GAS',      name:'Oil/NatGas',     sector:'energy', minDivPct:2.0, conf:65 },
+    { lead:'ETH',      lag:'SOL',      name:'ETH/SOL',        sector:'crypto', minDivPct:2.0, conf:67 },
+    { lead:'BTC',      lag:'HYPE',     name:'BTC/HYPE',       sector:'crypto', minDivPct:3.0, conf:65 },
+    { lead:'GLD',      lag:'PAXG',     name:'Gold/PAXG',      sector:'metals', minDivPct:1.0, conf:72 }
   ];
 
   // ── private state ────────────────────────────────────────────────────────────
@@ -322,13 +322,13 @@
       var conf = pair.conf;
 
       // Bonus if divergence is at least 2× the minimum threshold
-      if (absDivPct >= pair.minDivPct * 2) conf += 0.05;
+      if (absDivPct >= pair.minDivPct * 2) conf += 5;   // 0-100 scale
 
       // Bonus if any GII agent has a matching view on the lead asset
-      if (_giiMatchesLead(pair.lead, bias)) conf += 0.03;
+      if (_giiMatchesLead(pair.lead, bias)) conf += 3;
 
       // Cap confidence at 0.95
-      conf = Math.min(0.95, Math.round(conf * 100) / 100);
+      conf = Math.min(95, Math.round(conf));
 
       // ── 9. Reasoning string ───────────────────────────────────────────────────
       var leadDir  = leadRet >= 0 ? 'up' : 'down';

@@ -357,13 +357,12 @@
         if (Math.abs(pctMove) < thr) return;
 
         // ── confidence calculation ────────────────────────────────────────
-        var conf = 0.65;
-        if (evtSignal > 75)                    conf += 0.05;
-        if (Math.abs(pctMove) > 2 * thr)      conf += 0.05;
-        if (_hasGIIMatch(assetUp, bias))       conf += 0.03;
-        if (conf > 0.85) conf = 0.85;
-        // Round to 2 dp
-        conf = Math.round(conf * 100) / 100;
+        var conf = 65;   // 0-100 scale
+        if (evtSignal > 75)                    conf += 5;
+        if (Math.abs(pctMove) > 2 * thr)      conf += 5;
+        if (_hasGIIMatch(assetUp, bias))       conf += 3;
+        if (conf > 85) conf = 85;
+        conf = Math.round(conf);
 
         // ── age of baseline snapshot ──────────────────────────────────────
         var ageMin = Math.round((now - baseline.ts) / 60000);

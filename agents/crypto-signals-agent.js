@@ -199,13 +199,13 @@
       // Extreme Fear → contrarian LONG
       assets  = ['BTC', 'ETH', 'SOL'];
       bias    = 'LONG';
-      conf    = 0.72;
+      conf    = 72;
       dirNote = 'Extreme Fear implies capitulation — long bias';
     } else if (val <= 35) {
       // Fear → LONG
       assets  = ['BTC', 'ETH'];
       bias    = 'LONG';
-      conf    = 0.67;
+      conf    = 67;
       dirNote = 'Fear implies oversold conditions — long bias';
     } else if (val <= 64) {
       // Neutral — no signal
@@ -214,13 +214,13 @@
       // Greed → SHORT
       assets  = ['BTC', 'ETH'];
       bias    = 'SHORT';
-      conf    = 0.67;
+      conf    = 67;
       dirNote = 'Greed implies overextension — short bias';
     } else {
       // Extreme Greed → SHORT
       assets  = ['BTC', 'ETH', 'SOL'];
       bias    = 'SHORT';
-      conf    = 0.73;
+      conf    = 73;
       dirNote = 'Extreme Greed implies euphoria — short bias';
     }
 
@@ -274,7 +274,7 @@
       // Tradeable check
       if (window.HLFeed && !HLFeed.isAvailable(asset)) continue;
 
-      var conf = abs >= FUNDING_THR_HIGH ? 0.75 : 0.68;
+      var conf = abs >= FUNDING_THR_HIGH ? 75 : 68;
       var ratePct = (rate * 100).toFixed(4);
       var reasoning;
 
@@ -348,7 +348,7 @@
     var shift = Math.abs(dom - prev.dominance);
     if (shift < DOM_SHIFT_THR) return out;  // shift not large enough
 
-    var conf = 0.65;
+    var conf = 65;
 
     if (dom > DOM_RISK_OFF) {
       // BTC dominance very high — risk-off, prefer BTC long over alts
@@ -463,7 +463,7 @@
         source       : 'crypto-signals',
         asset        : asset,
         bias         : bias,
-        confidence   : 0.67,
+        confidence   : 67,
         reasoning    : 'Volatility spike: 5-min range ' + rangePct + '% is ' + spikeRatio + '\u00d7 avg \u2192 trade direction of spike (' + bias + ')',
         region       : 'GLOBAL',
         sector       : 'crypto',

@@ -41,9 +41,9 @@
   /* ── Confidence from extremity ─────────────────────────────────────────── */
   function _toConf(rate) {
     var abs = Math.abs(rate);
-    if (abs >= THR_EXTREME)  return 0.80;
-    if (abs >= THR_HIGH)     return 0.65;
-    if (abs >= THR_MODERATE) return 0.50;
+    if (abs >= THR_EXTREME)  return 80;   // 0-100 scale
+    if (abs >= THR_HIGH)     return 65;
+    if (abs >= THR_MODERATE) return 50;
     return 0;
   }
 
@@ -107,7 +107,7 @@
 
     _signals = sigs;
 
-    var extremes = _signals.filter(function (s) { return s.confidence >= 0.65; });
+    var extremes = _signals.filter(function (s) { return s.confidence >= 65; });
     if (extremes.length) {
       console.log('[FR] Extreme funding: ' +
         extremes.map(function (s) {
@@ -122,7 +122,7 @@
     var el = document.getElementById('fundingRateBadge');
     if (!el) return;
 
-    var extremes = _signals.filter(function (s) { return s.confidence >= 0.65; });
+    var extremes = _signals.filter(function (s) { return s.confidence >= 65; });
 
     /* Top 3 assets by absolute rate for tooltip */
     var topRates = Object.keys(_rates)

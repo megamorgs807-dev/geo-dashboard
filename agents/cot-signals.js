@@ -51,11 +51,11 @@
   /* ── Confidence from extremity of positioning ────────────────────────── */
   function _toConfidence(sentiment) {
     var abs = Math.abs(sentiment);
-    if (abs >= 40) return 0.85;
-    if (abs >= 30) return 0.70;
-    if (abs >= 20) return 0.55;
-    if (abs >= 15) return 0.45;
-    return 0.30;
+    if (abs >= 40) return 85;   // 0-100 scale
+    if (abs >= 30) return 70;
+    if (abs >= 20) return 55;
+    if (abs >= 15) return 45;
+    return 30;
   }
 
   /* ── Map COT ticker to EE-compatible asset ───────────────────────────── */
@@ -112,7 +112,7 @@
           /* Accelerating in same direction as contrarian signal → higher conf */
           var isAccelerating = (bias === 'short' && delta > 0) ||
                                (bias === 'long'  && delta < 0);
-          conf = isAccelerating ? Math.min(0.95, conf + 0.1) : Math.max(0.25, conf - 0.1);
+          conf = isAccelerating ? Math.min(95, conf + 10) : Math.max(25, conf - 10);
         }
       }
 
@@ -130,7 +130,7 @@
     _signals = sigs;
 
     /* Log notable extremes */
-    var extremes = _signals.filter(function (s) { return s.confidence >= 0.7; });
+    var extremes = _signals.filter(function (s) { return s.confidence >= 70; });
     if (extremes.length) {
       console.log('[COT] ' + extremes.length + ' extreme positioning signal(s): ' +
         extremes.map(function (s) { return s.asset + '(' + s.bias + ')'; }).join(', '));
@@ -162,7 +162,7 @@
     var ageLabel  = daysOld > 0 ? ' · ' + daysOld + 'd' : '';
     var isStale   = daysOld > 8;   // COT is weekly; >8d means a report was missed
 
-    var extremes = _signals.filter(function (s) { return s.confidence >= 0.7; });
+    var extremes = _signals.filter(function (s) { return s.confidence >= 70; });
 
     if (isStale) {
       el.textContent = 'COT stale' + ageLabel;

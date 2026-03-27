@@ -78,7 +78,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.70,
+          confidence   : 70,
           reasoning    : 'Fed rate decision in {{HOURS}}h — gold historically rallies into uncertainty and dovish meeting bets',
           region       : 'US',
           sector       : 'metals',
@@ -87,7 +87,7 @@
         {
           asset        : 'BTC',
           bias         : 'LONG',
-          confidence   : 0.70,
+          confidence   : 70,
           reasoning    : 'FOMC in {{HOURS}}h — crypto risk-on flow into dovish Fed expectations',
           region       : 'US',
           sector       : 'crypto',
@@ -106,7 +106,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.70,
+          confidence   : 70,
           reasoning    : 'Fed rate decision in {{HOURS}}h — gold historically rallies into uncertainty and dovish meeting bets',
           region       : 'US',
           sector       : 'metals',
@@ -115,7 +115,7 @@
         {
           asset        : 'BTC',
           bias         : 'LONG',
-          confidence   : 0.70,
+          confidence   : 70,
           reasoning    : 'FOMC in {{HOURS}}h — crypto risk-on flow into dovish Fed expectations',
           region       : 'US',
           sector       : 'crypto',
@@ -136,7 +136,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI data in {{HOURS}}h — gold bid as inflation hedge ahead of print',
           region       : 'US',
           sector       : 'metals',
@@ -145,7 +145,7 @@
         {
           asset        : 'SILVER',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI print in {{HOURS}}h — silver follows gold as inflation hedge',
           region       : 'US',
           sector       : 'metals',
@@ -154,7 +154,7 @@
         {
           asset        : 'BTC',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI release in {{HOURS}}h — crypto bid as digital inflation hedge',
           region       : 'US',
           sector       : 'crypto',
@@ -163,7 +163,7 @@
         {
           asset        : 'SPY',
           bias         : 'SHORT',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI in {{HOURS}}h — equities pressured by rate hike fears ahead of hot print risk',
           region       : 'US',
           sector       : 'equity',
@@ -182,7 +182,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI data in {{HOURS}}h — gold bid as inflation hedge ahead of print',
           region       : 'US',
           sector       : 'metals',
@@ -191,7 +191,7 @@
         {
           asset        : 'SILVER',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI print in {{HOURS}}h — silver follows gold as inflation hedge',
           region       : 'US',
           sector       : 'metals',
@@ -200,7 +200,7 @@
         {
           asset        : 'BTC',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI release in {{HOURS}}h — crypto bid as digital inflation hedge',
           region       : 'US',
           sector       : 'crypto',
@@ -209,7 +209,7 @@
         {
           asset        : 'SPY',
           bias         : 'SHORT',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI in {{HOURS}}h — equities pressured by rate hike fears ahead of hot print risk',
           region       : 'US',
           sector       : 'equity',
@@ -228,7 +228,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI data in {{HOURS}}h — gold bid as inflation hedge ahead of print',
           region       : 'US',
           sector       : 'metals',
@@ -237,7 +237,7 @@
         {
           asset        : 'SILVER',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI print in {{HOURS}}h — silver follows gold as inflation hedge',
           region       : 'US',
           sector       : 'metals',
@@ -246,7 +246,7 @@
         {
           asset        : 'BTC',
           bias         : 'LONG',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI release in {{HOURS}}h — crypto bid as digital inflation hedge',
           region       : 'US',
           sector       : 'crypto',
@@ -255,7 +255,7 @@
         {
           asset        : 'SPY',
           bias         : 'SHORT',
-          confidence   : 0.68,
+          confidence   : 68,
           reasoning    : 'CPI in {{HOURS}}h — equities pressured by rate hike fears ahead of hot print risk',
           region       : 'US',
           sector       : 'equity',
@@ -276,7 +276,7 @@
         {
           asset        : 'SPY',
           bias         : 'LONG',
-          confidence   : 0.63,
+          confidence   : 63,
           reasoning    : 'NFP jobs report in {{HOURS}}h — risk-on positioning into strong labour market expectations',
           region       : 'US',
           sector       : 'equity',
@@ -285,7 +285,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.63,
+          confidence   : 63,
           reasoning    : 'NFP in {{HOURS}}h — QQQ follows SPY risk-on into jobs beat expectations',
           region       : 'US',
           sector       : 'equity',
@@ -304,7 +304,7 @@
         {
           asset        : 'SPY',
           bias         : 'LONG',
-          confidence   : 0.63,
+          confidence   : 63,
           reasoning    : 'NFP jobs report in {{HOURS}}h — risk-on positioning into strong labour market expectations',
           region       : 'US',
           sector       : 'equity',
@@ -313,7 +313,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.63,
+          confidence   : 63,
           reasoning    : 'NFP in {{HOURS}}h — QQQ follows SPY risk-on into jobs beat expectations',
           region       : 'US',
           sector       : 'equity',
@@ -332,7 +332,7 @@
         {
           asset        : 'SPY',
           bias         : 'LONG',
-          confidence   : 0.63,
+          confidence   : 63,
           reasoning    : 'NFP jobs report in {{HOURS}}h — risk-on positioning into strong labour market expectations',
           region       : 'US',
           sector       : 'equity',
@@ -341,7 +341,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.63,
+          confidence   : 63,
           reasoning    : 'NFP in {{HOURS}}h — QQQ follows SPY risk-on into jobs beat expectations',
           region       : 'US',
           sector       : 'equity',
@@ -362,7 +362,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'ECB rate decision in {{HOURS}}h — EUR volatility drives commodity safe-haven demand',
           region       : 'EU',
           sector       : 'metals',
@@ -371,7 +371,7 @@
         {
           asset        : 'BRENT',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'ECB decision in {{HOURS}}h — EUR policy shift drives energy commodity hedging',
           region       : 'EU',
           sector       : 'energy',
@@ -390,7 +390,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'ECB rate decision in {{HOURS}}h — EUR volatility drives commodity safe-haven demand',
           region       : 'EU',
           sector       : 'metals',
@@ -399,7 +399,7 @@
         {
           asset        : 'BRENT',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'ECB decision in {{HOURS}}h — EUR policy shift drives energy commodity hedging',
           region       : 'EU',
           sector       : 'energy',
@@ -420,7 +420,7 @@
         {
           asset        : 'SPY',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'US GDP advance estimate in {{HOURS}}h — markets positioning into growth-positive print',
           region       : 'US',
           sector       : 'equity',
@@ -429,7 +429,7 @@
         {
           asset        : 'GLD',
           bias         : 'LONG',
-          confidence   : 0.62,
+          confidence   : 62,
           reasoning    : 'GDP release in {{HOURS}}h — gold bid as hedge against growth surprise in either direction',
           region       : 'US',
           sector       : 'metals',
@@ -450,7 +450,7 @@
         {
           asset        : 'TSLA',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -459,7 +459,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -478,7 +478,7 @@
         {
           asset        : 'MSFT',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -487,7 +487,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -506,7 +506,7 @@
         {
           asset        : 'GOOGL',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -515,7 +515,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -534,7 +534,7 @@
         {
           asset        : 'AAPL',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -543,7 +543,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -562,7 +562,7 @@
         {
           asset        : 'META',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -571,7 +571,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -590,7 +590,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -609,7 +609,7 @@
         {
           asset        : 'AMZN',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',
@@ -618,7 +618,7 @@
         {
           asset        : 'QQQ',
           bias         : 'LONG',
-          confidence   : 0.65,
+          confidence   : 65,
           reasoning    : 'Q1 earnings in {{HOURS}}h — pre-earnings momentum historically bullish',
           region       : 'US',
           sector       : 'equity',

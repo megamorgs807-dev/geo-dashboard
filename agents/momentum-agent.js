@@ -167,10 +167,10 @@
 
   // Map score to confidence float
   function _confidence(score) {
-    if (score >= 85) return 0.85;
-    if (score >= 75) return 0.79;
-    if (score >= 65) return 0.72;
-    return 0.65;
+    if (score >= 85) return 85;   // 0-100 scale
+    if (score >= 75) return 79;
+    if (score >= 65) return 72;
+    return 65;
   }
 
   // Cooldown key for an asset+bias pair
