@@ -83,8 +83,11 @@
     'INDA':  { sector: 'em',      name: 'iShares India ETF' },
     'LIT':   { sector: 'energy',  name: 'Global X Lithium ETF' },
     'XME':   { sector: 'mining',  name: 'SPDR Metals & Mining ETF' },
-    /* Note: SPY, QQQ, GLD, SLV, AAPL, TSLA, META, MSFT, AMZN, GOOGL, HOOD
-             are all on HL spot tokens → HL handles those when HLBroker exists. */
+    /* GLD and SLV: previously on HL spot, now fallback here when HL unfunded */
+    'GLD':   { sector: 'commodity', name: 'SPDR Gold ETF' },
+    'SLV':   { sector: 'commodity', name: 'iShares Silver ETF' },
+    /* Note: SPY, QQQ, AAPL, TSLA, META, MSFT, AMZN, GOOGL, HOOD
+             still on HL spot tokens → HL handles those when HLBroker funded. */
     /* ── Crypto — routed here when HLBroker is unavailable ──────────── */
     'BTC':   { sector: 'crypto', name: 'Bitcoin',       alpacaSym: 'BTCUSD' },
     'ETH':   { sector: 'crypto', name: 'Ethereum',      alpacaSym: 'ETHUSD' },
