@@ -2194,9 +2194,64 @@
     <button class="nav-btn" data-tab="alerts"    data-color="#e03030">🔔 Alerts <span class="tab-badge" id="badge-alerts"></span></button>
     <button class="nav-btn" data-tab="analysis"  data-color="#2090e0">🧠 Analysis <span class="tab-badge" id="badge-analysis"></span></button>
     <button class="nav-btn" data-tab="markets"   data-color="#a050e0">📊 Markets <span class="tab-badge" id="badge-markets"></span></button>
-    <button class="nav-btn" data-tab="analytics" data-color="#20b090">📈 Analytics</button>
+    <button class="nav-btn" data-tab="analytics" data-color="#20b090">📈 Performance</button>
     <button class="nav-btn" data-tab="monitors"  data-color="#e8a020">🌐 Monitors</button>
   </nav>
+
+  <!-- ══════════════════════════ COMMAND STRIP ═══════════════════════════════════════ -->
+  <!-- Always-visible status bar: survives tab switching. Shows the data you always    -->
+  <!-- need regardless of which tab you're on.                                         -->
+  <div id="cmdStrip">
+    <div class="cs-grp">
+      <span class="cs-lbl">Regime</span>
+      <span class="cs-val" id="csRegime" title="Macro regime score and signals">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">Balance</span>
+      <span class="cs-val" id="csBalance">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">Open</span>
+      <span class="cs-val" id="csOpen">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">Realised P&amp;L</span>
+      <span class="cs-val" id="csPnl">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">Unrealised</span>
+      <span class="cs-val" id="csUnreal">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">VIX</span>
+      <span class="cs-val" id="csVix">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">DXY</span>
+      <span class="cs-val" id="csDxy">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">US10Y</span>
+      <span class="cs-val" id="csUs10y">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp">
+      <span class="cs-lbl">Signals</span>
+      <span class="cs-val" id="csSignals">—</span>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cs-grp cs-grp-right">
+      <span class="cs-lbl">EE</span>
+      <span class="cs-val" id="csEeStatus">—</span>
+    </div>
+  </div>
 
   <!-- ═══════════════════════════════ OVERVIEW PANEL ═══════════════════════════════════ -->
   <section id="overviewPanel" class="nav-section" data-tab="overview">
@@ -2218,7 +2273,7 @@
         <div class="ov-card-body" id="ovMarkets">Loading…</div>
       </div>
       <div class="ov-card" data-goto="analytics">
-        <div class="ov-card-title" style="color:#20b090">📈 Analytics</div>
+        <div class="ov-card-title" style="color:#20b090">📈 Performance</div>
         <div class="ov-card-body" id="ovAnalytics">Loading…</div>
       </div>
       <div class="ov-card" data-goto="monitors">
@@ -14186,6 +14241,51 @@ window._TT_BOOTSTRAP = {
   width: 10px;
 }
 .sub-section-header.open .chevron { transform: rotate(90deg); }
+
+/* ══════════════════════════════ COMMAND STRIP ════════════════════════════════════════ */
+#cmdStrip {
+  position: sticky;
+  top: 43px;
+  z-index: 199;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0;
+  background: #040810;
+  border-bottom: 1px solid var(--border);
+  font-family: 'Courier New', monospace;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#cmdStrip::-webkit-scrollbar { display: none; }
+.cs-grp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  height: 100%;
+  white-space: nowrap;
+}
+.cs-grp-right { margin-left: auto; padding-right: 18px; }
+.cs-lbl {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+.cs-val {
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--bright);
+  min-width: 24px;
+}
+.cs-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  flex-shrink: 0;
+}
 </style>
 
 <script>
@@ -14339,15 +14439,93 @@ window._TT_BOOTSTRAP = {
     if (el && html) el.innerHTML = html;
   }
 
+  /* ── Command strip updater ───────────────────────────────────────────────────────── */
+  function cs(id, text, color) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (text !== null && text !== undefined) el.textContent = text;
+    if (color) el.style.color = color; else el.style.color = '';
+  }
+
+  function updateCmdStrip() {
+    /* ── Macro regime ── */
+    try {
+      if (window.MacroRegime) {
+        var mr  = MacroRegime.current();
+        var rCol = { RISK_ON: '#28c060', TRANSITIONING: '#e8a020', RISK_OFF: '#e03030', UNKNOWN: '#607080' };
+        var rLbl = { RISK_ON: 'RISK ON', TRANSITIONING: 'TRANSIT', RISK_OFF: 'RISK OFF', UNKNOWN: '—' };
+        var el = document.getElementById('csRegime');
+        if (el) {
+          el.textContent = rLbl[mr.regime] || mr.regime;
+          el.style.color  = rCol[mr.regime] || '#c8d8e8';
+          el.title = 'Score: ' + mr.score + '/100' +
+            (mr.vix   ? ' | VIX '   + mr.vix.toFixed(1)  : '') +
+            (mr.dxy   ? ' | DXY '   + mr.dxy.toFixed(2)  : '') +
+            (mr.us10y ? ' | US10Y ' + mr.us10y.toFixed(2) + '%' : '') +
+            (mr.notes && mr.notes.length ? '\n' + mr.notes.join('\n') : '');
+        }
+        if (mr.vix)   cs('csVix',   mr.vix.toFixed(1),   mr.vix >= 30 ? '#e03030' : mr.vix >= 20 ? '#e8a020' : '#28c060');
+        if (mr.dxy)   cs('csDxy',   mr.dxy.toFixed(2),   mr.dxy > 103 ? '#e8a020' : null);
+        if (mr.us10y) cs('csUs10y', mr.us10y.toFixed(2) + '%', null);
+      }
+    } catch (e) {}
+
+    /* ── EE: balance, open trades, P&L, signal count ── */
+    try {
+      if (window.EE) {
+        /* Balance */
+        var bal = typeof EE.balance === 'function' ? EE.balance() : null;
+        if (bal != null) cs('csBalance', '$' + bal.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}), null);
+
+        /* Open trades */
+        var open = EE.getOpenTrades ? EE.getOpenTrades() : [];
+        cs('csOpen', open.length, open.length > 0 ? '#e8a020' : '#607080');
+
+        /* Unrealised P&L across open trades */
+        try {
+          if (typeof EE.unrealisedPnl === 'function') {
+            var unreal = EE.unrealisedPnl();
+            if (unreal != null) {
+              cs('csUnreal', (unreal >= 0 ? '+' : '') + unreal.toFixed(2) + '%', unreal >= 0 ? '#28c060' : '#e03030');
+            }
+          }
+        } catch (e2) {}
+
+        /* Realised P&L — look for LPM element */
+        try {
+          var pnlEl = document.querySelector('#eeRealisedPnl, .lpm-real-val, [data-lpm="realised"]');
+          if (pnlEl) {
+            var pnlTxt = pnlEl.textContent.replace(/[^\d.\-+]/g, '');
+            var pnlNum = parseFloat(pnlTxt);
+            if (!isNaN(pnlNum)) cs('csPnl', (pnlNum >= 0 ? '+$' : '-$') + Math.abs(pnlNum).toFixed(2), pnlNum >= 0 ? '#28c060' : '#e03030');
+          }
+        } catch (e2) {}
+
+        /* Signal count from EE status */
+        try {
+          var st = EE.getStatus ? EE.getStatus() : null;
+          if (st) {
+            var sigCount = st.signalLog || 0;
+            var eeOn     = st.enabled;
+            cs('csSignals', sigCount, sigCount > 0 ? '#2090e0' : '#607080');
+            cs('csEeStatus', eeOn ? 'ON' : 'OFF', eeOn ? '#28c060' : '#e03030');
+          }
+        } catch (e2) {}
+      }
+    } catch (e) {}
+  }
+
   /* ── Init ───────────────────────────────────────────────────────────────────────── */
   var savedTab = localStorage.getItem('geodash_tab') || 'overview';
   showTab(savedTab);
   initCollapsibles();
 
-  /* Delay first badge update so EE/GII have time to init */
+  /* Delay first update so EE/GII/MacroRegime have time to init */
   setTimeout(function () {
     updateBadgesAndOverview();
+    updateCmdStrip();
     setInterval(updateBadgesAndOverview, 8000);
+    setInterval(updateCmdStrip, 5000);
   }, 3000);
 
 })();
