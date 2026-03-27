@@ -1907,6 +1907,13 @@
     /* ─────────────────────────────────────────────────────────────────────── */
 
     var units    = (slDist > 0 && riskAmt > 0) ? riskAmt / slDist : 0;
+    // Apply signal leverage: scales notional so a 5× signal produces 5× exposure.
+    // The MAX_LEVERAGE cap below still applies as a hard ceiling.
+    var _sigLev  = Math.max(1, sig.leverage || 1);
+    if (_sigLev > 1) {
+      units = units * _sigLev;
+      log('RISK', sig.asset + ' leverage ×' + _sigLev + ' applied → notional ×' + _sigLev, 'dim');
+    }
     var sizeUsd  = units * entryPrice;
 
     // Reality check 6 — leverage validation: if notional exceeds MAX_LEVERAGE × balance,
@@ -2038,6 +2045,67 @@
     _cooldown[normaliseAsset(sig.asset) + '_' + dir] = Date.now();
     saveTrades();
     _apiPostTrade(trade);   // async push to SQLite (fire-and-forget)
+
+    // ── Fire HL order if this trade is routed to Hyperliquid ─────────────
+    if (trade.venue === 'HL' && window.HLBroker && HLBroker.isConnected()) {
+      var _hlSide = trade.direction === 'LONG' ? 'buy' : 'sell';
+      var _hlLev  = trade.leverage ? Math.round(trade.leverage) : 1;
+      HLBroker.placeOrderWithConfirmation(
+        trade.asset, null, _hlSide,
+        { notional: trade.size_usd, leverage: _hlLev },
+        /* onFill */ function (fillPrice, pos) {
+          trade.broker_status     = 'FILLED';
+          trade.broker_fill_price = fillPrice;
+          if (fillPrice > 0) trade.entry_price = fillPrice;
+          saveTrades();
+          _apiPatchTrade(trade.trade_id, {
+            broker_status:     'FILLED',
+            broker_fill_price: fillPrice,
+            entry_price:       trade.entry_price
+          });
+          log('HL', trade.asset + ' FILLED @ $' + fillPrice.toFixed(4) +
+            ' · lev ' + _hlLev + 'x · notional $' + trade.size_usd.toFixed(0), 'green');
+          renderUI();
+        },
+        /* onFail */ function (reason) {
+          trade.broker_status   = 'REJECTED';
+          trade.broker_error    = 'Order ' + reason;
+          trade.status          = 'CLOSED';
+          trade.close_reason    = 'BROKER_REJECTED';
+          trade.timestamp_close = new Date().toISOString();
+          _cfg.virtual_balance += (trade.open_commission || 0);
+          saveTrades();
+          saveCfg();
+          _apiPatchTrade(trade.trade_id, {
+            status: 'CLOSED', close_reason: 'BROKER_REJECTED',
+            broker_error: trade.broker_error, timestamp_close: trade.timestamp_close
+          });
+          log('HL', '⚠ Order ' + reason + ' for ' + trade.asset +
+            ' — trade closed, commission refunded.', 'red');
+          renderUI();
+        }
+      ).then(function (result) {
+        if (!result || !result.ok) return;
+        trade.broker_status = 'PENDING_FILL';
+        saveTrades();
+        log('HL', trade.asset + ' order submitted — awaiting fill', 'cyan');
+      }).catch(function (e) {
+        trade.broker_status   = 'REJECTED';
+        trade.broker_error    = e.message || 'unknown error';
+        trade.status          = 'CLOSED';
+        trade.close_reason    = 'BROKER_REJECTED';
+        trade.timestamp_close = new Date().toISOString();
+        _cfg.virtual_balance += (trade.open_commission || 0);
+        saveTrades();
+        saveCfg();
+        _apiPatchTrade(trade.trade_id, {
+          status: 'CLOSED', close_reason: 'BROKER_REJECTED',
+          broker_error: trade.broker_error, timestamp_close: trade.timestamp_close
+        });
+        log('HL', '⚠ Order REJECTED for ' + trade.asset + ': ' + trade.broker_error, 'red');
+        renderUI();
+      });
+    }
 
     // ── Fire Alpaca order if this trade is routed to Alpaca ──────────────
     if (trade.venue === 'ALPACA' && window.AlpacaBroker && AlpacaBroker.isConnected()) {
@@ -2411,6 +2479,13 @@
       }
     }
 
+    // ── Close HL position if routed there ────────────────────────────────
+    if (trade.venue === 'HL' && window.HLBroker && HLBroker.isConnected()) {
+      HLBroker.closePosition(trade.asset).catch(function (e) {
+        log('HL', '⚠ Close position failed for ' + trade.asset + ': ' + e.message, 'amber');
+      });
+    }
+
     // ── Close Alpaca position if routed there ────────────────────────────
     if (trade.venue === 'ALPACA' && window.AlpacaBroker && AlpacaBroker.isConnected()) {
       AlpacaBroker.closePosition(trade.asset).catch(function (e) {
@@ -2629,7 +2704,10 @@
 
       var _asset = normaliseAsset(sig.asset);
       var _venue;
-      if (!_hlStale && window.HLFeed && HLFeed.covers(_asset)) {
+      /* HL venue requires BOTH a price feed AND a broker execution layer.
+         HLFeed provides prices only — without HLBroker, fall through to Alpaca. */
+      if (!_hlStale && window.HLFeed && HLFeed.covers(_asset) &&
+          window.HLBroker && typeof HLBroker.isConnected === 'function' && HLBroker.isConnected()) {
         _venue = 'HL';
       } else if (window.AlpacaBroker && AlpacaBroker.covers(_asset)) {
         _venue = 'ALPACA';
@@ -4664,6 +4742,22 @@
 
     /* ── Reset virtual balance (alias kept for any existing onclick refs) ── */
     resetBalance: function () { return this.accountReset(); },
+
+    /* ── Stats checkpoint — zero the session counters without touching anything else ── */
+    sessionReset: function () {
+      /* Re-baseline session start to NOW and session balance to current balance.
+         Effect: Balance display resets to 0 change, Unrealised/Realised/Session Returns
+         all reset from this moment. Open trades, history, config — nothing else changes. */
+      _sessionStart        = new Date().toISOString();
+      _sessionStartBalance = _cfg.virtual_balance;
+      _peakEquity          = _cfg.virtual_balance;
+      _ddFromPeak          = 0;
+      try { localStorage.setItem('geodash_session_start_v1', _sessionStart); } catch(e) {}
+      try { localStorage.setItem('geodash_session_balance_v1', String(_sessionStartBalance)); } catch(e) {}
+      log('CONFIG', 'Stats checkpoint: session counters reset to current balance $' +
+          _cfg.virtual_balance.toFixed(2), 'amber');
+      renderUI();
+    },
 
     /* ── Clear closed trade history ── */
     clearHistory: function () {

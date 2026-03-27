@@ -727,6 +727,86 @@ async def trades_backup():
     return JSONResponse(content={'ok': True, 'path': path, 'count': n})
 
 
+# ── Hyperliquid broker endpoints ─────────────────────────────────────────────
+
+import hl_broker as _hl
+
+@app.post('/api/hl/connect')
+async def hl_connect(request: Request):
+    """Connect HL broker with wallet address + private key."""
+    body    = await request.json()
+    wallet  = (body.get('wallet') or '').strip()
+    privkey = (body.get('privateKey') or '').strip()
+    testnet = body.get('testnet', True)
+    if not wallet or not privkey:
+        return JSONResponse(content={'ok': False, 'error': 'wallet and privateKey required'})
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _hl.connect, wallet, privkey, testnet
+    )
+    return JSONResponse(content=result)
+
+
+@app.get('/api/hl/account')
+async def hl_account():
+    """Get HL account equity, available margin, unrealised P&L."""
+    result = await asyncio.get_event_loop().run_in_executor(None, _hl.get_account)
+    return JSONResponse(content=result)
+
+
+@app.post('/api/hl/order')
+async def hl_order(request: Request):
+    """Place a market order on HL. Body: {coin, side, sizeUsd, leverage}"""
+    body     = await request.json()
+    coin     = (body.get('coin') or '').upper().strip()
+    side     = (body.get('side') or '').lower()
+    size_usd = float(body.get('sizeUsd', 0))
+    leverage = int(body.get('leverage', 1))
+    if not coin or side not in ('buy', 'sell') or size_usd <= 0:
+        return JSONResponse(content={'ok': False, 'error': 'coin, side (buy/sell), sizeUsd required'})
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _hl.place_order, coin, side == 'buy', size_usd, leverage
+    )
+    return JSONResponse(content=result)
+
+
+@app.post('/api/hl/close')
+async def hl_close(request: Request):
+    """Close the full HL position for a coin. Body: {coin}"""
+    body = await request.json()
+    coin = (body.get('coin') or '').upper().strip()
+    if not coin:
+        return JSONResponse(content={'ok': False, 'error': 'coin required'})
+    result = await asyncio.get_event_loop().run_in_executor(None, _hl.close_position, coin)
+    return JSONResponse(content=result)
+
+
+@app.get('/api/hl/positions')
+async def hl_positions():
+    """Get all open HL perp positions."""
+    result = await asyncio.get_event_loop().run_in_executor(None, _hl.get_positions)
+    return JSONResponse(content=result)
+
+
+@app.get('/api/hl/status')
+async def hl_status():
+    """HL broker connection status."""
+    connected = _hl._cfg.get('connected', False)
+    wallet    = _hl._cfg.get('wallet', '')
+    testnet   = _hl._cfg.get('testnet', True)
+    result    = {'connected': connected, 'testnet': testnet,
+                 'address': wallet, 'addressHint': wallet[:10] + '…' if wallet else ''}
+    if connected:
+        acct = await asyncio.get_event_loop().run_in_executor(None, _hl.get_account)
+        result.update(acct)
+    return JSONResponse(content=result)
+
+
+@app.post('/api/hl/disconnect')
+async def hl_disconnect():
+    _hl.disconnect()
+    return JSONResponse(content={'ok': True})
+
+
 # ── Static asset fallback ─────────────────────────────────────────────────────
 # MUST be last — serves JS/CSS from project root so the dashboard works at
 # http://localhost:8765/ as well as http://localhost:8080/

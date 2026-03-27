@@ -8,7 +8,7 @@
 
   var MAX_SIGNALS = 20;
   var POLL_INTERVAL = 74000;
-  var MIN_SIGNAL    = 70;
+  var MIN_SIGNAL    = 78;  // raised from 70 — prevents analysis/commentary articles triggering shifts
   var LOOKBACK_MS   = 2 * 60 * 60 * 1000;  // 2 hours
   var COOLDOWN_MS   = 60 * 60 * 1000;       // 1 hour
 
@@ -22,7 +22,7 @@
     },
     COUP: {
       kws: ['coup', 'military takeover', 'junta', 'seized power', 'government overthrown',
-            'military coup', 'regime change', 'takeover government'],
+            'military coup', 'takeover government'],
       volBoost: 2.5,
       priorReset: 0.75
     },
@@ -88,10 +88,16 @@
     var now = Date.now();
     var cutoff = now - LOOKBACK_MS;
 
-    // High-signal events in last 2h
+    /* Only consider events AFTER the last detected shift.
+       Without this, the same triggering headline stays in the 2h lookback
+       beyond the 1h cooldown, gets re-detected, and resets the cooldown —
+       causing the force-close loop to repeat every hour indefinitely. */
+    var eventCutoff = (_status.lastShiftTs > 0) ? Math.max(cutoff, _status.lastShiftTs) : cutoff;
+
+    // High-signal events in window
     var highSigEvents = IC.events.filter(function (e) {
       var sig = e.signal || e.severity || 0;
-      return e.ts > cutoff && sig >= MIN_SIGNAL;
+      return e.ts > eventCutoff && sig >= MIN_SIGNAL;
     });
 
     _status.eventCount = highSigEvents.length;

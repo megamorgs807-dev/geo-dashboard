@@ -5291,6 +5291,7 @@
         <button class="ee-cfg-ghost" onclick="EE.accountReset()">Account Reset</button>
         <button class="ee-cfg-ghost" onclick="EE.clearHistory()">Clear History</button>
         <button class="ee-cfg-ghost" style="color:#00c8a0;border-color:rgba(0,200,160,0.4)" onclick="EE.analyticsReset()">&#9654; New Session</button>
+        <button class="ee-cfg-ghost" style="color:#60a5fa;border-color:rgba(96,165,250,0.4)" onclick="EE.sessionReset()" title="Reset Balance / Unrealised / Realised / Session Returns display to now — trades and history untouched">&#8635; Reset Stats</button>
         <button class="ee-cfg-ghost" style="color:#ff4444;border-color:rgba(255,68,68,0.4)" onclick="EE.fullReset()">&#9888; Full Reset</button>
         <button class="ee-cfg-ghost" onclick="EE.exportJSON()">&#8595; JSON</button>
         <button class="ee-cfg-ghost" onclick="EE.exportCSV()">&#8595; CSV</button>
@@ -5416,13 +5417,14 @@
     <div class="ee-config-section" style="margin-bottom:16px">
       <div class="ee-panel-title">
         Broker &amp; Data Connections
-        <span style="font-weight:normal;font-size:8px;color:var(--dim)">HL active &middot; Alpaca ready &middot; OANDA rates optional</span>
+        <span style="font-weight:normal;font-size:8px;color:var(--dim)">HL perps &middot; Alpaca stocks &middot; OANDA forex</span>
       </div>
       <div class="ee-broker-grid">
-        <div class="ee-broker-card">
-          <div class="ee-broker-name" style="color:#a78bfa">Hyperliquid</div>
-          <div class="ee-broker-assets">Crypto perps + tokenised equities &middot; Live price feed</div>
-          <button class="ee-broker-btn" style="border-color:#a78bfa;color:#a78bfa;cursor:default" disabled>&#9679; Active &mdash; No key needed</button>
+        <div id="hlBrokerCard" class="ee-broker-card">
+          <!-- Rendered by HLBroker.renderCard() on load -->
+          <div class="ee-broker-name">Hyperliquid</div>
+          <div class="ee-broker-assets">Crypto perps &middot; Up to 50&times; leverage</div>
+          <div style="font-size:7px;color:var(--dim);margin-bottom:4px">Loading&hellip;</div>
         </div>
         <div id="alpacaBrokerCard" class="ee-broker-card">
           <!-- Rendered by AlpacaBroker.renderCard() on load -->
@@ -13499,8 +13501,11 @@ window._TT_BOOTSTRAP = {
 <!-- TickTrader Broker adapter — forex majors via any TickTrader-powered broker -->
 <script src="agents/ticktrader-broker.js?v=5"></script>
 
+<!-- HL Broker adapter — loaded before EE so venue router sees it -->
+<script src="HLBroker.js?v=1"></script>
+
 <!-- Alpaca Broker adapter — loaded before EE so venue router is available -->
-<script src="agents/alpaca-broker.js?v=5"></script>
+<script src="agents/alpaca-broker.js?v=6"></script>
 
 <!-- OANDA Rates agent — real-time FX rates via OANDA v20 API.
      Loaded before executionEngine so _fetchFrankfurter can use OANDA_RATES. -->
@@ -13552,7 +13557,7 @@ window._TT_BOOTSTRAP = {
 <script src="agents/macro-regime.js?v=3"></script>
 
 <!-- Execution Engine — loaded last so HRS and IC are already initialised -->
-<script src="executionEngine.js?v=104"></script>
+<script src="executionEngine.js?v=108"></script>
 <!-- Smoke tests — EETests.run() in console to validate core EE behaviour -->
 <script src="tests/ee-smoke-tests.js?v=3"></script>
 
@@ -13568,7 +13573,7 @@ window._TT_BOOTSTRAP = {
 <script src="agents/gii-maritime.js?v=3"></script>
 <script src="agents/gii-social.js?v=3"></script>
 <script src="agents/gii-polymarket.js?v=1"></script>
-<script src="agents/gii-regime.js?v=2"></script>
+<script src="agents/gii-regime.js?v=4"></script>
 <script src="agents/gii-satellite.js?v=1"></script>
 <script src="agents/gii-historical.js?v=2"></script>
 <script src="agents/gii-liquidity.js?v=1"></script>
@@ -13598,7 +13603,7 @@ window._TT_BOOTSTRAP = {
 </script>
 <script src="agents/gii-technicals.js?v=2"></script>
 <script src="gii-scalper-brain.js?v=2"></script>
-<script src="agents/gii-scalper.js?v=14"></script>
+<script src="agents/gii-scalper.js?v=15"></script>
 <script src="agents/gii-scalper-session.js?v=6"></script>
 <script src="agents/gii-scraper-manager.js?v=6"></script>
 <script src="agents/gii-optimizer.js?v=1"></script>

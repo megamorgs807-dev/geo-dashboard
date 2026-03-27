@@ -82,9 +82,25 @@
     'CORN':  { sector: 'agri',    name: 'Teucrium Corn Fund' },
     'INDA':  { sector: 'em',      name: 'iShares India ETF' },
     'LIT':   { sector: 'energy',  name: 'Global X Lithium ETF' },
-    'XME':   { sector: 'mining',  name: 'SPDR Metals & Mining ETF' }
+    'XME':   { sector: 'mining',  name: 'SPDR Metals & Mining ETF' },
     /* Note: SPY, QQQ, GLD, SLV, AAPL, TSLA, META, MSFT, AMZN, GOOGL, HOOD
-             are all on HL spot tokens → HL handles those, NOT Alpaca.    */
+             are all on HL spot tokens → HL handles those when HLBroker exists. */
+    /* ── Crypto — routed here when HLBroker is unavailable ──────────── */
+    'BTC':   { sector: 'crypto', name: 'Bitcoin',       alpacaSym: 'BTCUSD' },
+    'ETH':   { sector: 'crypto', name: 'Ethereum',      alpacaSym: 'ETHUSD' },
+    'SOL':   { sector: 'crypto', name: 'Solana',        alpacaSym: 'SOLUSD' },
+    'XRP':   { sector: 'crypto', name: 'XRP',           alpacaSym: 'XRPUSD' },
+    'DOGE':  { sector: 'crypto', name: 'Dogecoin',      alpacaSym: 'DOGEUSD' },
+    'LTC':   { sector: 'crypto', name: 'Litecoin',      alpacaSym: 'LTCUSD' },
+    'AVAX':  { sector: 'crypto', name: 'Avalanche',     alpacaSym: 'AVAXUSD' },
+    'LINK':  { sector: 'crypto', name: 'Chainlink',     alpacaSym: 'LINKUSD' },
+    'BCH':   { sector: 'crypto', name: 'Bitcoin Cash',  alpacaSym: 'BCHUSD' },
+    'UNI':   { sector: 'crypto', name: 'Uniswap',       alpacaSym: 'UNIUSD' },
+    'AAVE':  { sector: 'crypto', name: 'Aave',          alpacaSym: 'AAVEUSD' },
+    'DOT':   { sector: 'crypto', name: 'Polkadot',      alpacaSym: 'DOTUSD' },
+    'ADA':   { sector: 'crypto', name: 'Cardano',       alpacaSym: 'ADAUSD' },
+    'BNB':   { sector: 'crypto', name: 'BNB',           alpacaSym: 'BNBUSD' },
+    'SHIB':  { sector: 'crypto', name: 'Shiba Inu',     alpacaSym: 'SHIBUSD' }
   };
 
   /* ── Config state ────────────────────────────────────────────────────── */
@@ -98,6 +114,18 @@
   };
 
   function _baseUrl() { return _cfg.paper ? PAPER_BASE : LIVE_BASE; }
+
+  /* Convert internal asset name to Alpaca symbol (crypto needs USD suffix) */
+  function _toAlpacaSymbol(asset) {
+    var info = ALPACA_ASSETS[String(asset).toUpperCase()];
+    return (info && info.alpacaSym) ? info.alpacaSym : String(asset).toUpperCase();
+  }
+
+  /* Crypto orders must use 'gtc' (markets open 24/7); stocks use 'day' */
+  function _timeInForce(asset) {
+    var info = ALPACA_ASSETS[String(asset).toUpperCase()];
+    return (info && info.sector === 'crypto') ? 'gtc' : 'day';
+  }
 
   function _headers() {
     return {
@@ -332,10 +360,10 @@
        opts.notional: use dollar amount instead of shares */
     placeOrder: async function (symbol, qty, side, opts) {
       var body = {
-        symbol:        symbol.toUpperCase(),
+        symbol:        _toAlpacaSymbol(symbol),
         side:          side,
         type:          'market',
-        time_in_force: 'day'
+        time_in_force: _timeInForce(symbol)
       };
       if (opts && opts.notional) {
         body.notional = String(parseFloat(opts.notional).toFixed(2));
@@ -351,10 +379,10 @@
        Returns the initial order object (id available immediately).      */
     placeOrderWithConfirmation: async function (symbol, qty, side, opts, onFill, onFail) {
       var body = {
-        symbol:        symbol.toUpperCase(),
+        symbol:        _toAlpacaSymbol(symbol),
         side:          side,
         type:          'market',
-        time_in_force: 'day'
+        time_in_force: _timeInForce(symbol)
       };
       if (opts && opts.notional) {
         body.notional = String(parseFloat(opts.notional).toFixed(2));
@@ -368,7 +396,7 @@
 
     /* Close entire position */
     closePosition: async function (symbol) {
-      var url = _baseUrl() + '/v2/positions/' + symbol.toUpperCase();
+      var url = _baseUrl() + '/v2/positions/' + _toAlpacaSymbol(symbol);
       var res = await fetch(url, { method: 'DELETE', headers: _headers() });
       if (!res.ok && res.status !== 404) throw new Error('Alpaca close ' + res.status);
       return res.status === 404 ? null : res.json();

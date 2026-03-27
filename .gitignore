@@ -1,6 +1,7 @@
 # API keys and secrets
 backend/.env
 backend/uw_config.json
+backend/hl_config.json
 
 # Databases
 *.db

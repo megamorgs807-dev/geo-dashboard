@@ -647,6 +647,19 @@
   // ── main poll ─────────────────────────────────────────────────────────────
 
   function _pollAsset(sym, gtiM) {
+    /* Block new scalp signals during an active geopolitical regime shift.
+       The exit agent force-closes all non-defensive positions within 90s of a
+       shift, so opening new trades just burns spread for a guaranteed loss. */
+    if (window.GII_AGENT_REGIME) {
+      try {
+        var _regSt = GII_AGENT_REGIME.status();
+        if (_regSt.regimeShiftActive) {
+          _status['note_' + sym] = 'Blocked: regime shift active (' + (_regSt.shiftType || '?') + ')';
+          return;
+        }
+      } catch (e) {}
+    }
+
     if (!_slotFreeFor(sym)) {
       _status['note_' + sym] = 'Active scalp: ' + JSON.stringify(_activeScalps[sym]);
       return;
