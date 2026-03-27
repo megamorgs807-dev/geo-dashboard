@@ -43,8 +43,8 @@
     enabled:               true,         // auto-execution always on by default
     min_confidence:        55,           // lowered 60→55: more trades get through on good signals
     virtual_balance:       1000,         // starting virtual balance (USD)
-    risk_per_trade_pct:    3,            // raised 2→3%: more aggressive growth on small account
-    stop_loss_pct:         1.5,          // % distance from entry
+    risk_per_trade_pct:    1,            // lowered 3→1%: conservative sizing for small account
+    stop_loss_pct:         2.5,          // % distance from entry (raised 1.5→2.5: stops were too tight)
     take_profit_ratio:     2.5,          // R:R multiplier
     max_open_trades:       12,           // raised 8→12: more concurrent positions
     max_per_region:        6,            // raised 5→6
@@ -63,7 +63,7 @@
     daily_loss_limit_pct:  15,           // raised 10→15%: slightly looser circuit breaker
     event_gate_enabled:    true,         // block new trades near major calendar events
     event_gate_hours:      0.5,          // hours before event to block (0.5 = 30min)
-    max_risk_usd:          100           // raised 50→100: higher per-trade cap for leverage
+    max_risk_usd:          30            // lowered 100→30: hard cap $30 risk per trade on $1k account
   };
 
   /* ── Sector map — used for max_per_sector concentration cap ──────────────── */
@@ -1924,6 +1924,15 @@
       log('AUDIT', '⚠ LEVERAGE: ' + sig.asset + ' capped at ' + MAX_LEVERAGE + '× — units reduced to ' + units.toFixed(4), 'amber');
     }
 
+    // Reality check 6b — notional cap: max position = 50% of balance (cash account protection).
+    // Prevents $2k+ positions on a $1k account regardless of leverage or Kelly.
+    var _maxNotional = _cfg.virtual_balance * 0.50;
+    if (sizeUsd > _maxNotional) {
+      units   = _maxNotional / entryPrice;
+      sizeUsd = _maxNotional;
+      log('AUDIT', '⚠ SIZE CAP: ' + sig.asset + ' capped at 50% balance ($' + _maxNotional.toFixed(0) + ')', 'amber');
+    }
+
     // Reality check 7 — reject zero-size positions: risk budget exhausted or SL too wide.
     // Previously these slipped through as phantom trades (units=0) blocking asset slots.
     var MIN_SIZE_USD = 1.0;  // absolute floor — $1 minimum position
@@ -2710,6 +2719,13 @@
           window.HLBroker && typeof HLBroker.isConnected === 'function' && HLBroker.isConnected()) {
         _venue = 'HL';
       } else if (window.AlpacaBroker && AlpacaBroker.covers(_asset)) {
+        // Alpaca paper accounts cannot short stocks (only longs; crypto is spot-buy-only too).
+        // Block any SHORT routed to Alpaca to avoid silent 403 rejections.
+        if (sig.dir === 'SHORT') {
+          _flagTrade(sig, 'Alpaca paper account cannot short ' + _asset + ' — no margin/short-selling on paper.');
+          _logSignal(sig, 'SKIPPED', 'Alpaca no-short: ' + _asset);
+          return;
+        }
         _venue = 'ALPACA';
       } else if (window.OANDABroker && OANDABroker.isConnected() && OANDABroker.covers(_asset)) {
         _venue = 'OANDA';

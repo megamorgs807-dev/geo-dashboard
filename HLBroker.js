@@ -87,8 +87,7 @@
     'MSFT':      { name: 'Microsoft token' },
     'AMZN':      { name: 'Amazon token' },
     'GOOGL':     { name: 'Google token' },
-    'GLD':       { name: 'Gold token' },
-    'SLV':       { name: 'Silver token' }
+    // GLD and SLV removed — no mid price on HL testnet or mainnet perps
   };
 
   /* ── State ───────────────────────────────────────────────────────────────── */
