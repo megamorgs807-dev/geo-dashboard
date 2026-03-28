@@ -667,8 +667,11 @@
         console.info('[EE] State version migrating from', _cfg._state_version || 'none', '→', STATE_VERSION);
       }
       _cfg._state_version = STATE_VERSION;
-      // audit-v2 migration: daily loss limit 50%→10% (50% was not a real circuit breaker)
-      if (_cfg.daily_loss_limit_pct > 10 || _cfg.daily_loss_limit_pct < 1) {
+      // H5 fix: migration cap was >10 but DEFAULTS is 15 — any user with a value
+      // between 11–100% was silently reset on every load. Changed to only catch the
+      // truly invalid old default of 50% (and anything above 100% or below 1%).
+      if (_cfg.daily_loss_limit_pct > 100 || _cfg.daily_loss_limit_pct < 1 ||
+          _cfg.daily_loss_limit_pct === 50) {
         _cfg.daily_loss_limit_pct = DEFAULTS.daily_loss_limit_pct;
       }
       // floor guards — prevent accidental misconfiguration
@@ -856,7 +859,23 @@
       ? '/api/trades'
       : '/api/trades/' + encodeURIComponent(item.tradeId);
     _apiFetch(url, { method: item.op, body: JSON.stringify(item.data) })
-      .then(function () {
+      .then(function (r) {
+        // H3 fix: HTTP 5xx resolves (not rejects) — must check r.ok.
+        // On 4xx (stale/deleted trade): discard silently (it's a stale operation).
+        // On 5xx: keep item in queue and retry on next flush.
+        if (!r.ok) {
+          if (r.status >= 400 && r.status < 500) {
+            log('SYSTEM', 'Write queue: ' + item.op + ' ' + item.tradeId + ' → ' + r.status + ' (stale, discarding)', 'dim');
+            _writeQueue.shift(); // discard 4xx
+          } else {
+            log('SYSTEM', 'Write queue: ' + item.op + ' ' + item.tradeId + ' → ' + r.status + ' (server error, will retry)', 'amber');
+            // keep item for retry
+          }
+          _saveWriteQueue();
+          _writeQueueBusy = false;
+          if (_writeQueue.length) setTimeout(_flushWriteQueue, 2000); // back off on error
+          return;
+        }
         _writeQueue.shift();
         _saveWriteQueue();
         _writeQueueBusy = false;
@@ -963,7 +982,12 @@
         // Smart Improvement 2: if localStorage config was wiped (e.g. Chrome crash),
         // restore it from the backend's saved copy before loading trades.
         var lsCfgRaw = localStorage.getItem(CFG_KEY);
-        var lsCfg    = lsCfgRaw ? JSON.parse(lsCfgRaw) : null;
+        // C5 fix: JSON.parse can throw if localStorage was corrupted (e.g. partial write
+        // during storage-full condition). Catch and treat as missing so the backend restore
+        // path fires instead of crashing _apiInit and leaving backendChecked=false forever.
+        var lsCfg = null;
+        try { lsCfg = lsCfgRaw ? JSON.parse(lsCfgRaw) : null; }
+        catch (e) { log('SYSTEM', 'localStorage config corrupted — restoring from backend', 'amber'); }
         var cfgFetch = (!lsCfg || !lsCfg.mode)
           ? _apiFetch('/api/config').then(function (cr) {
               return cr.json().then(function (saved) {
@@ -982,7 +1006,13 @@
 
         return cfgFetch.then(function () { return _apiFetch('/api/trades'); });
       })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        // H2 fix: guard against malformed JSON from backend (e.g. maintenance page returning
+        // HTML as a 200). Without this, r.json() throws, the catch marks backend offline,
+        // even though the status check succeeded — causing a false offline state.
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json().catch(function () { return { trades: [] }; });
+      })
       .then(function (data) {
         var dbTrades = data.trades || [];
 
@@ -1573,7 +1603,7 @@
       var _cdDirKey = (sig.dir || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
       var _cdStreak = Math.max(
         _lossStreak[_cdDirKey] || 0,
-        _lossStreak[_cdDirKey + '_' + (_SECTOR_MAP[_cdAsset] || 'other')] || 0
+        _lossStreak[_cdDirKey + '_' + (EE_SECTOR_MAP[_cdAsset] || 'other')] || 0
       );
       if (_cdStreak >= 4) mult *= 1.5;
       else if (_cdStreak >= 2) mult *= 1.25;
@@ -1842,8 +1872,23 @@
         } catch (e) {}
       }
 
-      var kelly = (W * R - (1 - W)) / R;
-      var baseKelly = Math.max(0.01, (0.5 * R - 0.5) / R);  // BE kelly at 50% win rate
+      // H6 fix: Kelly uses realised R (avg win / avg loss from closed trades) not
+      // the theoretical TP:SL config ratio. Partial TPs mean actual realised R is
+      // often 1.5–2.0× not the configured 2.5×, causing systematic over-sizing.
+      // With ≥10 closed trades, compute realised R from actual trade P&L.
+      // Fall back to configured R when data is insufficient.
+      var _realisedR = R; // default: use configured ratio
+      if (_allClosed.length >= 10) {
+        var _realisedWins   = _allClosed.filter(function (t) { return (t.pnl_usd || 0) > 0; });
+        var _realisedLosses = _allClosed.filter(function (t) { return (t.pnl_usd || 0) < 0; });
+        if (_realisedWins.length >= 5 && _realisedLosses.length >= 5) {
+          var _avgWin  = _realisedWins.reduce(function (s, t) { return s + (t.pnl_usd || 0); }, 0) / _realisedWins.length;
+          var _avgLoss = Math.abs(_realisedLosses.reduce(function (s, t) { return s + (t.pnl_usd || 0); }, 0) / _realisedLosses.length);
+          if (_avgLoss > 0) _realisedR = Math.max(1.0, _avgWin / _avgLoss);
+        }
+      }
+      var kelly = (W * _realisedR - (1 - W)) / _realisedR;
+      var baseKelly = Math.max(0.01, (0.5 * _realisedR - 0.5) / _realisedR);  // BE kelly at 50% win rate
       if (kelly > 0) {
         kellyMult = Math.max(0.3, Math.min(2.0, kelly * 0.5 / baseKelly));  // raised cap 1.5→2.0
         // Floor lowered 0.50→0.30: prior win rate now genuinely affects sizing.
@@ -1872,7 +1917,7 @@
     // We read the tighter sector key first; if no data yet, fall back to the
     // global direction key so new asset classes still get protection.
     var _dirKey    = (sig.dir || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
-    var _sigSector = _SECTOR_MAP[normaliseAsset(sig.asset)] || 'other';
+    var _sigSector = EE_SECTOR_MAP[normaliseAsset(sig.asset)] || 'other';
     var _sectorDirKey = _dirKey + '_' + _sigSector;  // e.g. 'long_crypto', 'short_forex'
     // Use sector-specific streak if it has any data, else fall back to global direction streak
     var _dirStreak = (_lossStreak[_sectorDirKey] !== undefined)
@@ -1955,8 +2000,10 @@
       });
       if (_srcClosed.length < 10) return; // insufficient data — stay neutral
       var _srcWr = _srcClosed.filter(function (t) { return (t.pnl_usd || 0) > 0; }).length / _srcClosed.length;
-      // Normalise: 0.30 WR → 0.70×, 0.45 WR → 1.0×, 0.60+ WR → 1.30×
-      _srcWrMult = Math.max(0.70, Math.min(1.30, 0.70 + (_srcWr / 0.60) * 0.60));
+      // H7 fix: previous formula had neutral point at 0.30 WR, not 0.45 as intended.
+      // Formula: 0.70 + (srcWr - 0.45) / 0.15 * 0.30
+      //   → WR=0.30 → 0.70×, WR=0.45 → 1.00× (neutral), WR=0.60 → 1.30×
+      _srcWrMult = Math.max(0.70, Math.min(1.30, 1.0 + (_srcWr - 0.45) / 0.15 * 0.30));
       if (Math.abs(_srcWrMult - 1.0) > 0.03) {
         log('RISK', sig.asset + ' source "' + _srcName + '" WR=' + (_srcWr * 100).toFixed(0) +
           '% (' + _srcClosed.length + ' trades) → size ×' + _srcWrMult.toFixed(2),
@@ -2278,9 +2325,12 @@
     // leaving riskAmt=0 for the next signal. Opening a 0-unit trade is pointless —
     // it costs commission, clutters the log, and never closes. Skip it cleanly.
     if (!trade || trade.units < 0.001) {
+      _logSignal(sig, 'SKIPPED', 'risk budget exhausted — 0 units available');
       log('TRADE', sig.asset + ' ' + dir + ' skipped — risk budget exhausted by open positions (0 units available)', 'amber');
       return;
     }
+    // M7 fix: log TRADED only after confirming units > 0 (trade will actually open)
+    _logSignal(sig, 'TRADED', null);
 
     // Store raw (pre-slippage) price for audit display
     trade.raw_entry_price    = +entryPrice.toFixed(6);
@@ -2708,6 +2758,12 @@
       trade.close_reason = 'TRAILING_STOP';
     }
 
+    // C4 fix: store total_pnl_usd = final close P&L + any partial TP P&L already banked.
+    // pnl_usd alone only reflects the remaining position at close — analytics uses
+    // total_pnl_usd so partial-TP trades aren't misclassified as losses when they're
+    // actually net winners (e.g. +$20 partial then -$2 at break-even = +$18 net win).
+    trade.total_pnl_usd = +((trade.pnl_usd || 0) + (trade.partial_pnl_usd || 0)).toFixed(2);
+
     // Update virtual balance (pnl_usd is net of close commission; open commission already deducted at open)
     _cfg.virtual_balance += trade.pnl_usd;
     if (_cfg.virtual_balance < 0) {
@@ -2824,7 +2880,7 @@
     // The sector key is used for fine-grained sizing; the global key is used as
     // a fallback for assets without a sector-level history. Both stay in sync.
     var _tradeDir = (trade.direction || 'LONG').toLowerCase() === 'short' ? 'short' : 'long';
-    var _tradeSector = _SECTOR_MAP[normaliseAsset(trade.asset)] || 'other';
+    var _tradeSector = EE_SECTOR_MAP[normaliseAsset(trade.asset)] || 'other';
     var _tradeSectorKey = _tradeDir + '_' + _tradeSector;
     if (trade.pnl_usd > 0) {
       // Win: reset sector loss streak + global direction streak
@@ -2855,6 +2911,12 @@
       _reversalCooldown[_slAsset + '_' + _oppDir] = _revExpiry;
       log('RISK', trade.asset + ' stop-loss → ' + _oppDir + ' reversal blocked for 5 min', 'amber');
     }
+
+    // M2+M3 fix: clean up per-trade runtime maps when a trade closes.
+    // _livePrice and _lastPriceTs entries for closed trade IDs are never read again
+    // but accumulate indefinitely — one entry per closed trade.
+    delete _livePrice[tradeId];
+    delete _lastPriceTs[tradeId];
 
     renderUI();
 
@@ -3030,8 +3092,13 @@
       }, 30000);
       fetchPrice(sig.asset, function (price) {
         clearTimeout(_pendingTimer);
-        delete _pendingOpen[_lockKey];   // release lock regardless of outcome
+        // M1 fix: hold the lock through the post-fetch canExecute re-check.
+        // Releasing here and re-checking below left a brief window where a second
+        // signal for the same asset (e.g. from re-scan) could pass canExecute
+        // concurrently. Lock stays until openTrade() completes or is rejected.
+        // _pendingOpen[_lockKey] = true; ← keep held, delete after recheck below
         if (!price) {
+          delete _pendingOpen[_lockKey]; // release on early-out paths
           // No price available — skip this trade entirely rather than open at
           // a meaningless $100 fallback which would corrupt P&L. The 5-min
           // re-scan loop will retry this signal when a price becomes available.
@@ -3040,9 +3107,11 @@
           return;
         }
         // Re-validate after async gap — another signal for same asset may have
-        // opened while price was being fetched (fixes duplicate-position race condition)
+        // opened while price was being fetched (fixes duplicate-position race condition).
+        // Lock is still held through this check (M1 fix).
         var recheck = canExecute(sig);
         if (!recheck.ok) {
+          delete _pendingOpen[_lockKey]; // release on reject
           _logSignal(sig, 'SKIPPED', 'post-fetch recheck: ' + recheck.reason);
           return;
         }
@@ -3052,11 +3121,15 @@
         var _staleTok = normaliseAsset(sig.asset);
         var _priceAge = _priceCacheTs[_staleTok] ? (Date.now() - _priceCacheTs[_staleTok]) : Infinity;
         if (_priceAge > _PRICE_STALE_RESCAN) {
+          delete _pendingOpen[_lockKey]; // release on reject
           _logSignal(sig, 'SKIPPED', 'Stale price (' + Math.round(_priceAge / 60000) + ' min old) — refusing trade on ' + sig.asset);
           log('TRADE', sig.asset + ' skipped: price is ' + Math.round(_priceAge / 60000) + ' min old (limit 10 min). Re-scan will retry when feed recovers.', 'amber');
           return;
         }
-        _logSignal(sig, 'TRADED', null);
+        delete _pendingOpen[_lockKey]; // release only after all checks pass, immediately before openTrade
+        // M7 fix: _logSignal(TRADED) moved to inside openTrade() after the zero-size guard.
+        // Previously it fired here before openTrade, so a risk-budget-exhausted rejection
+        // still showed as TRADED in the signal log with no actual trade opened.
         openTrade(sig, price);
       });
     });
@@ -3382,7 +3455,12 @@
         if (ageMs > _zombieMs) {
           log('TRADE', 'Zombie position cancelled: ' + zt.asset + ' (size=$0, age=' +
             Math.round(ageMs / 60000) + 'min)', 'amber');
-          closeTrade(zt.trade_id, zt.entry_price || 0, 'ZOMBIE-CANCEL');
+          // H4 fix: closeTrade rejects price ≤ 0 and reverts to OPEN, causing
+          // infinite spam. Use a non-zero fallback (stop_loss > 0 else 1 cent).
+          var _zombiePx = (zt.entry_price > 0) ? zt.entry_price
+                        : (zt.stop_loss   > 0) ? zt.stop_loss
+                        : 0.01;
+          closeTrade(zt.trade_id, _zombiePx, 'ZOMBIE-CANCEL');
         }
       }
     });
@@ -3395,6 +3473,13 @@
       Object.keys(_cooldown).forEach(function (k) {
         if (_cdNow - (_cooldown[k] || 0) > _cfg.cooldown_ms) {
           delete _cooldown[k];
+        }
+      });
+      // H8 fix: _reversalCooldown also never pruned — same unbounded growth issue.
+      // Entries store an expiry ms timestamp (unlike _cooldown which stores a start ts).
+      Object.keys(_reversalCooldown).forEach(function (k) {
+        if (_cdNow > (_reversalCooldown[k] || 0)) {
+          delete _reversalCooldown[k];
         }
       });
     })();
@@ -3459,7 +3544,11 @@
           if (hitTP1) {
             var closedUnits  = trade.units * _partialFrac;
             // Use tp1 price (not current price) so partial P&L is always capped at 1×R.
-            var partialClosePrice = isLong ? Math.min(price, tp1) : Math.max(price, tp1);
+            // C6 fix: for LONG, cap at tp1 (Math.min = don't pay above tp1).
+            // For SHORT, tp1 is BELOW entry; a lower price is MORE favourable, so
+            // Math.max is wrong (it would use a worse-than-available price).
+            // Correct: Math.min for SHORT too (fill at the best/lowest available fill).
+            var partialClosePrice = isLong ? Math.min(price, tp1) : Math.min(price, tp1);
             // Reality check 2 — apply limit-order exit slippage (spread only, no market slippage)
             var adjPartialClose = _adjustedExitPrice(trade.asset, partialClosePrice, trade.direction, 'TAKE_PROFIT');
             var pnlPerUnit   = isLong ? (adjPartialClose - trade.entry_price) : (trade.entry_price - adjPartialClose);
@@ -3528,14 +3617,20 @@
               // remaining run — this turns break-even into a net positive expectation
               // (risk-free with an extended target) rather than just a defensive move.
               // Only extend if not already trailing (trailing stop can naturally extend gains).
-              if (!trade._tpExtended) {
+              // L5 fix: only extend TP on genuine forward momentum, not a pullback re-touch.
+              // Check that price is above (LONG) or below (SHORT) the midpoint by at least 55%
+              // of the full TP distance — i.e. clearly moving toward TP, not just at the 50% trigger.
+              var _tpProgress = isLong
+                ? (price - trade.entry_price) / Math.max(0.0001, trade.take_profit - trade.entry_price)
+                : (trade.entry_price - price) / Math.max(0.0001, trade.entry_price - trade.take_profit);
+              if (!trade._tpExtended && _tpProgress >= 0.55) {
                 var _origTpDist = Math.abs(trade.take_profit - trade.entry_price);
                 var _tpExtension = _origTpDist * 0.20;  // +20% of original TP distance
                 trade.take_profit = isLong
                   ? +(trade.take_profit + _tpExtension).toFixed(6)
                   : +(trade.take_profit - _tpExtension).toFixed(6);
                 trade._tpExtended = true;
-                log('TRAIL', trade.asset + ' TP extended +20% to ' + _num(trade.take_profit) + ' (break-even momentum bonus)', 'green');
+                log('TRAIL', trade.asset + ' TP extended +20% to ' + _num(trade.take_profit) + ' (break-even momentum bonus, progress=' + Math.round(_tpProgress * 100) + '%)', 'green');
               }
               _notify('🔒 Break-Even — ' + trade.asset,
                 'Stop moved to entry. TP extended +20% to capture momentum.',
@@ -3650,7 +3745,11 @@
           var _expiredHrs = Math.round(tradeAgeMs / 3600000);
           log('TRADE', trade.asset + ' ' + trade.direction + ' auto-expired after ' +
             _expiredHrs + 'h (max=' + (_maxHoldMs / 3600000) + 'h)', 'amber');
-          closeTrade(trade.trade_id, _getPrice(trade.asset) || trade.entry_price, 'MAX-HOLD-EXPIRED');
+          // C3 fix: _getPrice doesn't exist — use cached price with fallbacks
+          var _expiredPx = _livePrice[trade.trade_id] ||
+                           _priceCache[normaliseAsset(trade.asset)] ||
+                           trade.entry_price;
+          closeTrade(trade.trade_id, _expiredPx, 'MAX-HOLD-EXPIRED');
           return;
         }
 
@@ -4529,7 +4628,10 @@
     var scalperStats = {};
 
     sorted.forEach(function (t) {
-      var pnl   = t.pnl_usd || 0;
+      // C4 fix: use total_pnl_usd (final close + partial TP banked) for analytics.
+      // Without this, a trade that partially TP'd (+$20) and then stopped at break-even (-$2)
+      // would be classified as a LOSS (pnl_usd = -$2), even though net P&L = +$18.
+      var pnl   = t.total_pnl_usd !== undefined ? t.total_pnl_usd : (t.pnl_usd || 0);
       var isWin = pnl > 0;
 
       // Win/loss tallies
@@ -4627,7 +4729,10 @@
       var stdR = Math.sqrt(variance);
       if (stdR > 0) {
         var avgDurHrs = avgDur !== null ? avgDur : 24;
-        var tradesPerYear = 8760 / Math.max(avgDurHrs, 0.25);
+        // M4 fix: 8760/avgDur assumes 24/7 trading, overstating Sharpe ~1.2× for
+        // market-hours systems. Cap at 250 trading days/year × (24/avgDur) to account
+        // for the fact that signals only fire during active market sessions.
+        var tradesPerYear = Math.min(8760 / Math.max(avgDurHrs, 0.25), 250 * (24 / Math.max(avgDurHrs, 1)));
         sharpeRatio = +(meanR / stdR * Math.sqrt(tradesPerYear)).toFixed(2);
       }
     }
@@ -5325,7 +5430,21 @@
         return t.trade_id === tradeId && t.status === 'OPEN';
       });
       if (!trade) return false;
+      // H1 fix: add 30s fallback so close fires even if fetchPrice hangs (dead feed).
+      // The caller receives true meaning "request dispatched", not "close complete".
+      var _fcDone = false;
+      var _fcTimeout = setTimeout(function () {
+        if (_fcDone) return;
+        _fcDone = true;
+        var _tok = normaliseAsset(trade.asset);
+        var _fallbackPx = _priceCache[_tok] || _livePrice[trade.trade_id] || trade.stop_loss || trade.entry_price;
+        log('PRICE', 'Force-close ' + trade.asset + ' — fetchPrice timed out, using cached $' + _num(_fallbackPx), 'amber');
+        closeTrade(tradeId, _fallbackPx, reason || 'GII-EXIT');
+      }, 30000);
       fetchPrice(trade.asset, function (price) {
+        clearTimeout(_fcTimeout);
+        if (_fcDone) return;
+        _fcDone = true;
         var _tok     = normaliseAsset(trade.asset);
         var _closeAt = price
                     || _priceCache[_tok]
@@ -5335,7 +5454,7 @@
         if (!price) log('PRICE', 'Force-close ' + trade.asset + ' — using cached price $' + _num(_closeAt), 'amber');
         closeTrade(tradeId, _closeAt, reason || 'GII-EXIT');
       });
-      return true;
+      return true; // means "dispatched", not "complete" — close fires async
     },
 
     /* ── Purge phantom trades: close all open trades that never got a broker fill ──
@@ -5621,7 +5740,13 @@
       if (!confirm('Force-close ALL ' + openT.length + ' open position(s) at market price?\n\nThis cannot be undone.')) return;
       var ids = openT.map(function (t) { return t.trade_id; });
       ids.forEach(function (id) {
-        try { _closeTrade(id, 'MANUAL_FORCE_CLOSE', null); } catch(e) {}
+        // C2 fix: was calling non-existent _closeTrade — use closeTrade with a real price
+        var trade = _trades.find(function (t) { return t.trade_id === id; });
+        if (!trade) return;
+        var px = _livePrice[id] || _priceCache[normaliseAsset(trade.asset)] || trade.entry_price;
+        try { closeTrade(id, px, 'MANUAL_FORCE_CLOSE'); } catch (e) {
+          log('RISK', '⚠ forceCloseAll: error closing ' + (trade.asset || id) + ': ' + (e.message || e), 'red');
+        }
       });
       log('RISK', '🚨 Force-closed ' + ids.length + ' position(s) manually', 'amber');
       renderUI();
@@ -6086,6 +6211,9 @@
           if (_decayFrac < 1.0) {
             var _decayed = Object.assign({}, s);  // shallow copy — don't mutate original
             _decayed.confidence = Math.round((s.confidence || 60) * _decayFrac);
+            // M6 fix: canExecute reads sig.conf, not sig.confidence — decay both fields
+            // so the gate actually sees the reduced confidence value.
+            _decayed.conf = Math.round((s.conf || s.confidence || 60) * _decayFrac);
             _decayed._rescanDecay = +_decayFrac.toFixed(2);
             return _decayed;
           }
