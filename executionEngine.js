@@ -51,7 +51,7 @@
     virtual_balance:       1000,         // placeholder — overwritten by live broker equity sync
     risk_per_trade_pct:    1,            // 1% per trade: conservative for small account
     stop_loss_pct:         2.5,          // 2.5% stop distance
-    take_profit_ratio:     2.5,          // 2.5R target
+    take_profit_ratio:     3.0,          // 3.0R target (raised from 2.5 — partial TP at 70% = 2.1R vs old 1.25R)
     max_open_trades:       12,
     max_per_region:        6,
     max_per_sector:        6,
@@ -61,7 +61,7 @@
     trailing_stop_enabled:  false,       // gii-exit owns progressive trailing — keep off here
     trailing_stop_pct:      1.0,
     break_even_enabled:     true,        // move SL to entry once 50% of way to TP
-    break_even_trigger_pct: 50,
+    break_even_trigger_pct: 40,          // trigger BE at 40% of TP distance (raised from 50% — fire BE earlier so runner has more room)
     partial_tp_enabled:     true,        // take 50% off at TP1
     daily_loss_limit_pct:   15,          // circuit breaker at -15% session loss
     daily_profit_target_pct: 0,          // T4-C: 0 = disabled; set e.g. 5 to pause new trades after +5% session gain
@@ -70,6 +70,18 @@
   };
 
   /* ── Sector map — used for max_per_sector concentration cap ──────────────── */
+  // Per-asset minimum confidence floors — derived from historical win-rate data.
+  // Assets with poor track records require stronger signal conviction before opening.
+  // Format: normalised asset key → minimum conf% required (overrides global min_confidence).
+  var EE_ASSET_CONF_FLOOR = {
+    'ADA':  85,  // 0% WR across 4 trades  — effectively blocked until signal quality improves
+    'BNB':  80,  // 9% WR across 11 trades — very high bar
+    'XRP':  75,  // 12% WR across 8 trades
+    'LTC':  73,  // 20% WR across 5 trades
+    'DOGE': 70,  // 30% WR across 10 trades
+    'DOT':  70,  // 29% WR across 7 trades
+  };
+
   var EE_SECTOR_MAP = {
     /* Energy — WTI, BRENT, GAS on HL perps; XLE/XOM flagged (no HL token) */
     'WTI':'energy',   'BRENT':'energy', 'XLE':'energy',  'XOM':'energy',
@@ -1562,6 +1574,12 @@
     })();
     if (sig._attrAdjFloor && sig.conf < sig._attrAdjFloor) {
       return { ok: false, reason: 'Conf ' + sig.conf + '% < attribution floor ' + sig._attrAdjFloor + '% (' + Math.round((sig._attrWr || 0) * 100) + '% hist. WR in current regime)' };
+    }
+
+    // Per-asset confidence floor: poor historical performers require higher conviction.
+    var _assetFloor = EE_ASSET_CONF_FLOOR[normaliseAsset(sig.asset)];
+    if (_assetFloor && sig.conf < _assetFloor) {
+      return { ok: false, reason: sig.asset + ' requires conf ≥' + _assetFloor + '% (poor hist. WR) — got ' + sig.conf + '%' };
     }
 
     // Adaptive confirmation tiers:
@@ -3790,9 +3808,13 @@
         var _skipPartial = (_sconf >= 75 && trade.entry_type === 'breakout') || (_monCycleHitRate >= 0.45);
         var _partialFrac = _sconf >= 70 ? 0.25 : 0.50;
         if (_cfg.partial_tp_enabled && !trade.partial_tp_taken && !_skipPartial) {
+          // Partial TP trigger moved from 50% → 70% of TP distance.
+          // At 50% (old): partial fires at 1.25R on a 2.5R target — too early, forfeits most upside.
+          // At 70% (new): partial fires at 2.1R on a 3.0R target — banks a meaningful gain while
+          // leaving room to capture the full move. Fixes the 0.29 realised R:R observed in data.
           var tp1 = isLong
-            ? trade.entry_price + 0.5 * (trade.take_profit - trade.entry_price)
-            : trade.entry_price - 0.5 * (trade.entry_price - trade.take_profit);
+            ? trade.entry_price + 0.70 * (trade.take_profit - trade.entry_price)
+            : trade.entry_price - 0.70 * (trade.entry_price - trade.take_profit);
           var hitTP1 = isLong ? (price >= tp1) : (price <= tp1);
           if (hitTP1) {
             var closedUnits  = trade.units * _partialFrac;
