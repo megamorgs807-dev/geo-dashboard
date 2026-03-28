@@ -1092,8 +1092,16 @@
     var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var tid = controller ? setTimeout(function () { controller.abort(); }, 5000) : null;
     _apiFetch('/api/market', controller ? { signal: controller.signal } : {})
-      .then(function (r) { clearTimeout(tid); return r.json(); })
+      .then(function (r) {
+        clearTimeout(tid);
+        // F28 fix: guard r.ok before parsing — a maintenance page or 5xx returning
+        // HTML as 200 would throw in r.json() and fall into the catch below, leaving
+        // _stalePriceSymbols stale indefinitely. Also clears stale badge on bad response.
+        if (!r.ok) { _stalePriceSymbols = []; return null; }
+        return r.json().catch(function () { _stalePriceSymbols = []; return null; });
+      })
       .then(function (data) {
+        if (!data) return; // bad response handled above
         var staleNow = [];
         Object.keys(data).forEach(function (sym) {
           var entry = data[sym];
@@ -1820,6 +1828,11 @@
       ? Math.max(0.1, Math.min(2.0, sig.impactMult))
       : 1.0;
 
+    // F31 fix: cache closed trades once here — both the Kelly IIFE and the
+    // _srcWrMult IIFE independently called _trades.filter(CLOSED), scanning
+    // the full array twice per signal. Shared reference eliminates the duplicate.
+    var _btClosedCache = _trades.filter(function (t) { return t.status === 'CLOSED'; });
+
     // EV/Kelly adjustment: scale size by simplified Kelly fraction using
     // historical win rate. Uses a global prior from total trade history so that
     // every trade (not just those with 5+ asset-specific records) gets Kelly sizing.
@@ -1835,8 +1848,8 @@
       var R = _cfg.take_profit_ratio;
       if (R <= 1.0) return;   // degenerate config — Kelly undefined
 
-      // Global prior: actual win rate across all closed trades (min 10 to trust it)
-      var _allClosed = _trades.filter(function (t) { return t.status === 'CLOSED'; });
+      // Global prior: use shared closed-trade cache (avoids double filter — F31 fix)
+      var _allClosed = _btClosedCache;
       // Fix #21: regime-conditional prior — when the market regime is known, adjust
       // the prior win-rate before we have 10 trades. RISK_ON favours momentum signals
       // (higher prior); RISK_OFF tightens capital deployment; TRANSITIONING is neutral.
@@ -1994,9 +2007,9 @@
     (function () {
       var _srcName = (sig.source || _inferSource(sig.reason || '')).toLowerCase();
       if (!_srcName) return;
-      var _srcClosed = _trades.filter(function (t) {
-        return t.status === 'CLOSED' &&
-               (t.source || _inferSource(t.reason || '')).toLowerCase() === _srcName;
+      // Use shared closed cache (F31 fix — avoids redundant full array scan)
+      var _srcClosed = _btClosedCache.filter(function (t) {
+        return (t.source || _inferSource(t.reason || '')).toLowerCase() === _srcName;
       });
       if (_srcClosed.length < 10) return; // insufficient data — stay neutral
       var _srcWr = _srcClosed.filter(function (t) { return (t.pnl_usd || 0) > 0; }).length / _srcClosed.length;
@@ -3423,10 +3436,13 @@
     //   -5% from peak → 50% position sizes (caution)
     //   -8% from peak → 25% position sizes (defensive)
     //  -10% from peak → auto-execution paused (same as daily loss limit)
-    if (_peakEquity === null) _peakEquity = _cfg.virtual_balance;
-    if (_cfg.virtual_balance > _peakEquity) _peakEquity = _cfg.virtual_balance;  // update high-water mark
+    // F44: use _getEffectiveBalance() so live broker equity is reflected when
+    // a broker connection is active, instead of relying solely on virtual_balance.
+    var _curEquity = _getEffectiveBalance();
+    if (_peakEquity === null) _peakEquity = _curEquity;
+    if (_curEquity > _peakEquity) _peakEquity = _curEquity;  // update high-water mark
     if (_peakEquity > 0) {
-      var _newDd  = (_peakEquity - _cfg.virtual_balance) / _peakEquity * 100;
+      var _newDd  = (_peakEquity - _curEquity) / _peakEquity * 100;
       var _prevDd = _ddFromPeak;
       _ddFromPeak = _newDd;
       if (_newDd >= 10 && _prevDd < 10 && _cfg.enabled) {
@@ -3484,12 +3500,14 @@
       });
     })();
 
-    openTrades().forEach(function (trade) {
+    openTrades().forEach(function (trade, _monIdx) {
       // Skip trades awaiting broker fill confirmation — no price has been
       // locked in yet, so SL/TP/funding checks would fire against the wrong price.
       if (trade.broker_status === 'PENDING_FILL') return;
 
-      fetchPrice(trade.asset, function (price) {
+      // F33: stagger fetches by 100 ms per trade to avoid rate-limit bursts
+      // (e.g. 12 open trades → last fetch starts at 1.1 s, well within 15 s cycle)
+      setTimeout(function () { fetchPrice(trade.asset, function (price) {
         // Use cached price as display fallback so unrealised P&L always renders
         var displayPrice = price || _priceCache[normaliseAsset(trade.asset)] || null;
         if (displayPrice) _livePrice[trade.trade_id] = displayPrice;
@@ -3788,7 +3806,7 @@
         if (hitTP)      closeTrade(trade.trade_id, trade.take_profit, 'TAKE_PROFIT');
         else if (hitSL) closeTrade(trade.trade_id, trade.stop_loss,   'STOP_LOSS');
         else            renderUI();
-      });
+      }); }, _monIdx * 100); // closes fetchPrice callback + setTimeout (F33 stagger)
     });
   }
 
@@ -4292,7 +4310,7 @@
           liveRow +
         '</div>' +
         '<div class="ee-tc-actions">' +
-          '<button class="ee-tc-btn close-btn" onclick="EE.manualClose(\'' + t.trade_id + '\')">&#10005; Close</button>' +
+          '<button class="ee-tc-btn close-btn" onclick="EE.manualClose(\'' + _esc(t.trade_id) + '\')">&#10005; Close</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -5114,20 +5132,12 @@
     // ── Per-asset win rate breakdown ─────────────────────────────────────────
     var assetEl = document.getElementById('eeAssetWinRate');
     if (assetEl) {
-      var closed = _trades.filter(function (t) { return t.status === 'CLOSED'; });
-      if (!closed.length) {
+      // F32 fix: calcAnalytics() already built assetMap — reuse it instead of
+      // re-filtering and re-iterating all closed trades a second time.
+      if (!a.closed) {
         assetEl.innerHTML = '<span style="color:var(--dim);font-size:10px">No closed trades yet.</span>';
       } else {
-        // Build per-asset stats
-        var assetStats = {};
-        closed.forEach(function (t) {
-          var k = t.asset || '?';
-          if (!assetStats[k]) assetStats[k] = { wins: 0, losses: 0, pnl: 0, partial: 0 };
-          if (t.close_reason === 'TAKE_PROFIT' || t.close_reason === 'TRAILING_STOP') assetStats[k].wins++;
-          else assetStats[k].losses++;
-          assetStats[k].pnl += (t.pnl_usd || 0) + (t.partial_pnl_usd || 0);
-          if (t.partial_tp_taken) assetStats[k].partial++;
-        });
+        var assetStats = a.assetMap; // already computed above
         var assetKeys = Object.keys(assetStats).sort(function (a, b) {
           return Math.abs(assetStats[b].pnl) - Math.abs(assetStats[a].pnl);
         });
