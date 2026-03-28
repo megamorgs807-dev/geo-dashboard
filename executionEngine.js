@@ -64,6 +64,7 @@
     break_even_trigger_pct: 50,
     partial_tp_enabled:     true,        // take 50% off at TP1
     daily_loss_limit_pct:   15,          // circuit breaker at -15% session loss
+    daily_profit_target_pct: 0,          // T4-C: 0 = disabled; set e.g. 5 to pause new trades after +5% session gain
     event_gate_enabled:     true,        // block new trades 30min before major events
     event_gate_hours:       0.5,
   };
@@ -1047,6 +1048,18 @@
                  t.broker_order_id &&
                  t.venue === 'ALPACA';
         });
+        // T1-B: auto-purge phantom trades on startup — OPEN trades with no broker_status
+        // that are >5 min old. These are positions that opened while no broker was connected
+        // and were never sent. They block asset slots and corrupt analytics indefinitely.
+        var _phantomCutoff = Date.now() - 300000;
+        _trades.forEach(function (t) {
+          if (t.status === 'OPEN' && !t.broker_status &&
+              new Date(t.timestamp_open).getTime() < _phantomCutoff) {
+            log('SYSTEM', t.asset + ' phantom trade purged on startup (no broker fill, >5min old)', 'amber');
+            closeTrade(t.trade_id, t.entry_price || 0.01, 'PHANTOM-PURGE');
+          }
+        });
+
         if (_pendingFill.length) {
           // Fix 7: event-driven resume — poll until AlpacaBroker is connected
           // rather than a fixed 6s guess that breaks if auth takes longer.
@@ -1528,6 +1541,29 @@
     if (sig.conf < _cfg.min_confidence)
       return { ok: false, reason: 'Conf ' + sig.conf + '% < threshold ' + _cfg.min_confidence + '%' };
 
+    // T2-A: attribution-adjusted confidence floor.
+    // If historical data shows this asset in the current regime has a poor win rate,
+    // require higher confidence before opening. Conversely, relax slightly for hot assets.
+    // Only adjusts when ≥10 historical records exist (insufficient data → no change).
+    (function () {
+      var _ceRegime = null;
+      try { if (window.MacroRegime) _ceRegime = (MacroRegime.current() || {}).regime; } catch(e) {}
+      var _attrWr = _attrWinRate(normaliseAsset(sig.asset), _ceRegime);
+      if (_attrWr === null) return;  // not enough data
+      var _adjFloor = _cfg.min_confidence;
+      if      (_attrWr < 0.35) _adjFloor = Math.min(80, _adjFloor + 15);  // very poor WR: raise bar
+      else if (_attrWr < 0.45) _adjFloor = Math.min(75, _adjFloor + 8);   // below avg: raise bar
+      else if (_attrWr > 0.60) _adjFloor = Math.max(45, _adjFloor - 5);   // hot asset: relax slightly
+      if (sig.conf < _adjFloor) {
+        // Store the adjusted floor on sig so _logSignal can show it
+        sig._attrAdjFloor = _adjFloor;
+        sig._attrWr       = _attrWr;
+      }
+    })();
+    if (sig._attrAdjFloor && sig.conf < sig._attrAdjFloor) {
+      return { ok: false, reason: 'Conf ' + sig.conf + '% < attribution floor ' + sig._attrAdjFloor + '% (' + Math.round((sig._attrWr || 0) * 100) + '% hist. WR in current regime)' };
+    }
+
     // Adaptive confirmation tiers:
     //   Fast Track  — specialist agent + conf >= 88%: single-source execution allowed.
     //   Standard    — srcCount >= 2: corroborated by 2+ independent sources.
@@ -1740,10 +1776,13 @@
 
     // Signal age check: if the signal carries a timestamp and it is older than
     // 15 minutes, reject. The market has already moved on — we're chasing.
-    // Scalper signals are exempt (they expire via their own TTL mechanism).
+    // T3-E: scalper signals get a 5-min age gate (was fully exempt).
+    // Scalp theses (momentum, breakout, RSI extreme) decay within minutes;
+    // a 20-min-old scalp signal is not just stale — it's likely a reversal risk.
     var _isScalperForAge = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
-    if (!_isScalperForAge && sig.ts && (Date.now() - sig.ts) > 15 * 60 * 1000) {
-      return { ok: false, reason: 'Signal stale — ' + Math.round((Date.now() - sig.ts) / 60000) + 'min old (>15min threshold)' };
+    var _maxAgeMs = _isScalperForAge ? 5 * 60 * 1000 : 15 * 60 * 1000;
+    if (sig.ts && (Date.now() - sig.ts) > _maxAgeMs) {
+      return { ok: false, reason: 'Signal stale — ' + Math.round((Date.now() - sig.ts) / 60000) + 'min old (>' + (_maxAgeMs / 60000) + 'min threshold for ' + (_isScalperForAge ? 'scalper' : 'IC') + ')' };
     }
 
     return { ok: true, reason: 'All risk checks passed' };
@@ -1808,6 +1847,34 @@
     } else {
       stopLoss   = entryPrice + slDist_;
       takeProfit = entryPrice - tpDist_;
+    }
+
+    // T2-D: dynamic TP ratio — scale the take-profit target based on current macro regime
+    // and momentum strength. RISK_ON trending markets justify holding for more; choppy
+    // RISK_OFF environments should take profit earlier. Only applies when signal doesn't
+    // already provide an explicit atrTarget (which is already regime-calibrated by gii-technicals).
+    if (!sig.atrTarget) {
+      var _dynTPRatio = sigTpRatio;
+      try {
+        if (window.MacroRegime && typeof MacroRegime.current === 'function') {
+          var _dynMR = (MacroRegime.current() || {}).regime;
+          if      (_dynMR === 'RISK_ON')       _dynTPRatio *= 1.20;  // trending: let winners run
+          else if (_dynMR === 'RISK_OFF')       _dynTPRatio *= 0.80;  // choppy: take profit early
+          else if (_dynMR === 'TRANSITIONING')  _dynTPRatio *= 0.90;  // uncertain: modest trim
+        }
+        if (window.GII_AGENT_MOMENTUM && typeof GII_AGENT_MOMENTUM.status === 'function') {
+          var _momStr = (GII_AGENT_MOMENTUM.status() || {}).strength;  // 0–1 normalised
+          if (typeof _momStr === 'number' && isFinite(_momStr)) {
+            _dynTPRatio *= (1.0 + (_momStr * 0.30));  // up to +30% on strong momentum
+          }
+        }
+      } catch(e) {}
+      _dynTPRatio = Math.max(1.5, Math.min(4.0, _dynTPRatio));  // floor 1.5R, cap 4.0R
+      tpDist_ = slDist_ * _dynTPRatio;
+      // Recalculate TP with the adjusted ratio
+      takeProfit = dir === 'LONG'
+        ? entryPrice + tpDist_
+        : entryPrice - tpDist_;
     }
 
     // Sanity check: stop must be on correct side of entry, and slDist must be
@@ -1897,14 +1964,33 @@
       // often 1.5–2.0× not the configured 2.5×, causing systematic over-sizing.
       // With ≥10 closed trades, compute realised R from actual trade P&L.
       // Fall back to configured R when data is insufficient.
+      // T2-C: recency-weighted realised R — trades from 30 days ago carry 50% weight,
+      // trades from 60 days ago carry 25% weight. Recent performance adapts Kelly faster
+      // after strategy shifts or regime changes. Win rate uses the same decay weights.
       var _realisedR = R; // default: use configured ratio
       if (_allClosed.length >= 10) {
         var _realisedWins   = _allClosed.filter(function (t) { return (t.pnl_usd || 0) > 0; });
         var _realisedLosses = _allClosed.filter(function (t) { return (t.pnl_usd || 0) < 0; });
         if (_realisedWins.length >= 5 && _realisedLosses.length >= 5) {
-          var _avgWin  = _realisedWins.reduce(function (s, t) { return s + (t.pnl_usd || 0); }, 0) / _realisedWins.length;
-          var _avgLoss = Math.abs(_realisedLosses.reduce(function (s, t) { return s + (t.pnl_usd || 0); }, 0) / _realisedLosses.length);
+          var _rNow      = Date.now();
+          var _halfLifeMs = 30 * 24 * 60 * 60 * 1000;  // 30-day half-life
+          function _rw(t) {
+            var age = _rNow - new Date(t.timestamp_close || t.timestamp_open || _rNow).getTime();
+            return Math.pow(0.5, age / _halfLifeMs);
+          }
+          var _wWin   = _realisedWins.reduce(function (s, t)   { return s + (t.pnl_usd || 0) * _rw(t); }, 0);
+          var _wLoss  = _realisedLosses.reduce(function (s, t) { return s + Math.abs(t.pnl_usd || 0) * _rw(t); }, 0);
+          var _wWinN  = _realisedWins.reduce(function (s, t)   { return s + _rw(t); }, 0);
+          var _wLossN = _realisedLosses.reduce(function (s, t) { return s + _rw(t); }, 0);
+          var _avgWin  = _wWinN  > 0 ? _wWin  / _wWinN  : 0;
+          var _avgLoss = _wLossN > 0 ? _wLoss / _wLossN : 0;
           if (_avgLoss > 0) _realisedR = Math.max(1.0, _avgWin / _avgLoss);
+          // Also update global win rate with recency weighting
+          if (_allClosed.length >= 10) {
+            var _wWinsTotal = _allClosed.reduce(function (s, t) { return s + ((t.pnl_usd || 0) > 0 ? _rw(t) : 0); }, 0);
+            var _wTotal     = _allClosed.reduce(function (s, t) { return s + _rw(t); }, 0);
+            if (_wTotal > 0) _globalW = _wWinsTotal / _wTotal;
+          }
         }
       }
       var kelly = (W * _realisedR - (1 - W)) / _realisedR;
@@ -2620,6 +2706,27 @@
   var _ATTR_KEY = 'geodash_attribution_v1';
   var _ATTR_MAX = 500;
 
+  // T2-A: cached attribution win-rate lookup for use in canExecute().
+  // Reads from localStorage attribution store and caches per asset+regime for 60s
+  // so canExecute() hot-path doesn't hit localStorage on every signal.
+  var _attrWinRateCache = {};
+  function _attrWinRate(asset, regime) {
+    var key = (asset || '') + '|' + (regime || '');
+    var c = _attrWinRateCache[key];
+    if (c && (Date.now() - c.ts) < 60000) return c.wr;  // 1-min cache
+    try {
+      var recs = JSON.parse(localStorage.getItem(_ATTR_KEY) || '[]');
+      var filtered = recs.filter(function (r) {
+        return (!asset || r.asset === asset) && (!regime || r.regime === regime);
+      });
+      var wr = filtered.length >= 10
+        ? filtered.filter(function (r) { return r.win; }).length / filtered.length
+        : null;  // insufficient data — don't adjust threshold
+      _attrWinRateCache[key] = { wr: wr, ts: Date.now() };
+      return wr;
+    } catch(e) { return null; }
+  }
+
   function _recordTradeAttribution(trade) {
     try {
       /* Snapshot current market conditions */
@@ -2977,6 +3084,36 @@
   var _sigRateCount  = 0;   // signals processed in current window
   var _SIG_RATE_LIMIT = 50; // max signals per 10s before throttling
 
+  // T2-B: signal fusion — when multiple independent agents agree on the same asset+direction
+  // within a single batch, merge them into the highest-confidence signal with a confidence
+  // boost. +4% per extra confirming agent, capped at +10%. This boosts multi-agent
+  // confluence trades above the min_confidence floor naturally without special-casing.
+  function _fuseSignals(sigs) {
+    var groups = {};
+    sigs.forEach(function (s) {
+      var key = normaliseAsset(s.asset || '') + '|' + ((s.dir || s.direction || s.bias || '')).toUpperCase();
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(s);
+    });
+    return Object.keys(groups).map(function (k) {
+      var g = groups[k];
+      if (g.length === 1) return g[0];
+      // Pick the signal with the highest confidence as the base
+      var best = g.reduce(function (a, b) {
+        return ((b.conf || b.confidence || 0) > (a.conf || a.confidence || 0)) ? b : a;
+      });
+      var fused = Object.assign({}, best);
+      var boost = Math.min(10, (g.length - 1) * 4);  // +4% per extra agent, max +10%
+      fused.conf       = Math.min(100, (fused.conf       || 60) + boost);
+      fused.confidence = Math.min(100, (fused.confidence || 60) + boost);
+      fused._fusedFrom = g.map(function (s) { return s.source || 'unknown'; });
+      fused.srcCount   = Math.max(fused.srcCount || 1, g.length);  // satisfy confirmation gate
+      log('SIGNAL', fused.asset + ' fused: ' + g.length + ' agents agree → conf boosted to ' + fused.conf + '%' +
+          (boost ? ' (+' + boost + '%)' : '') + ' sources: [' + fused._fusedFrom.join(', ') + ']', 'cyan');
+      return fused;
+    });
+  }
+
   function onSignals(sigs) {
     if (!sigs || !sigs.length) return;
 
@@ -2993,6 +3130,9 @@
     }
     _sigRateCount += sigs.length;
     if (!sigs.length) return;
+
+    // T2-B: fuse multi-agent agreement before processing
+    sigs = _fuseSignals(sigs);
 
     _lastSignals = sigs;                 // always cache — re-scan loop needs these
 
@@ -3370,6 +3510,34 @@
       .catch(function () { /* silent — Alpaca may be temporarily unavailable */ });
   }
 
+  // T1-A: HL position reconciliation — mirrors _reconcileAlpacaPositions().
+  // If HL liquidates a position (margin call, exchange risk limit, server-side close),
+  // the EE trade stays permanently OPEN, corrupting balance and blocking the asset slot.
+  // This runs every 5 minutes alongside Alpaca reconciliation.
+  var _lastHLReconcile = 0;
+  function _reconcileHLPositions() {
+    if (!window.HLBroker || typeof HLBroker.isConnected !== 'function' || !HLBroker.isConnected()) return;
+    if (typeof HLBroker.getOpenPositions !== 'function') return;
+    var now = Date.now();
+    if (now - _lastHLReconcile < 4 * 60 * 1000) return;  // dedupe: max once per 4 min
+    _lastHLReconcile = now;
+    var hlTrades = openTrades().filter(function (t) {
+      return t.venue === 'HL' && t.broker_status === 'FILLED' && t.broker_order_id;
+    });
+    if (!hlTrades.length) return;
+    HLBroker.getOpenPositions(function (hlPositions) {
+      var hlAssets = {};
+      (hlPositions || []).forEach(function (p) { hlAssets[normaliseAsset(p.asset || p.coin || '')] = p; });
+      hlTrades.forEach(function (t) {
+        if (!hlAssets[normaliseAsset(t.asset)]) {
+          var fallback = _livePrice[t.trade_id] || _priceCache[normaliseAsset(t.asset)] || t.entry_price;
+          log('HL', t.asset + ' position missing from HL — liquidated or closed externally. Closing EE trade @ $' + (fallback || 0).toFixed(4), 'red');
+          closeTrade(t.trade_id, fallback || t.entry_price, 'LIQUIDATED');
+        }
+      });
+    });
+  }
+
   /* ══════════════════════════════════════════════════════════════════════════════
      TRADE MONITOR — runs every 30s, checks open trades against live prices
      ══════════════════════════════════════════════════════════════════════════════ */
@@ -3401,6 +3569,30 @@
         // force-closing mid-trade locks in losses and can turn recoverable
         // drawdowns into confirmed ones. The stop-loss on each trade IS the
         // real risk-management tool.
+        renderUI();
+      }
+    }
+
+    // T4-C: daily profit target — symmetric circuit breaker to the daily loss limit.
+    // When session realised P&L hits the configured target, pause new entries to
+    // protect the day's gains. Existing open trades continue to their natural TP/SL.
+    // Set daily_profit_target_pct: 0 (default) to disable.
+    if (_monEffectiveStart && _cfg.daily_profit_target_pct > 0 && _cfg.enabled) {
+      var _monProfitPnl = _trades
+        .filter(function (t) {
+          return t.status === 'CLOSED' && t.timestamp_close &&
+                 new Date(t.timestamp_close).getTime() >= (_sessionStart ? new Date(_sessionStart).getTime() : 0);
+        })
+        .reduce(function (s, t) { return s + (t.pnl_usd || 0); }, 0);
+      var _profitPct = _monEffectiveStart > 0 ? (_monProfitPnl / _monEffectiveStart * 100) : 0;
+      if (_profitPct >= _cfg.daily_profit_target_pct) {
+        _cfg.enabled = false;
+        saveCfg();
+        log('RISK', '🎯 Daily profit target +' + _cfg.daily_profit_target_pct + '% reached (' +
+          _profitPct.toFixed(1) + '%) — pausing new entries to protect gains', 'green');
+        _notify('🎯 Daily Target Hit',
+          'Session P&L: +' + _profitPct.toFixed(1) + '% — new entries paused. Open trades run to TP/SL.',
+          'ee-daily-target');
         renderUI();
       }
     }
@@ -3692,6 +3884,30 @@
               _notify('🔒 Break-Even — ' + trade.asset,
                 'Stop moved to entry. TP extended +20% to capture momentum.',
                 'ee-be-' + trade.trade_id);
+            }
+          }
+        }
+
+        // ── T1-D: gii-exit fallback trailing stop ───────────────────────────────────
+        // gii-exit owns the progressive trailing stop. If it goes offline (stale >5min),
+        // apply a simple 2% fallback trail on any trade that has already hit break-even
+        // so gains are not fully surrendered if gii-exit is not responding.
+        if (trade.break_even_done && !_cfg.trailing_stop_enabled) {
+          var _giiExitAlive = false;
+          try {
+            _giiExitAlive = window.GII_EXIT_AGENT &&
+              typeof GII_EXIT_AGENT.lastSignalTs === 'number' &&
+              (Date.now() - GII_EXIT_AGENT.lastSignalTs) < 300000;
+          } catch(e) {}
+          if (!_giiExitAlive) {
+            var _fbTrailPct = 0.02;  // 2% trail distance
+            var _fbTrail    = trade.entry_price * _fbTrailPct;
+            var _fbNewSL    = isLong ? price - _fbTrail : price + _fbTrail;
+            if ((isLong  && _fbNewSL > trade.stop_loss && _fbNewSL < trade.take_profit) ||
+                (!isLong && _fbNewSL < trade.stop_loss && _fbNewSL > trade.take_profit)) {
+              trade.stop_loss = +_fbNewSL.toFixed(6);
+              saved = true;
+              log('TRAIL', trade.asset + ' fallback trail (gii-exit offline) SL → ' + _num(trade.stop_loss), 'dim');
             }
           }
         }
@@ -6213,10 +6429,16 @@
     }
     _startBinanceWS();                  // BTC fallback feed — yields to HL when live
 
-    // Alpaca position reconciliation — every 5 minutes (guarded against double-start)
+    // Position reconciliation — Alpaca + HL — every 5 minutes (guarded against double-start)
     if (!window._eeReconcileInterval) {
-      window._eeReconcileInterval = setInterval(_reconcileAlpacaPositions, 5 * 60 * 1000);
-      setTimeout(_reconcileAlpacaPositions, 15000); // first run 15s after load (let fills settle)
+      window._eeReconcileInterval = setInterval(function () {
+        _reconcileAlpacaPositions();
+        _reconcileHLPositions();
+      }, 5 * 60 * 1000);
+      setTimeout(function () {
+        _reconcileAlpacaPositions();
+        _reconcileHLPositions();
+      }, 15000); // first run 15s after load (let fills settle)
     }
 
     // Live broker equity polling — every 60 seconds, used for real-time position sizing
@@ -6275,8 +6497,22 @@
         if (cd && (now - cd) < _cfg.cooldown_ms) return false;
         // Also skip if reversal cooldown is active for this direction
         if (_reversalCooldown[_rsCdKey] && now < _reversalCooldown[_rsCdKey]) return false;
+        // T1-C: skip assets where price was unavailable recently — _noPriceThrottle is set
+        // for 1 hour when fetchPrice returns null. No point retrying every 5 min if all
+        // price sources are down for this asset; skip until the throttle window clears.
+        if (_noPriceThrottle[asset] && (now - _noPriceThrottle[asset]) < 3600000) return false;
         return true;
       });
+      // T3-A: re-scan retry budget — cap at 5 signals per cycle, prioritised by decayed
+      // confidence. Prevents 20+ concurrent fetchPrice calls + pendingOpen lock fights
+      // when _lastSignals has many eligible entries after a long quiet period.
+      if (freshSigs.length > 5) {
+        freshSigs.sort(function (a, b) {
+          return ((b.conf || b.confidence || 0)) - ((a.conf || a.confidence || 0));
+        });
+        freshSigs = freshSigs.slice(0, 5);
+      }
+
       if (freshSigs.length) {
         // Fix #22: apply freshness decay to re-scanned signals.
         // Confidence decays linearly from 100% at age=0 to 50% at age=60 min.
