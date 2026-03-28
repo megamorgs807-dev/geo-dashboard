@@ -1885,7 +1885,7 @@
           var assetKey = normaliseAsset(sig.asset);
           var biasKey  = dir === 'LONG' ? 'long' : 'short';
           Object.keys(reps).forEach(function (k) {
-            if (k.indexOf(assetKey) !== -1 && k.indexOf(biasKey) !== -1 && reps[k].total >= 5) {
+            if (k.indexOf(assetKey) !== -1 && k.indexOf(biasKey) !== -1 && reps[k] && reps[k].total >= 5) {
               W = reps[k].winRate;
             }
           });
@@ -2386,7 +2386,7 @@
         /* onFill */ function (fillPrice, pos) {
           trade.broker_status     = 'FILLED';
           trade.broker_fill_price = fillPrice;
-          if (fillPrice > 0) trade.entry_price = fillPrice;
+          if (fillPrice > 0 && isFinite(fillPrice)) trade.entry_price = fillPrice;
           saveTrades();
           _apiPatchTrade(trade.trade_id, {
             broker_status:     'FILLED',
@@ -2460,7 +2460,7 @@
         /* onFill */ function (fillPrice, order) {
           trade.broker_status     = 'FILLED';
           trade.broker_fill_price = fillPrice;
-          if (fillPrice > 0) trade.entry_price = fillPrice;
+          if (fillPrice > 0 && isFinite(fillPrice)) trade.entry_price = fillPrice;
           // Signal-to-fill latency tracking
           if (trade.signal_ts) {
             var _latMs = Date.now() - trade.signal_ts;
@@ -2693,9 +2693,10 @@
     trade.raw_close_price = +rawClosePrice.toFixed(6);
     trade.close_price     = +adjClosePrice.toFixed(6);
 
-    // Guard: invalid entry_price (0, null, NaN) would cause division-by-zero or
-    // sign-flip in P&L. Set P&L to 0 and log rather than corrupt the balance.
-    if (!trade.entry_price || !isFinite(trade.entry_price) || trade.entry_price <= 0) {
+    // Guard: invalid entry_price or units would corrupt P&L calculation.
+    // undefined * N = NaN in JS; NaN.toFixed(2) throws. Set P&L to 0 and log.
+    if (!trade.entry_price || !isFinite(trade.entry_price) || trade.entry_price <= 0 ||
+        !trade.units || !isFinite(trade.units)) {
       log('TRADE', trade.asset + ' closeTrade: invalid entry_price (' + trade.entry_price + ') — P&L set to 0', 'amber');
       trade.pnl_pct = 0;
       trade.pnl_usd = 0;
@@ -3006,7 +3007,8 @@
       if (sig.direction !== undefined && sig.dir  === undefined) sig.dir  = sig.direction;
       if (sig.dir) sig.dir = sig.dir.toUpperCase();   // 'long' → 'LONG', 'short' → 'SHORT'
       if (sig.confidence !== undefined && sig.conf === undefined) {
-        sig.conf = sig.confidence <= 1 ? Math.round(sig.confidence * 100) : sig.confidence;
+        var _rawConf = sig.confidence <= 1 ? Math.round(sig.confidence * 100) : sig.confidence;
+        sig.conf = Math.max(0, Math.min(100, _rawConf));  // clamp: agent could send out-of-range value
       }
       if (sig.reasoning !== undefined && sig.reason === undefined) sig.reason = sig.reasoning;
       // ───────────────────────────────────────────────────────────────────────────
@@ -3024,7 +3026,7 @@
       // Runs after ASSET_REMAP so routing sees the final tradeable asset name.
       if (window.GII_ROUTING && typeof GII_ROUTING.route === 'function') {
         var _routed = GII_ROUTING.route(sig);
-        if (_routed !== sig) {
+        if (_routed && _routed !== sig) {
           var _routeNote = (_routed.asset !== sig.asset)
             ? sig.asset + ' → ' + _routed.asset + (_routed.leverage > 1 ? ' ' + _routed.leverage + '×' : '')
             : (_routed.leverage > 1 ? sig.asset + ' ' + _routed.leverage + '× lev' : null);
@@ -4335,12 +4337,12 @@
         : '<span style="font-size:7px;padding:1px 4px;border-radius:2px;background:#1a1a3a;color:#a78bfa;margin-left:4px;letter-spacing:0.5px">HL</span>';
       return '<div class="ee-trade-card">' +
         '<div class="ee-tc-hdr">' +
-          '<span class="' + dirCls + '">' + t.direction + '</span>' +
+          '<span class="' + dirCls + '">' + _esc(t.direction) + '</span>' +
           '<span class="ee-tc-asset">' + _esc(t.asset) + '</span>' +
           venueBadge +
           '<span class="ee-tc-conf">' + t.confidence + '%</span>' +
           '<span class="ee-tc-age">' + _age(t.timestamp_open) + '</span>' +
-          '<span class="ee-tc-mode ' + (t.mode === 'LIVE' ? 'live' : 'sim') + '">' + t.mode + '</span>' +
+          '<span class="ee-tc-mode ' + (t.mode === 'LIVE' ? 'live' : 'sim') + '">' + _esc(t.mode) + '</span>' +
         '</div>' +
         '<div class="ee-tc-prices">' +
           'Entry: <b>' + _num(t.entry_price) + '</b>' +
@@ -4631,12 +4633,16 @@
   function _esc(s) {
     // A15: also escape quotes — required for safe use inside HTML attribute values
     // (e.g. onclick="EE.manualClose('...')" where trade_id is user/DB-supplied)
+    // F20: also escape backticks and newlines which could break inline event handlers
     return String(s || '')
       .replace(/&/g,  '&amp;')
       .replace(/</g,  '&lt;')
       .replace(/>/g,  '&gt;')
       .replace(/'/g,  '&#39;')
-      .replace(/"/g,  '&quot;');
+      .replace(/"/g,  '&quot;')
+      .replace(/`/g,  '&#96;')
+      .replace(/\n/g, '&#10;')
+      .replace(/\r/g, '&#13;');
   }
 
   function _num(n) {
@@ -4732,9 +4738,10 @@
 
       // Per-asset
       var ak = t.asset || 'Unknown';
-      if (!assetMap[ak]) assetMap[ak] = { wins: 0, losses: 0, pnl_usd: 0 };
+      if (!assetMap[ak]) assetMap[ak] = { wins: 0, losses: 0, pnl_usd: 0, partial: 0 };
       if (isWin) assetMap[ak].wins++; else assetMap[ak].losses++;
       assetMap[ak].pnl_usd += pnl;
+      if (t.partial_tp_taken) assetMap[ak].partial++;
 
       // Per-region
       var rk = t.region || 'GLOBAL';
@@ -6279,16 +6286,18 @@
         var _decayedSigs = freshSigs.map(function (s) {
           var _ageMin = s._signalTs ? (now - s._signalTs) / 60000 : 0;
           var _decayFrac = Math.max(0.50, 1.0 - (_ageMin / 120));  // 0→1.0, 60→0.75, 120→0.50
+          var _decayed = Object.assign({}, s);  // always shallow-copy — don't mutate original
+          // F22: propagate _signalTs → ts so canExecute's 15-min age gate works for agents
+          // that don't include ts. Without this, re-scan bypasses the staleness check.
+          if (!_decayed.ts && s._signalTs) _decayed.ts = s._signalTs;
           if (_decayFrac < 1.0) {
-            var _decayed = Object.assign({}, s);  // shallow copy — don't mutate original
             _decayed.confidence = Math.round((s.confidence || 60) * _decayFrac);
             // M6 fix: canExecute reads sig.conf, not sig.confidence — decay both fields
             // so the gate actually sees the reduced confidence value.
             _decayed.conf = Math.round((s.conf || s.confidence || 60) * _decayFrac);
             _decayed._rescanDecay = +_decayFrac.toFixed(2);
-            return _decayed;
           }
-          return s;
+          return _decayed;
         });
         log('SCAN', 'Periodic re-scan — ' + _decayedSigs.length + '/' + _lastSignals.length + ' signal(s) eligible (confidence decayed by age)', 'dim');
         onSignals(_decayedSigs);
