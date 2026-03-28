@@ -27,10 +27,11 @@
   var _PREV_POS_KEY = 'cot_prev_positions_v1';
 
   /* ── State ───────────────────────────────────────────────────────────── */
-  var _positions     = {};    // {ticker: {sentiment, positioning, net, ...}}
-  var _prevPositions = {};    // previous week — persisted in localStorage so trend survives reloads
-  var _signals       = [];    // current COT-derived signals (for gii-entry)
-  var _lastUpdate    = 0;
+  var _positions      = {};    // {ticker: {sentiment, positioning, net, ...}}
+  var _prevPositions  = {};    // previous week — persisted in localStorage so trend survives reloads
+  var _signals        = [];    // current COT-derived signals (for gii-entry)
+  var _lastUpdate     = 0;
+  var _cotBackoffUntil = 0;   // timestamp: don't fetch until this time (set on 429 rate-limit)
 
   /* Restore previous positions from localStorage on load */
   try {
@@ -67,9 +68,25 @@
 
   /* ── Main poll ────────────────────────────────────────────────────────── */
   function _poll() {
-    fetch(BACKEND_URL + '/api/cot')
-      .then(function (res) { return res.json(); })
+    if (Date.now() < _cotBackoffUntil) {
+      console.log('[COT] Rate-limit backoff active — skipping poll (' +
+        Math.ceil((_cotBackoffUntil - Date.now()) / 1000) + 's remaining)');
+      return;
+    }
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(BACKEND_URL + '/api/cot', { signal: ctrl.signal })
+      .then(function (res) {
+        clearTimeout(tid);
+        if (res.status === 429) {
+          _cotBackoffUntil = Date.now() + 5 * 60 * 1000; // back off 5 minutes on rate limit
+          console.warn('[COT] 429 rate limit — backing off for 5 minutes');
+          return null;
+        }
+        return res.json();
+      })
       .then(function (data) {
+        if (!data) return;
         if (!data || !Object.keys(data).length) return;
 
         /* Only advance _prevPositions when the report_date changes — i.e. a new
@@ -88,7 +105,13 @@
         _renderBadge();
         console.log('[COT] Updated: ' + Object.keys(_positions).length + ' markets');
       })
-      .catch(function () { /* backend offline */ });
+      .catch(function (e) {
+        clearTimeout(tid);
+        if (e && e.name === 'AbortError') {
+          console.warn('[COT] Fetch timeout after 120s');
+        }
+        /* backend offline or network error — will retry on next poll interval */
+      });
   }
 
   /* ── Build signals from positioning ─────────────────────────────────── */

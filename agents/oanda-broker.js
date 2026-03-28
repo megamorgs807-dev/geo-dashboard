@@ -117,12 +117,22 @@
     return _ratesCfg().accountId || '';
   }
 
-  /* Generic fetch wrapper */
+  /* Generic fetch wrapper.
+     Detects 401/403 immediately and marks broker disconnected — catches expired
+     API tokens mid-session without waiting for the next health-check cycle.     */
   async function _api(path, opts) {
     var url = _baseUrl() + path;
     var res = await fetch(url, Object.assign({ headers: _headers() }, opts || {}));
     if (!res.ok) {
       var txt = await res.text();
+      if (res.status === 401 || res.status === 403) {
+        console.warn('[OANDA] ⚠ Auth failure (' + res.status + ') — broker marked disconnected. ' +
+          'Check API key / account ID and re-connect.', txt.substring(0, 100));
+        /* Mark OANDA_RATES disconnected so downstream agents stop using stale prices */
+        if (window.OANDA_RATES && typeof OANDA_RATES._setConnected === 'function') {
+          OANDA_RATES._setConnected(false);
+        }
+      }
       throw new Error('OANDA ' + res.status + ': ' + txt.substring(0, 300));
     }
     return res.json();
@@ -296,10 +306,21 @@
         }
       };
 
-      // Optional stop-loss and take-profit
+      // Optional stop-loss and take-profit — validate direction before attaching
       if (opts) {
         if (opts.stopLoss && opts.stopLoss > 0) {
-          order.order.stopLossOnFill = { price: String(opts.stopLoss.toFixed(5)) };
+          /* SL must be below entry for LONG, above entry for SHORT.
+             If SL is on the wrong side, OANDA would trigger it immediately.
+             Warn and skip the SL rather than opening a position that auto-closes. */
+          var slValid = price ? (effectiveSide === 'buy'  ? opts.stopLoss < price
+                                                          : opts.stopLoss > price)
+                              : true;   // no price available — trust EE's calculation
+          if (slValid) {
+            order.order.stopLossOnFill = { price: String(opts.stopLoss.toFixed(5)) };
+          } else {
+            console.warn('[OANDA] ⚠ Stop-loss ' + opts.stopLoss + ' is on wrong side of entry ' +
+              price + ' for ' + effectiveSide.toUpperCase() + ' — SL omitted to prevent immediate trigger');
+          }
         }
         if (opts.takeProfit && opts.takeProfit > 0) {
           order.order.takeProfitOnFill = { price: String(opts.takeProfit.toFixed(5)) };
@@ -307,10 +328,33 @@
       }
 
       console.log('[OANDA] Placing order:', info.instrument, signedUnits + ' units', '@ ~$' + (price || '?'));
-      return _api('/v3/accounts/' + acctId + '/orders', {
+      var resp = await _api('/v3/accounts/' + acctId + '/orders', {
         method: 'POST',
         body: JSON.stringify(order)
       });
+
+      /* OANDA v20 can return HTTP 200 with an embedded rejection.
+         Validate that the order was actually accepted before returning.
+         Success paths: orderFillTransaction (market filled immediately) or
+         orderCreateTransaction (order created, pending fill confirmation).
+         Rejection paths: orderCancelTransaction, errorMessage field.         */
+      if (resp) {
+        if (resp.errorMessage) {
+          throw new Error('OANDA order rejected: ' + resp.errorMessage +
+            (resp.errorCode ? ' (' + resp.errorCode + ')' : ''));
+        }
+        if (resp.orderCancelTransaction && !resp.orderFillTransaction) {
+          var cancelReason = resp.orderCancelTransaction.reason || 'unknown';
+          throw new Error('OANDA order cancelled at placement: ' + cancelReason);
+        }
+        var txId = (resp.orderFillTransaction && resp.orderFillTransaction.id) ||
+                   (resp.orderCreateTransaction && resp.orderCreateTransaction.id);
+        if (!txId) {
+          console.warn('[OANDA] Order response missing transaction ID — response:', JSON.stringify(resp).slice(0, 200));
+        }
+      }
+
+      return resp;
     },
 
     /**

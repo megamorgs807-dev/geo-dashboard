@@ -66,9 +66,10 @@
       var d = HLFeed.getPrice(up);
       if (d && d.price) return d.price;
     }
-    // Fallback: OANDA_RATES for energy assets
+    // Fallback: OANDA_RATES for energy assets (only if connected — avoids stale cached prices)
     var oandaInst = _OANDA_ENERGY_MAP[up];
-    if (oandaInst && window.OANDA_RATES && typeof OANDA_RATES.getRate === 'function') {
+    if (oandaInst && window.OANDA_RATES && typeof OANDA_RATES.getRate === 'function' &&
+        typeof OANDA_RATES.isConnected === 'function' && OANDA_RATES.isConnected()) {
       var r = OANDA_RATES.getRate(oandaInst);
       if (r && r.mid) return r.mid;
     }
@@ -80,7 +81,8 @@
     var up = asset.toUpperCase();
     if (window.HLFeed && typeof HLFeed.isAvailable === 'function' && HLFeed.isAvailable(up)) return true;
     var oandaInst = _OANDA_ENERGY_MAP[up];
-    if (oandaInst && window.OANDA_RATES && typeof OANDA_RATES.getRate === 'function') {
+    if (oandaInst && window.OANDA_RATES && typeof OANDA_RATES.getRate === 'function' &&
+        typeof OANDA_RATES.isConnected === 'function' && OANDA_RATES.isConnected()) {
       var r = OANDA_RATES.getRate(oandaInst);
       return !!(r && r.mid);
     }

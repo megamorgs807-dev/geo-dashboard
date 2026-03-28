@@ -202,13 +202,14 @@
 
   /* ── State ──────────────────────────────────────────────────────────────────
      _hlPrices: per-EE-asset, updated on every allMids message.               */
-  var _ws             = null;
-  var _connected      = false;
-  var _lastTs         = null;
-  var _pairsReceived  = 0;
-  var _injected       = 0;
-  var _errors         = 0;
-  var _reconnectTimer = null;
+  var _ws                = null;
+  var _connected         = false;
+  var _lastTs            = null;
+  var _pairsReceived     = 0;
+  var _injected          = 0;
+  var _errors            = 0;
+  var _reconnectTimer    = null;
+  var _reconnectAttempts = 0;   // consecutive failures — drives exponential backoff
   var _lastRawPrices  = {};   // { 'CL': '73.50', ... } for HLFeed.tickers()
   var _hlPrices       = {};   // { 'WTI': { price: 73.5, ts: ..., hlTicker: 'CL' }, ... }
   var _eeReady        = false;
@@ -233,8 +234,9 @@
       _ws = new WebSocket(HL_WS_URL);
 
       _ws.onopen = function () {
-        _connected = true;
-        _errors    = 0;
+        _connected         = true;
+        _errors            = 0;
+        _reconnectAttempts = 0;   // reset backoff on successful connection
         _ws.send(JSON.stringify({
           method: 'subscribe',
           subscription: { type: 'allMids' }
@@ -281,18 +283,28 @@
 
       _ws.onclose = function () {
         _connected = false;
-        _log('HL WebSocket closed — reconnecting in ' + (RECONNECT_MS / 1000) + 's');
-        _reconnectTimer = setTimeout(_connect, RECONNECT_MS);
+        _reconnectAttempts++;
+        /* Exponential backoff: 12s → 24s → 48s → 60s cap, ±20% jitter.
+           Prevents hammering the API during outages or auth failures.    */
+        var base    = Math.min(60000, RECONNECT_MS * Math.pow(2, _reconnectAttempts - 1));
+        var jitter  = base * 0.2 * (Math.random() * 2 - 1);   // ±20%
+        var delay   = Math.round(base + jitter);
+        _log('HL WebSocket closed — reconnecting in ' + (delay / 1000).toFixed(1) +
+             's (attempt ' + _reconnectAttempts + ')');
+        _reconnectTimer = setTimeout(_connect, delay);
       };
 
       _ws.onerror = function () {
         _connected = false;
-        /* onclose fires after onerror — reconnect handled there */
+        /* onclose fires after onerror — reconnect and backoff handled there */
       };
 
     } catch (e) {
       _log('WebSocket unavailable: ' + (e.message || String(e)), true);
-      _reconnectTimer = setTimeout(_connect, RECONNECT_MS * 2);
+      _reconnectAttempts++;
+      var _errBase  = Math.min(60000, RECONNECT_MS * Math.pow(2, _reconnectAttempts));
+      var _errDelay = Math.round(_errBase * (0.8 + Math.random() * 0.4));
+      _reconnectTimer = setTimeout(_connect, _errDelay);
     }
   }
 

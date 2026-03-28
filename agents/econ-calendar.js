@@ -112,10 +112,10 @@
       var minsAgo  = (now - ts) / 60000;
       var timeFade = Math.max(0.5, 1.0 - minsAgo / 60);   // 1.0 → 0.5 over 30 min
 
-      /* Base confidence from magnitude of surprise */
-      var baseConf = Math.min(0.80, 0.45 + Math.abs(surprise) * 0.60);
-      var conf     = +(baseConf * timeFade).toFixed(3);
-      if (conf < 0.30) return;
+      /* Base confidence from magnitude of surprise — 0-100 scale to match EE threshold */
+      var baseConf = Math.min(80, 45 + Math.abs(surprise) * 60);
+      var conf     = +(baseConf * timeFade).toFixed(1);
+      if (conf < 30) return;
 
       _ASSET_SIGNALS.forEach(function (rule) {
         if (!rule.match.test(e.title)) return;
@@ -165,8 +165,10 @@
 
   /* ── Poll calendar ─────────────────────────────────────────────────────── */
   function _poll() {
-    fetch(CALENDAR_URL + '?_=' + Date.now())
-      .then(function (r) { return r.json(); })
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(CALENDAR_URL + '?_=' + Date.now(), { signal: ctrl.signal })
+      .then(function (r) { clearTimeout(tid); return r.json(); })
       .then(function (data) {
         if (!Array.isArray(data)) return;
 
@@ -190,7 +192,7 @@
         _renderBadge();
         console.log('[ECON] ' + _events.length + ' high-impact events this week');
       })
-      .catch(function (e) { console.warn('[ECON] Poll error:', e.message || e); });
+      .catch(function (e) { clearTimeout(tid); console.warn('[ECON] Poll error:', e.message || e); });
   }
 
   /* ── Helpers ───────────────────────────────────────────────────────────── */

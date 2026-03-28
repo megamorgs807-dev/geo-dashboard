@@ -408,7 +408,7 @@
       ['GBP_JPY', 'EUR_JPY', 'AUD_USD', 'NZD_USD'].forEach(function(p) {
         if (!_priceHistory[p] || _priceHistory[p].length < 3) return;
         if (_onCooldown(p, 'SHORT')) return;
-        var sig = _mkSig(p, 'SHORT', 0.72, jpyMsg + ' — unwind ' + p, 85);
+        var sig = _mkSig(p, 'SHORT', 72, jpyMsg + ' — unwind ' + p, 85);
         batch.push(sig);
         _signals.unshift(sig);
         if (_signals.length > MAX_SIGNALS) _signals.length = MAX_SIGNALS;
@@ -422,7 +422,7 @@
       var chfMsg = 'USD/CHF ' + chfRet30.toFixed(3) + '% (30m) in RISK_ON — CHF bid, carry unwind';
       if (!_onCooldown('USD_CHF', 'SHORT') && _priceHistory['USD_CHF'] &&
           _priceHistory['USD_CHF'].length >= 3) {
-        var sig2 = _mkSig('USD_CHF', 'SHORT', 0.68, chfMsg, 80);
+        var sig2 = _mkSig('USD_CHF', 'SHORT', 68, chfMsg, 80);
         batch.push(sig2);
         _signals.unshift(sig2);
         if (_signals.length > MAX_SIGNALS) _signals.length = MAX_SIGNALS;

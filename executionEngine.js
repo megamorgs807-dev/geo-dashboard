@@ -26,6 +26,7 @@
   var TRADES_KEY      = 'geodash_ee_trades_v1';
   var SIGLOG_KEY      = 'geodash_ee_siglog_v1';
   var PNL_HISTORY_KEY = 'geodash_pnl_history_v1';
+  var HALT_KEY        = 'geodash_ee_halted_v1';
   var STATE_VERSION   = '2.0';
 
   /* ── SQLite API ─────────────────────────────────────────────────────────────
@@ -582,6 +583,7 @@
   var _liveBrokerEquity     = null;  // sum of all connected broker equities — polled every 60s, used for sizing
   var _liveBrokerEquityTs   = 0;     // timestamp of last successful equity fetch
   var _liveBrokerSources    = [];    // which brokers contributed to _liveBrokerEquity
+  var _halted               = false; // emergency kill switch — blocks all new trade execution when true
   var _wsConnected          = false; // Binance WebSocket status
   var _wsBtcWs              = null;  // WebSocket instance (BTC real-time)
   var _wsBinanceRetries     = 0;     // Fix #17: exponential backoff retry counter
@@ -750,7 +752,14 @@
       if (_cfg.min_confidence < 50) {
         _cfg.min_confidence = DEFAULTS.min_confidence;
       }
-    } catch (e) { _cfg = Object.assign({}, DEFAULTS); }
+      // Restore kill switch state — prevents a page refresh from silently re-enabling trading
+      try { _halted = localStorage.getItem(HALT_KEY) === 'true'; } catch(e2) {}
+    } catch (e) {
+      console.error('[EE] ⚠ Config load FAILED — localStorage corrupt or missing. ' +
+        'Reverting to DEFAULTS. All risk limits reset to factory values. ' +
+        'Re-configure before live trading.', e);
+      _cfg = Object.assign({}, DEFAULTS);
+    }
   }
 
   function saveCfg() {
@@ -1585,6 +1594,9 @@
   }
 
   function canExecute(sig) {
+    if (_halted)
+      return { ok: false, reason: '🛑 KILL SWITCH ACTIVE — EE.resume() to re-enable' };
+
     if (!_cfg.enabled)
       return { ok: false, reason: 'Auto-execution disabled' };
 
@@ -2639,11 +2651,21 @@
           trade.broker_status     = 'FILLED';
           trade.broker_fill_price = fillPrice;
           if (fillPrice > 0 && isFinite(fillPrice)) trade.entry_price = fillPrice;
+          if (trade.signal_ts) {
+            var _hlLatMs = Date.now() - trade.signal_ts;
+            trade.fill_latency_ms = _hlLatMs;
+            _fillLatencies.push(_hlLatMs);
+            if (_fillLatencies.length > 20) _fillLatencies.shift();
+            var _hlAvgLat = Math.round(_fillLatencies.reduce(function(a,b){return a+b;},0) / _fillLatencies.length);
+            log('HL', trade.asset + ' fill latency: ' + (_hlLatMs/1000).toFixed(1) + 's (avg ' + (_hlAvgLat/1000).toFixed(1) + 's)', 'dim');
+            if (_hlLatMs > 10000) log('HL', '⚠ Slow fill: ' + trade.asset + ' took ' + (_hlLatMs/1000).toFixed(0) + 's — check HL connection', 'amber');
+          }
           saveTrades();
           _apiPatchTrade(trade.trade_id, {
             broker_status:     'FILLED',
             broker_fill_price: fillPrice,
-            entry_price:       trade.entry_price
+            entry_price:       trade.entry_price,
+            fill_latency_ms:   trade.fill_latency_ms || null
           });
           log('HL', trade.asset + ' FILLED @ $' + fillPrice.toFixed(4) +
             ' · lev ' + _hlLev + 'x · notional $' + trade.size_usd.toFixed(0), 'green');
@@ -2783,9 +2805,23 @@
       OANDABroker.placeOrder(trade.asset, trade.size_usd, trade.direction, trade)
         .then(function (order) {
           trade.broker_order_id = order.id;
-          trade.broker_status   = order.status;
+          trade.broker_status   = order.status || 'FILLED';
+          if (trade.signal_ts) {
+            var _oaLatMs = Date.now() - trade.signal_ts;
+            trade.fill_latency_ms = _oaLatMs;
+            _fillLatencies.push(_oaLatMs);
+            if (_fillLatencies.length > 20) _fillLatencies.shift();
+            log('OANDA', trade.asset + ' fill latency: ' + (_oaLatMs/1000).toFixed(1) + 's', 'dim');
+            if (_oaLatMs > 10000) log('OANDA', '⚠ Slow fill: ' + trade.asset + ' took ' + (_oaLatMs/1000).toFixed(0) + 's — check OANDA connection', 'amber');
+          }
           saveTrades();
+          _apiPatchTrade(trade.trade_id, {
+            broker_status:   trade.broker_status,
+            broker_order_id: trade.broker_order_id,
+            fill_latency_ms: trade.fill_latency_ms || null
+          });
           log('OANDA', trade.asset + ' order placed: ' + order.id + ' (' + order.status + ')', 'cyan');
+          renderUI();
         })
         .catch(function (e) {
           trade.broker_status   = 'REJECTED';
@@ -3295,6 +3331,18 @@
       sigs = sigs.slice(0, _quota);
     }
     _sigRateCount += sigs.length;
+
+    /* Auto-halt on extreme signal storm (>150 signals in a 10s window = clear malfunction).
+       Activates the kill switch and logs loudly. Human must call EE.resume() to re-enable.
+       Normal busy cycles peak around 10-20 signals; 150 indicates a runaway agent loop.  */
+    if (_sigRateCount > 150) {
+      if (!_halted) {
+        _halted = true;
+        log('SYSTEM', '🛑 AUTO KILL SWITCH — signal storm detected (' + _sigRateCount +
+          ' signals in 10s). All execution halted. Investigate agents, then call EE.resume().', 'warn');
+      }
+      return;
+    }
     if (!sigs.length) return;
 
     // T2-B: fuse multi-agent agreement before processing
@@ -3313,7 +3361,8 @@
       if (sig.direction !== undefined && sig.dir  === undefined) sig.dir  = sig.direction;
       if (sig.dir) sig.dir = sig.dir.toUpperCase();   // 'long' → 'LONG', 'short' → 'SHORT'
       if (sig.confidence !== undefined && sig.conf === undefined) {
-        var _rawConf = sig.confidence <= 1 ? Math.round(sig.confidence * 100) : sig.confidence;
+        var _numConf = typeof sig.confidence === 'number' ? sig.confidence : parseFloat(sig.confidence) || 0;
+        var _rawConf = _numConf <= 1 ? Math.round(_numConf * 100) : _numConf;
         sig.conf = Math.max(0, Math.min(100, _rawConf));  // clamp: agent could send out-of-range value
       }
       if (sig.reasoning !== undefined && sig.reason === undefined) sig.reason = sig.reasoning;
@@ -3710,6 +3759,50 @@
         }
       });
     });
+  }
+
+  // OANDA position reconciliation — mirrors _reconcileAlpacaPositions().
+  // Catches trades closed externally (margin, API, manual) that EE never saw.
+  var _lastOANDAReconcile = 0;
+  function _reconcileOANDAPositions() {
+    if (!window.OANDABroker || !OANDABroker.isConnected()) return;
+    var now = Date.now();
+    if (now - _lastOANDAReconcile < 4 * 60 * 1000) return;  // dedupe: max once per 4 min
+    _lastOANDAReconcile = now;
+    var oandaTrades = openTrades().filter(function (t) {
+      return t.venue === 'OANDA' && t.broker_status === 'FILLED';
+    });
+    if (!oandaTrades.length) return;
+    OANDABroker.getPositions()
+      .then(function (positions) {
+        if (!positions || !positions.length) {
+          // Empty = connection not ready, not mass close — same guard as HL
+          log('OANDA', 'Reconciliation skipped — OANDA returned empty position list. ' + oandaTrades.length + ' EE trade(s) left open.', 'amber');
+          return;
+        }
+        // OANDA instruments are formatted as "EUR_USD"; normalise to "EURUSD" for matching
+        var oandaKeys = {};
+        (positions || []).forEach(function (p) {
+          var key = (p.instrument || '').replace(/_/g, '').toUpperCase();
+          oandaKeys[key] = p;
+        });
+        oandaTrades.forEach(function (t) {
+          var key = normaliseAsset(t.asset).toUpperCase();
+          if (!oandaKeys[key]) {
+            var fallback = _livePrice[t.trade_id] || _priceCache[normaliseAsset(t.asset)] || t.entry_price;
+            log('OANDA', t.asset + ' position missing from OANDA — closed externally. Closing in EE at $' + (fallback || 0).toFixed(4), 'amber');
+            closeTrade(t.trade_id, fallback || t.entry_price, 'EXTERNALLY_CLOSED');
+          }
+        });
+        (positions || []).forEach(function (pos) {
+          var instr = (pos.instrument || '').replace(/_/g, '').toUpperCase();
+          var eeMatch = oandaTrades.some(function (t) { return normaliseAsset(t.asset).toUpperCase() === instr; });
+          if (!eeMatch) {
+            log('OANDA', '⚠ Orphan OANDA position: ' + instr + ' — not in EE trades (manually opened or prior session)', 'amber');
+          }
+        });
+      })
+      .catch(function () { /* silent — OANDA may be temporarily unavailable */ });
   }
 
   /* ══════════════════════════════════════════════════════════════════════════════
@@ -4353,6 +4446,80 @@
      UI RENDERING
      ══════════════════════════════════════════════════════════════════════════════ */
 
+  /* ── Agent Manager Alerts ─────────────────────────────────────────────────────
+     Reads alerts from GII_AGENT_MANAGER (if available) and surfaces them in the
+     #eeManagerAlerts strip below the live-mode warning banner.                  */
+  function renderManagerAlerts() {
+    var el = document.getElementById('eeManagerAlerts');
+    if (!el) return;
+    var alerts = [];
+    try {
+      if (window.GII_AGENT_MANAGER && typeof GII_AGENT_MANAGER.alerts === 'function') {
+        alerts = GII_AGENT_MANAGER.alerts() || [];
+      }
+    } catch (e) {}
+    // Also surface kill-switch state as a top-level alert
+    if (_halted) {
+      alerts = [{ level: 'crit', msg: '🛑 KILL SWITCH ACTIVE — all new trade execution is halted. Click HALT to resume.', ts: null }].concat(alerts);
+    }
+    if (!alerts.length) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'block';
+    el.innerHTML = alerts.slice(0, 8).map(function (a) {
+      var lvl  = (a.level === 'critical' || a.level === 'crit'    || a.severity === 'error') ? 'crit'
+               : (a.level === 'warn'     || a.level === 'warning' || a.severity === 'warn')  ? 'warn'
+               : '';
+      var icon = lvl === 'crit' ? '🔴' : lvl === 'warn' ? '⚠️' : 'ℹ️';
+      var tsStr = a.ts ? ('<span class="ee-mgr-alert-ts">' + _age(a.ts) + ' ago</span>') : '';
+      return '<div class="ee-mgr-alert ' + lvl + '">' +
+        '<span class="ee-mgr-alert-icon">' + icon + '</span>' +
+        '<span class="ee-mgr-alert-msg">' + _esc(String(a.msg || a.message || '')) + '</span>' +
+        tsStr +
+      '</div>';
+    }).join('');
+  }
+
+  /* ── Agent Heartbeat Panel ────────────────────────────────────────────────────
+     Reads GII_AGENT_MANAGER.healthReport() and renders a compact status grid
+     in #eeAgentHeartbeat showing last-poll age and status for every watched agent. */
+  function renderAgentHeartbeat() {
+    var el = document.getElementById('eeAgentHeartbeat');
+    if (!el) return;
+    var report = null;
+    try {
+      if (window.GII_AGENT_MANAGER && typeof GII_AGENT_MANAGER.healthReport === 'function') {
+        report = GII_AGENT_MANAGER.healthReport();
+      }
+    } catch (e) {}
+    if (!report || !report.agents || !Object.keys(report.agents).length) {
+      el.innerHTML = '<span style="font-size:9px;color:var(--dim)">Agent manager not yet initialised — waiting for first health check (30s after load)…</span>';
+      return;
+    }
+    var now = Date.now();
+    var rows = Object.keys(report.agents).map(function (name) {
+      var h   = report.agents[name];
+      var age = h.lastPoll ? Math.round((now - (h.lastPoll || 0)) / 1000) : null;
+      var ageStr = age === null ? '—' : age < 60 ? age + 's' : Math.round(age / 60) + 'm';
+      var statusCol = h.status === 'ok'   ? '#00c8a0'
+                    : h.status === 'warn' ? '#ff9500'
+                    : h.status === 'error'? '#ff4444'
+                    : '#555';
+      var dot = h.status === 'ok' ? '●' : h.status === 'warn' ? '◐' : '○';
+      var shortName = name.replace('GII_AGENT_', '').replace('GII_SCRAPER_', 'SCR_');
+      return '<div class="ee-hb-row">' +
+        '<span style="color:' + statusCol + ';font-size:9px">' + dot + '</span>' +
+        '<span class="ee-hb-name">' + shortName + '</span>' +
+        '<span class="ee-hb-age" style="color:' + (age !== null && age > 300 ? '#ff9500' : 'var(--dim)') + '">' + ageStr + '</span>' +
+        (h.message ? '<span class="ee-hb-msg" style="color:' + statusCol + '">' + h.message + '</span>' : '<span class="ee-hb-msg"></span>') +
+      '</div>';
+    }).join('');
+    var lastCheck = report.lastCheck ? Math.round((now - report.lastCheck) / 1000) + 's ago' : 'pending';
+    el.innerHTML = '<div class="ee-hb-header">Agent Heartbeats <span style="color:var(--dim);font-weight:normal">· last check: ' + lastCheck + '</span></div>' +
+      '<div class="ee-hb-grid">' + rows + '</div>';
+  }
+
   function renderUI() {
     renderStatusBar();
     renderPortfolioSummary();
@@ -4365,6 +4532,10 @@
     // Show/hide live mode warning
     var warn = document.getElementById('eeLiveWarning');
     if (warn) warn.classList.toggle('show', _cfg.mode === 'LIVE');
+    // Agent manager alerts strip
+    renderManagerAlerts();
+    // Agent heartbeat panel
+    renderAgentHeartbeat();
     // Refresh strategy analytics panel
     renderAnalytics();
     // Refresh signal history + risk simulator
@@ -4628,6 +4799,14 @@
       modeBtn.textContent = 'MODE: ' + _cfg.mode;
       modeBtn.className   = 'ee-mode-btn ' + (_cfg.mode === 'LIVE' ? 'live' : 'sim');
     }
+    var haltBtn = document.getElementById('eeHaltBtn');
+    if (haltBtn) {
+      haltBtn.textContent = _halted ? '\u25a0 HALTED' : '\u25a0 HALT';
+      haltBtn.className   = 'ee-halt-btn' + (_halted ? ' halted' : '');
+      haltBtn.title       = _halted
+        ? 'Kill switch is ACTIVE — click to resume trade execution'
+        : 'Emergency kill switch — halts all new trade execution immediately. Existing trades are unaffected.';
+    }
     var subtitleEl = document.getElementById('eeSubtitle');
     if (subtitleEl) {
       // Market status: show which venues are currently open
@@ -4663,7 +4842,8 @@
   function renderConfigFields() {
     var fields = ['min_confidence','risk_per_trade_pct','stop_loss_pct',
                   'take_profit_ratio','max_open_trades','max_per_region','max_per_sector',
-                  'virtual_balance','max_risk_usd','trailing_stop_pct','daily_loss_limit_pct','event_gate_hours'];
+                  'virtual_balance','max_risk_usd','trailing_stop_pct','daily_loss_limit_pct',
+                  'daily_profit_target_pct','event_gate_hours'];
     fields.forEach(function (f) {
       var el = document.getElementById('eeCfg_' + f);
       if (el && document.activeElement !== el) el.value = _cfg[f];
@@ -4735,15 +4915,17 @@
         var slDist = t.stop_loss   ? Math.abs(livePx - t.stop_loss)   / t.entry_price * 100 : null;
         var tpDist = t.take_profit ? Math.abs(t.take_profit - livePx) / t.entry_price * 100 : null;
         liveRow =
-          '<div style="font-size:9px;margin:5px 0 0 0;padding-top:5px;border-top:1px solid rgba(255,255,255,0.07)">' +
-            'Live: <b style="color:var(--text)">$' + _num(livePx) + '</b>' +
-            '&nbsp;&nbsp;Unrealised: ' +
-            '<b style="color:' + uCol + '">' +
-              (uPct >= 0 ? '+' : '') + uPct.toFixed(2) + '%&thinsp;' +
-              '(' + (uUsd >= 0 ? '+$' : '-$') + _num(Math.abs(uUsd)) + ')' +
-            '</b>' +
+          '<div style="margin:6px 0 0 0;padding-top:6px;border-top:1px solid rgba(255,255,255,0.07)">' +
+            '<span style="font-size:9px;color:var(--dim)">Live: <b style="color:var(--text)">$' + _num(livePx) + '</b></span>' +
+            '&nbsp;&nbsp;' +
+            '<span style="font-size:13px;font-weight:700;color:' + uCol + ';letter-spacing:0.3px">' +
+              (uUsd >= 0 ? '+$' : '-$') + _num(Math.abs(uUsd)) +
+            '</span>' +
+            '&nbsp;<span style="font-size:10px;color:' + uCol + ';opacity:0.85">' +
+              '(' + (uPct >= 0 ? '+' : '') + uPct.toFixed(2) + '%)' +
+            '</span>' +
             (slDist !== null || tpDist !== null
-              ? '&nbsp;&nbsp;<span style="color:var(--dim)">' +
+              ? '&nbsp;&nbsp;<span style="font-size:9px;color:var(--dim)">' +
                   (slDist !== null ? 'SL&nbsp;' + slDist.toFixed(1) + '% away' : '') +
                   (slDist !== null && tpDist !== null ? '&nbsp;·&nbsp;' : '') +
                   (tpDist !== null ? 'TP&nbsp;' + tpDist.toFixed(1) + '% away' : '') +
@@ -4928,17 +5110,17 @@
                     : e.action === 'WATCH'  ? '&#9900; WATCH'
                     : '&#8212; SKIP';
       var dirCls  = e.dir === 'LONG' ? 'sl-long' : e.dir === 'SHORT' ? 'sl-short' : 'sl-watch-dir';
-      var skipHtml = e.skip_reason
-        ? '<span class="sl-skip-reason">' + _esc(e.skip_reason) + '</span>'
-        : '';
+      // For skipped signals, show reason prominently in place of region (more useful than region name)
+      var lastCol = (e.action === 'SKIP' && e.skip_reason)
+        ? '<span class="sl-skip-reason prominent" style="color:#ff9500;font-style:normal;font-weight:600;grid-column:auto">' + _esc(e.skip_reason) + '</span>'
+        : '<span class="ee-sl-region">' + _esc(e.region) + '</span>';
       return '<div class="ee-sl-row">' +
         '<span class="ee-sl-ts">'  + ts + '</span>' +
         '<span class="ee-sl-asset">' + _esc(e.asset) + '</span>' +
         '<span class="ee-sl-dir ' + dirCls + '">' + _esc(e.dir) + '</span>' +
         '<span class="ee-sl-conf">' + e.conf + '%</span>' +
         '<span class="ee-sl-act ' + actionCls + '">' + actionLbl + '</span>' +
-        '<span class="ee-sl-region">' + _esc(e.region) + '</span>' +
-        skipHtml +
+        lastCol +
       '</div>';
     }).join('');
   }
@@ -5807,6 +5989,39 @@
 
   window.EE = {
 
+    /* ── Emergency kill switch ── */
+    /* EE.halt()   — immediately stops all new trade execution (canExecute returns false).
+       EE.resume() — re-enables execution.
+       Existing open trades are not affected — positions are managed normally.
+       Use EE.halt() if a signal source malfunctions, API misbehaves, or unexpected
+       trades are opening. Dashboard auto-calls halt() if signal storm is detected. */
+    halt: function () {
+      _halted = true;
+      try { localStorage.setItem(HALT_KEY, 'true'); } catch(e) {}
+      log('SYSTEM', '🛑 KILL SWITCH ACTIVATED — all new trade execution halted. Call EE.resume() to re-enable.', 'warn');
+      renderUI();
+    },
+    resume: function () {
+      _halted = false;
+      try { localStorage.setItem(HALT_KEY, 'false'); } catch(e) {}
+      log('SYSTEM', '✅ KILL SWITCH CLEARED — trade execution re-enabled.', 'green');
+      renderUI();
+    },
+    isHalted: function () { return _halted; },
+    toggleHalt: function () {
+      if (_halted) window.EE.resume(); else window.EE.halt();
+    },
+
+    /* ── Collapsible config panel ── */
+    toggleConfig: function () {
+      var body  = document.getElementById('eeConfigBody');
+      var arrow = document.getElementById('eeCfgArrow');
+      if (!body) return;
+      var collapsed = body.classList.toggle('collapsed');
+      if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(90deg)';
+      try { localStorage.setItem('geodash_ee_cfg_collapsed_v1', collapsed ? '1' : '0'); } catch(e) {}
+    },
+
     /* ── Called by renderTrades() hook each cycle ── */
     onSignals: onSignals,
 
@@ -5884,8 +6099,9 @@
         // A21: min=1 so that 0 can't accidentally disable the hard risk cap entirely
         max_risk_usd:         { min: 1,   max: 10000,    int: false },
         trailing_stop_pct:    { min: 0.1, max: 10,       int: false },
-        daily_loss_limit_pct: { min: 1,   max: 100,      int: false },
-        event_gate_hours:     { min: 0,   max: 4,        int: false }
+        daily_loss_limit_pct:    { min: 1,   max: 100,  int: false },
+        daily_profit_target_pct: { min: 0,   max: 50,   int: false },
+        event_gate_hours:        { min: 0,   max: 4,    int: false }
       };
       Object.keys(rules).forEach(function (f) {
         var el = document.getElementById('eeCfg_' + f);
@@ -6667,15 +6883,28 @@
       window._eeReconcileInterval = setInterval(function () {
         _reconcileAlpacaPositions();
         _reconcileHLPositions();
+        _reconcileOANDAPositions();
       }, 5 * 60 * 1000);
       setTimeout(function () {
         _reconcileAlpacaPositions();
         _reconcileHLPositions();
+        _reconcileOANDAPositions();
       }, 15000); // first run 15s after load (let fills settle)
     }
 
     // Dynamic confidence floors: run at init (5s delay for attribution data to load)
     // and every 30 min thereafter — adjusts EE_ASSET_CONF_FLOOR from live trade history.
+    // Restore config panel collapse state from last session
+    try {
+      var _cfgCollapsed = localStorage.getItem('geodash_ee_cfg_collapsed_v1');
+      var _cfgBody  = document.getElementById('eeConfigBody');
+      var _cfgArrow = document.getElementById('eeCfgArrow');
+      if (_cfgBody && _cfgCollapsed === '0') {
+        _cfgBody.classList.remove('collapsed');
+        if (_cfgArrow) _cfgArrow.style.transform = 'rotate(90deg)';
+      }
+    } catch(e) {}
+
     setTimeout(_updateDynamicFloors, 5000);
     if (!window._eeFloorsInterval) {
       window._eeFloorsInterval = setInterval(_updateDynamicFloors, 30 * 60 * 1000);

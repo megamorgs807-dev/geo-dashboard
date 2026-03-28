@@ -167,7 +167,7 @@
      WARM_MS:   route to HL but 1× only — slightly stale is still better than
                 Yahoo/backend (delayed, sometimes 15-min old)                 */
   var HL_FRESH_MS = 30000;    // < 30s — same as HLFeed's own definition
-  var HL_WARM_MS  = 300000;   // 30s – 5min — prefer HL at 1× (v5: extended from 2min to cover brief WS pauses)
+  var HL_WARM_MS  = 120000;   // 30s – 2min — tightened from 5min: stale prices cause inaccurate leverage/stop calc
 
   /* ── Fee structures ─────────────────────────────────────────────────────────
      HL: 0.05% taker. Traditional: CFD/stock estimates.                       */

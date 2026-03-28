@@ -49,8 +49,10 @@
 
   /* ── Main poll ─────────────────────────────────────────────────────────── */
   function _poll() {
-    fetch(BINANCE_URL)
-      .then(function (r) { return r.json(); })
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(BINANCE_URL, { signal: ctrl.signal })
+      .then(function (r) { clearTimeout(tid); return r.json(); })
       .then(function (data) {
         if (!Array.isArray(data)) return;
 
@@ -75,7 +77,7 @@
         console.log('[FR] Updated ' + Object.keys(_rates).length + ' assets, ' +
                     _signals.length + ' signals');
       })
-      .catch(function (e) { console.warn('[FR] Poll error:', e.message || e); });
+      .catch(function (e) { clearTimeout(tid); console.warn('[FR] Poll error:', e.message || e); });
   }
 
   /* ── Build contrarian signals ──────────────────────────────────────────── */

@@ -46,10 +46,12 @@
   var _API = (typeof window !== 'undefined' && window.GEO_API_BASE) || 'http://localhost:8765';
 
   function _fetchMarket(cb) {
-    fetch(_API + '/api/market', { method: 'GET', headers: { 'Content-Type': 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(_API + '/api/market', { method: 'GET', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal })
+      .then(function (r) { clearTimeout(tid); return r.ok ? r.json() : null; })
       .then(function (d) { cb(null, d); })
-      .catch(function (e) { cb(e, null); });
+      .catch(function (e) { clearTimeout(tid); cb(e, null); });
   }
 
   // ── analysis ───────────────────────────────────────────────────────────────

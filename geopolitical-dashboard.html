@@ -1984,12 +1984,36 @@
       box-shadow: 0 0 8px rgba(255,68,68,0.3) !important;
     }
     .ee-toggle-btn:hover  { opacity:0.8; }
+    .ee-halt-btn        { font-size:9px; font-weight:700; letter-spacing:1px; padding:4px 12px; border:1px solid rgba(255,68,68,0.5); background:rgba(255,68,68,0.1); color:#ff4444; cursor:pointer; font-family:inherit; border-radius:2px; transition:all 0.15s; }
+    .ee-halt-btn.halted { border-color:rgba(255,68,68,0.9); background:rgba(255,68,68,0.22); color:#ff4444; box-shadow:0 0 8px rgba(255,68,68,0.35); animation:halt-pulse 1.5s ease-in-out infinite; }
+    .ee-halt-btn:hover  { opacity:0.8; }
+    @keyframes halt-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+    .ee-badge-sep       { display:inline-block; width:1px; height:14px; background:rgba(255,255,255,0.1); margin:0 3px; vertical-align:middle; }
 
     .ee-live-warning      { background:rgba(224,48,48,0.08); border:1px solid rgba(224,48,48,0.35); border-left:4px solid var(--red); padding:10px 14px; margin-bottom:16px; font-size:11px; color:var(--red); display:none; }
     .ee-live-warning.show { display:block; }
+    .ee-mgr-alerts      { margin-bottom:12px; }
+    .ee-mgr-alert       { display:flex; align-items:center; gap:8px; padding:7px 12px; margin-bottom:4px; border-radius:3px; font-size:10px; background:rgba(255,100,0,0.1); border:1px solid rgba(255,100,0,0.35); border-left:3px solid #ff6400; color:#ffaa66; }
+    .ee-mgr-alert.warn  { background:rgba(255,149,0,0.1); border-color:rgba(255,149,0,0.35); border-left-color:#ff9500; color:#ffbb55; }
+    .ee-mgr-alert.crit  { background:rgba(255,68,68,0.12); border-color:rgba(255,68,68,0.4); border-left-color:#ff4444; color:#ff8888; }
+    .ee-mgr-alert-icon  { font-size:11px; flex-shrink:0; }
+    .ee-mgr-alert-msg   { flex:1; line-height:1.4; }
+    .ee-mgr-alert-ts    { font-size:8px; color:var(--dim); flex-shrink:0; }
 
-    .ee-config-section { background:var(--bg2); border:1px solid var(--border); padding:14px 16px; margin-bottom:16px; }
-    .ee-panel-title    { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--bright); display:flex; justify-content:space-between; align-items:center; }
+    .ee-hb-header  { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--bright); margin-bottom:8px; }
+    .ee-hb-grid    { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:3px; }
+    .ee-hb-row     { display:grid; grid-template-columns:12px 1fr 28px auto; align-items:center; gap:5px; padding:3px 6px; background:var(--bg3); border-radius:2px; }
+    .ee-hb-name    { font-size:8px; color:var(--text); letter-spacing:0.3px; font-family:inherit; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ee-hb-age     { font-size:8px; text-align:right; }
+    .ee-hb-msg     { font-size:8px; font-style:italic; color:var(--dim); grid-column:2 / -1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ee-hb-msg:empty { display:none; }
+    .ee-config-section  { background:var(--bg2); border:1px solid var(--border); padding:14px 16px; margin-bottom:16px; }
+    .ee-config-body     { }
+    .ee-config-body.collapsed { display:none; }
+    .ee-panel-title     { font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--bright); display:flex; justify-content:space-between; align-items:center; }
+    .ee-panel-title.collapsible { cursor:pointer; user-select:none; }
+    .ee-panel-title.collapsible:hover { opacity:0.8; }
+    .ee-cfg-arrow       { display:inline-block; font-size:8px; margin-right:5px; transition:transform 0.2s; color:var(--dim); }
     .ee-config-grid    { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; align-items:end; margin-top:10px; }
     @media (max-width:900px) { .ee-config-grid { grid-template-columns:repeat(3,1fr); } }
     .ee-cfg-field label { display:block; font-size:8px; color:var(--dim); letter-spacing:0.8px; text-transform:uppercase; margin-bottom:3px; }
@@ -5229,11 +5253,13 @@
       <div class="ee-hdr-right">
         <span class="ee-badge" id="eeBadgeMode">SIMULATION</span>
         <span class="ee-badge" id="eeBadgeEnabled">AUTO OFF</span>
+        <span class="ee-badge-sep"></span>
         <span class="ee-badge" id="macroRegimeBadge" style="color:#555" title="Market Regime: Risk-On / Transitioning / Risk-Off — affects position sizing multiplier">REGIME —</span>
         <span class="ee-badge" id="optionsMarketBadge" style="color:#555" title="Options Market Sentiment: Put/Call ratio and skew — loading...">OPT —</span>
         <span class="ee-badge" id="cotBadge" style="color:#555" title="COT (Commitment of Traders): net positioning of institutional traders — loading...">COT —</span>
         <span class="ee-badge" id="fundingRateBadge" style="color:#555" title="Funding Rate: crypto perp funding — positive = longs paying shorts, negative = shorts paying longs">FR —</span>
         <span class="ee-badge" id="econCalBadge" style="color:#555" title="Economic Calendar: upcoming high-impact events — gates new trades within the configured window">CAL —</span>
+        <span class="ee-badge-sep"></span>
         <span class="ee-badge" id="eeBadgeBalance">$10,000</span>
         <span class="ee-badge" id="eeBadgeOpen">0 OPEN</span>
         <span class="ee-badge" id="eeBadgePnl">+$0 P&amp;L</span>
@@ -5241,6 +5267,7 @@
         <span class="ee-badge" id="eeStaleDataBadge" style="display:none;color:#f87171" title="These prices are from a cached refresh — live data temporarily unavailable (e.g. futures contract roll)"></span>
         <button class="ee-mode-btn sim"  id="eeModeBtn"   onclick="EE.toggleMode()">MODE: SIMULATION</button>
         <button class="ee-toggle-btn"    id="eeToggleBtn" onclick="EE.toggleAuto()">&#9658; START AUTO</button>
+        <button class="ee-halt-btn"      id="eeHaltBtn"   onclick="EE.toggleHalt()" title="Emergency kill switch — halts all new trade execution immediately. Existing trades are unaffected.">&#9632; HALT</button>
       </div>
     </div>
 
@@ -5249,12 +5276,16 @@
       &#9888; LIVE MODE ACTIVE &mdash; Broker adapters are currently stubs. No real orders will fire until a broker adapter is wired in. Switch back to SIMULATION for paper trading.
     </div>
 
+    <!-- Agent manager alerts strip — rendered by EE.renderManagerAlerts() -->
+    <div class="ee-mgr-alerts" id="eeManagerAlerts" style="display:none"></div>
+
     <!-- Risk parameters -->
     <div class="ee-config-section">
-      <div class="ee-panel-title">
-        Risk Parameters
+      <div class="ee-panel-title collapsible" onclick="EE.toggleConfig()" title="Click to expand / collapse risk parameters">
+        <span><span class="ee-cfg-arrow" id="eeCfgArrow">&#9654;</span>Risk Parameters</span>
         <span style="font-weight:normal;font-size:8px;color:var(--dim)">Changes apply to new trades only</span>
       </div>
+      <div class="ee-config-body collapsed" id="eeConfigBody">
       <div class="ee-config-grid">
         <div class="ee-cfg-field"><label>Min Confidence %</label><input type="number" id="eeCfg_min_confidence"    value="65"    min="10"  max="95"       step="1"></div>
         <div class="ee-cfg-field"><label>Risk / Trade %</label>  <input type="number" id="eeCfg_risk_per_trade_pct" value="2"     min="0.1" max="10"        step="0.1"></div>
@@ -5268,9 +5299,10 @@
 
       <!-- ── Advanced risk controls ─────────────────────────────────── -->
       <div class="ee-config-grid" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-        <div class="ee-cfg-field"><label>Trailing Stop %</label>    <input type="number" id="eeCfg_trailing_stop_pct"    value="1.5" min="0.1" max="10"  step="0.1"></div>
-        <div class="ee-cfg-field"><label>Daily Loss Limit %</label> <input type="number" id="eeCfg_daily_loss_limit_pct" value="5"   min="1"   max="20"  step="0.5"></div>
-        <div class="ee-cfg-field"><label>Event Gate (hrs)</label>   <input type="number" id="eeCfg_event_gate_hours"     value="0.5" min="0"   max="4"   step="0.25"></div>
+        <div class="ee-cfg-field"><label>Trailing Stop %</label>    <input type="number" id="eeCfg_trailing_stop_pct"       value="1.5" min="0.1" max="10"  step="0.1"></div>
+        <div class="ee-cfg-field"><label>Daily Loss Limit %</label> <input type="number" id="eeCfg_daily_loss_limit_pct"    value="5"   min="1"   max="20"  step="0.5"></div>
+        <div class="ee-cfg-field" title="Pause new trades after session gain reaches this % of balance. 0 = disabled."><label>Profit Target %</label>   <input type="number" id="eeCfg_daily_profit_target_pct" value="0"   min="0"   max="50"  step="0.5"></div>
+        <div class="ee-cfg-field"><label>Event Gate (hrs)</label>   <input type="number" id="eeCfg_event_gate_hours"        value="0.5" min="0"   max="4"   step="0.25"></div>
       </div>
 
       <!-- Toggle switches + status badges -->
@@ -5316,6 +5348,7 @@
           <span id="eeBackendUrlStatus" style="font-size:9px;color:var(--dim)">&#128274; Locked</span>
         </div>
       </div>
+      </div><!-- /eeConfigBody -->
     </div>
 
     <!-- Daily loss limit gauge — rendered by renderPortfolioSummary -->
@@ -5328,6 +5361,9 @@
       <span style="color:var(--text);margin-left:8px">Back up regularly before going live:</span>
       <button onclick="EE.exportJSON()" style="margin-left:10px;padding:2px 10px;background:var(--amber);color:var(--bg);border:none;font-family:inherit;font-size:10px;font-weight:bold;cursor:pointer;letter-spacing:1px">&#8595; EXPORT TRADES</button>
     </div>
+
+    <!-- Agent Heartbeat Panel — rendered by renderAgentHeartbeat() each cycle -->
+    <div id="eeAgentHeartbeat" style="background:var(--bg2);border:1px solid var(--border);padding:10px 14px;margin-bottom:12px;border-radius:2px"></div>
 
     <!-- Portfolio Summary Bar -->
     <div id="eePortfolioSummary" style="display:flex;flex-wrap:wrap;gap:0;margin-bottom:12px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;overflow:hidden"></div>

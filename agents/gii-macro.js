@@ -45,10 +45,12 @@
   // ── fetch helpers ──────────────────────────────────────────────────────────
 
   function _fetchJSON(url, cb) {
-    fetch(url, { method: 'GET' })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(url, { method: 'GET', signal: ctrl.signal })
+      .then(function (r) { clearTimeout(tid); return r.ok ? r.json() : null; })
       .then(function (d) { cb(null, d); })
-      .catch(function (e) { cb(e, null); });
+      .catch(function (e) { clearTimeout(tid); cb(e, null); });
   }
 
   // ── analysis ───────────────────────────────────────────────────────────────

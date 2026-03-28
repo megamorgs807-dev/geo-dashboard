@@ -71,6 +71,7 @@
 
   var _lastPoll         = 0;
   var _lastFetch        = 0;
+  var _cgBackoffUntil   = 0;   // CoinGecko 429 backoff — don't retry until this timestamp
   var _signalCount      = 0;
   var _online           = false;
 
@@ -136,10 +137,20 @@
   // ── Source 1: CoinGecko markets — volume surge ────────────────────────────
 
   function _fetchMarkets() {
-    fetch(CG_MARKETS_URL)
+    /* Respect CoinGecko 429 backoff window — don't hammer the API during throttle */
+    if (Date.now() < _cgBackoffUntil) {
+      var _waitSec = Math.ceil((_cgBackoffUntil - Date.now()) / 1000);
+      console.log('[OnChain] CoinGecko backoff active — skipping markets fetch (' + _waitSec + 's remaining)');
+      return;
+    }
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(CG_MARKETS_URL, { signal: ctrl.signal })
       .then(function (res) {
+        clearTimeout(tid);
         if (res.status === 429) {
-          console.warn('[OnChain] CoinGecko markets rate-limited (429) — skipping');
+          _cgBackoffUntil = Date.now() + 90000;  // back off 90s before retrying
+          console.warn('[OnChain] CoinGecko rate-limited (429) — backing off 90s');
           return null;
         }
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -151,6 +162,7 @@
         _processMarkets(data);
       })
       .catch(function (err) {
+        clearTimeout(tid);
         console.warn('[OnChain] CoinGecko markets fetch failed:', err.message);
       });
   }
@@ -215,10 +227,15 @@
   // ── Source 2: CoinGecko global — market cap & BTC dominance ──────────────
 
   function _fetchGlobal() {
-    fetch(CG_GLOBAL_URL)
+    if (Date.now() < _cgBackoffUntil) return;   // shared backoff with _fetchMarkets
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(CG_GLOBAL_URL, { signal: ctrl.signal })
       .then(function (res) {
+        clearTimeout(tid);
         if (res.status === 429) {
-          console.warn('[OnChain] CoinGecko global rate-limited (429) — skipping');
+          _cgBackoffUntil = Date.now() + 90000;
+          console.warn('[OnChain] CoinGecko global rate-limited (429) — backing off 90s');
           return null;
         }
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -230,6 +247,7 @@
         _processGlobal(body.data);
       })
       .catch(function (err) {
+        clearTimeout(tid);
         console.warn('[OnChain] CoinGecko global fetch failed:', err.message);
       });
   }
@@ -315,8 +333,11 @@
   // ── Source 3: Blockchain.com BTC stats — on-chain activity ───────────────
 
   function _fetchBlockchain() {
-    fetch(BLOCKCHAIN_STATS_URL)
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(BLOCKCHAIN_STATS_URL, { signal: ctrl.signal })
       .then(function (res) {
+        clearTimeout(tid);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
@@ -325,6 +346,7 @@
         _processBlockchain(data);
       })
       .catch(function (err) {
+        clearTimeout(tid);
         // CORS or network failure — skip gracefully, this source is optional
         console.warn('[OnChain] Blockchain.com stats fetch failed (may be CORS) — skipping:', err.message);
       });

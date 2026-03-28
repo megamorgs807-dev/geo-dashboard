@@ -189,7 +189,11 @@
     return {
       agrees:   matching.length > opposing.length,
       opposes:  opposing.length > matching.length,
-      strength: matching.length ? (matching[0].confidence || 0.5) : 0
+      /* Cap strength at 1.0 — guards against any agent that emits confidence on
+         0-100 scale rather than 0-1. Without the cap, score contributions from
+         technical/fundamental agents would overflow by ×100 (e.g. +160 pts instead
+         of +1.6) and bypass all confluence thresholds silently.               */
+      strength: matching.length ? Math.min(1.0, (matching[0].confidence || 0.5)) : 0
     };
   }
 
@@ -324,15 +328,20 @@
         if (econMatch) {
           var econBias = econMatch.bias;
           var econDir  = dir === 'LONG';
+          /* Normalize to 0-1 for scoring weights — econ-calendar emits on 0-100 scale
+             (fixed in audit) but scoring weights were calibrated for 0-1 range.
+             Without this, a confidence of 80 would add 160 score points instead of 1.6,
+             completely overriding all other confluence inputs.                         */
+          var econConf = Math.min(1.0, (econMatch.confidence || 0) / 100);
           if ((econBias === 'long' && econDir) || (econBias === 'short' && !econDir)) {
             /* Event surprise confirms our direction — high-conviction catalyst */
-            var econW = econMatch.confidence * 2.0;
+            var econW = econConf * 2.0;
             score += econW;
             categories.econ_event = true;
             agentsFor.push('econ(' + econMatch.eventTitle.split(' ').slice(0, 3).join(' ') + ')');
           } else if ((econBias === 'short' && econDir) || (econBias === 'long' && !econDir)) {
             /* Event surprise opposes direction — meaningful headwind */
-            score -= econMatch.confidence * 1.5;
+            score -= econConf * 1.5;
             agentsAgainst.push('econ-headwind(' + econMatch.eventTitle.split(' ').slice(0, 2).join(' ') + ')');
           }
         }
@@ -516,6 +525,25 @@
         var hasOpen = EE.getOpenTrades().some(function (t) { return t.asset === asset; });
         if (hasOpen) return 'position-already-open';
       } catch (e) {}
+    }
+
+    /* Veto 4b: recently closed trade on this asset within last 30 min.
+       Dedup guard against direct EE.onSignals() emitters (forex-fundamentals,
+       crypto-signals, correlation-agent etc.) that bypass this confluence
+       pipeline — prevents GII from re-entering an asset that was just worked
+       by another agent. Reads the same localStorage store used by gii-manager. */
+    try {
+      var _allTrades  = JSON.parse(localStorage.getItem('geodash_ee_trades_v1') || '[]');
+      var _thirtyAgo  = Date.now() - 30 * 60 * 1000;
+      var _justClosed = _allTrades.some(function (t) {
+        return t.asset === asset &&
+               t.status === 'CLOSED' &&
+               t.timestamp_close &&
+               new Date(t.timestamp_close).getTime() > _thirtyAgo;
+      });
+      if (_justClosed) return 'dedup-recently-closed-30min';
+    } catch (e) {
+      console.warn('[GII-ENTRY] Veto 4b check failed — localStorage parse error, dedup skipped:', e.message || e);
     }
 
     /* Veto 5: GTI extreme (>85) blocks new risk-asset longs */
@@ -875,6 +903,10 @@
          making confidence indistinguishable between winners and losers.
          Smaller boost + lower cap preserves meaningful differentiation. */
       var confBoost = Math.min(5, Math.floor(result.score * 0.4));
+      /* sig.conf is used (not sig.confidence) because EE.onSignals() normalises
+         .confidence → .conf (0-100 scale) before signals reach this pipeline.
+         If a signal arrives via a path that skips EE normalisation, conf defaults
+         to 50 — a conservative mid-range fallback rather than 0 or 100.       */
       enriched.conf = Math.min(88, (sig.conf || 50) + confBoost);
 
       /* Economic calendar confidence penalty: if a high-impact event is within

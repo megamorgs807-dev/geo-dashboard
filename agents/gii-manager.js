@@ -383,6 +383,122 @@
     } catch (e) {}
   }
 
+  /* ── CHECK: HLFeed WebSocket heartbeat ──────────────────────────────────── */
+  /* HLFeed streams live Hyperliquid positions/fills over WebSocket. If it goes
+     silent, HL position reconciliation is blind — the T1-A guard won't fire
+     but positions may drift undetected. Monitor after the first 3 check cycles
+     (90s) to allow the agent time to connect on boot.                          */
+  function _checkHLFeed() {
+    /* Try both possible window names used by the HL feed agent */
+    var hl = window.HLFeed || window.GII_AGENT_HL || window.HL_FEED;
+    if (!hl) {
+      if (_checkCount > 3) {
+        _addAlert('hlfeed_missing', 'warn', 'HLFeed',
+          'HLFeed WebSocket agent not found — HL position tracking offline');
+      }
+      return;
+    }
+    _resolve('hlfeed_missing');
+
+    try {
+      var st = hl.status ? hl.status() : {};
+
+      /* Explicit disconnect state */
+      if (st.connected === false) {
+        _addAlert('hlfeed_disconnected', 'error', 'HLFeed',
+          'HLFeed WebSocket disconnected — HL broker data offline');
+      } else {
+        _resolve('hlfeed_disconnected');
+      }
+
+      /* Message freshness — no message in 5 min means WS may have stalled */
+      var lastMsg = st.lastMessageTs || st.lastMsg || st.lastPoll || 0;
+      if (lastMsg && (_ts() - lastMsg) > 5 * 60 * 1000) {
+        _addAlert('hlfeed_stale', 'warn', 'HLFeed',
+          'HLFeed silent for ' + Math.round((_ts() - lastMsg) / 60000) +
+          'min — HL positions may be stale, reconciliation blind');
+      } else {
+        _resolve('hlfeed_stale');
+      }
+    } catch (e) {}
+  }
+
+  /* ── CHECK: OANDA rates feed ────────────────────────────────────────────── */
+  /* OANDA_RATES is the sole price source for forex-fundamentals and OANDA broker.
+     If it goes offline, forex signals silently stop generating with no alert.
+     Check both connection state and data freshness.                            */
+  function _checkOANDA() {
+    var oanda = window.OANDA_RATES;
+    if (!oanda) {
+      if (_checkCount > 3) {
+        _addAlert('oanda_missing', 'warn', 'OANDA_RATES',
+          'OANDA rates agent not loaded — forex signals blind');
+      }
+      return;
+    }
+    _resolve('oanda_missing');
+    try {
+      if (typeof oanda.isConnected === 'function' && !oanda.isConnected()) {
+        _addAlert('oanda_disconnected', 'warn', 'OANDA_RATES',
+          'OANDA rates disconnected — forex-fundamentals using stale prices');
+      } else {
+        _resolve('oanda_disconnected');
+      }
+      var st = oanda.status ? oanda.status() : {};
+      var lastUpdate = st.lastUpdate || st.lastPoll || 0;
+      if (lastUpdate && (_ts() - lastUpdate) > 5 * 60 * 1000) {
+        _addAlert('oanda_stale', 'warn', 'OANDA_RATES',
+          'OANDA rates stale — last update ' + Math.round((_ts() - lastUpdate) / 60000) + 'min ago');
+      } else {
+        _resolve('oanda_stale');
+      }
+    } catch (e) {}
+  }
+
+  /* ── CHECK: __IC events backend ─────────────────────────────────────────── */
+  /* All 26 GII geopolitical agents read exclusively from window.__IC.events.
+     If the IC backend stalls, all 26 agents go blind simultaneously — the only
+     visible symptom would be zero signals, which can be confused with "no events".
+     Alert early so the issue is visible in the manager panel.                  */
+  function _checkICBackend() {
+    var IC = window.__IC;
+    if (!IC) {
+      if (_checkCount > 3) {
+        _addAlert('ic_missing', 'error', '__IC',
+          '__IC pipeline not loaded — all 26 GII geopolitical agents have no data');
+      }
+      return;
+    }
+    _resolve('ic_missing');
+    try {
+      var events = IC.events || [];
+
+      /* Empty events array — backend may be offline or still seeding */
+      if (!events.length) {
+        if (_checkCount > 6) {   // allow 30s boot time before alarming
+          _addAlert('ic_empty', 'warn', '__IC',
+            '__IC.events empty — GII geopolitical agents have no intelligence data');
+        }
+      } else {
+        _resolve('ic_empty');
+      }
+
+      /* Newest event timestamp — if the newest event is >4h old, the feed has stalled */
+      if (events.length) {
+        var newestTs = 0;
+        for (var i = 0; i < events.length; i++) {
+          if ((events[i].ts || 0) > newestTs) newestTs = events[i].ts;
+        }
+        if (newestTs && (_ts() - newestTs) > 4 * 60 * 60 * 1000) {
+          _addAlert('ic_feed_stalled', 'warn', '__IC',
+            'Newest IC event is ' + Math.round((_ts() - newestTs) / 3600000) + 'h old — IC feed may be stalled');
+        } else {
+          _resolve('ic_feed_stalled');
+        }
+      }
+    } catch (e) {}
+  }
+
   /* ── MAIN POLL ──────────────────────────────────────────────────────────── */
   function _poll() {
     _lastCheck = _ts();
@@ -393,6 +509,9 @@
     _checkGIICore();
     _checkScalper();
     _checkPortfolioQuality();
+    _checkHLFeed();
+    _checkOANDA();
+    _checkICBackend();
   }
 
   /* ── PUBLIC API ─────────────────────────────────────────────────────────── */

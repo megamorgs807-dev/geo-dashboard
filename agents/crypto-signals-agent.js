@@ -119,12 +119,16 @@
   // ── funding rate fetch ────────────────────────────────────────────────────
 
   function _fetchFunding(callback) {
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
     fetch(HL_INFO_URL, {
       method  : 'POST',
       headers : { 'Content-Type': 'application/json' },
-      body    : JSON.stringify({ type: 'metaAndAssetCtxs' })
+      body    : JSON.stringify({ type: 'metaAndAssetCtxs' }),
+      signal  : ctrl.signal
     })
     .then(function (res) {
+      clearTimeout(tid);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     })
@@ -156,6 +160,7 @@
       if (callback) callback(null);
     })
     .catch(function (err) {
+      clearTimeout(tid);
       console.warn('[CryptoSig] Funding fetch failed — skipping funding signals:', err.message);
       if (callback) callback(err);
     });
@@ -164,8 +169,11 @@
   // ── Fear & Greed fetch ────────────────────────────────────────────────────
 
   function _fetchFearAndGreed() {
-    fetch(FNG_URL)
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(FNG_URL, { signal: ctrl.signal })
       .then(function (res) {
+        clearTimeout(tid);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
@@ -181,6 +189,7 @@
         console.log('[CryptoSig] Fear & Greed updated: ' + _fngValue + ' (' + _fngClassification + ')');
       })
       .catch(function (err) {
+        clearTimeout(tid);
         console.warn('[CryptoSig] Fear & Greed fetch failed:', err.message);
       });
   }

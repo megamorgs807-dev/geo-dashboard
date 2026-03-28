@@ -145,8 +145,10 @@
 
   /* ── Main poll ──────────────────────────────────────────────────────── */
   function _poll() {
-    fetch(BACKEND_URL + '/api/market')
-      .then(function (res) { return res.json(); })
+    var ctrl = new AbortController();
+    var tid  = setTimeout(function () { ctrl.abort(); }, 120000);
+    fetch(BACKEND_URL + '/api/market', { signal: ctrl.signal })
+      .then(function (res) { clearTimeout(tid); return res.json(); })
       .then(function (data) {
         var vix   = data.VIX   && data.VIX.price   ? parseFloat(data.VIX.price)   : null;
         var dxy   = data.DXY   && data.DXY.price   ? parseFloat(data.DXY.price)   : null;
@@ -185,7 +187,7 @@
 
         _renderBadge();
       })
-      .catch(function () { /* backend offline — keep last known regime */ });
+      .catch(function () { clearTimeout(tid); /* backend offline — keep last known regime */ });
   }
 
   /* ── Dashboard badge ─────────────────────────────────────────────────

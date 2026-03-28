@@ -137,12 +137,20 @@
     };
   }
 
-  /* Generic fetch wrapper — throws on non-2xx */
+  /* Generic fetch wrapper — throws on non-2xx.
+     Detects 401/403 immediately and marks broker disconnected — no need to wait
+     for the 5-min health-check poll to catch an expired or revoked key.         */
   async function _api(path, opts) {
     var url = _baseUrl() + path;
     var res = await fetch(url, Object.assign({ headers: _headers() }, opts || {}));
     if (!res.ok) {
       var txt = await res.text();
+      if (res.status === 401 || res.status === 403) {
+        _cfg.connected = false;
+        console.warn('[Alpaca] ⚠ Auth failure (' + res.status + ') — broker marked disconnected. ' +
+          'Check API key / secret and re-connect.', txt.substring(0, 100));
+        try { if (typeof renderCard === 'function') renderCard(); } catch(e) {}
+      }
       throw new Error('Alpaca ' + res.status + ': ' + txt.substring(0, 200));
     }
     return res.json();
@@ -150,7 +158,19 @@
 
   function _loadCfg() {
     try {
-      var saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+      /* Credentials are stored in sessionStorage (not localStorage) so they are not
+         accessible after the tab/browser closes — reduces XSS credential exposure.
+         Migration: if sessionStorage is empty, check localStorage once and migrate,
+         then delete the localStorage entry.                                         */
+      var raw = sessionStorage.getItem(STORE_KEY);
+      if (!raw) {
+        raw = localStorage.getItem(STORE_KEY);   // one-time migration from old storage
+        if (raw) {
+          sessionStorage.setItem(STORE_KEY, raw);
+          localStorage.removeItem(STORE_KEY);    // remove plaintext credentials from localStorage
+        }
+      }
+      var saved = JSON.parse(raw || '{}');
       if (saved.apiKey)                _cfg.apiKey    = saved.apiKey;
       if (saved.apiSecret)             _cfg.apiSecret = saved.apiSecret;
       if (saved.paper !== undefined)   _cfg.paper     = saved.paper;
@@ -159,7 +179,8 @@
   }
 
   function _saveCfg() {
-    localStorage.setItem(STORE_KEY, JSON.stringify({
+    /* Store in sessionStorage only — credentials expire when the tab closes. */
+    sessionStorage.setItem(STORE_KEY, JSON.stringify({
       apiKey:    _cfg.apiKey,
       apiSecret: _cfg.apiSecret,
       paper:     _cfg.paper

@@ -196,11 +196,19 @@
   /* ── Fill poll — polls /api/hl/positions until the trade appears ─────────── */
   function _pollFill(coin, side, onFill, onFail) {
     var POLL_MS    = 3000;
-    var TIMEOUT_MS = 30000;
+    var TIMEOUT_MS = 45000;   // extended from 30s — HL position confirmation can lag under load
     var started    = Date.now();
 
     function _check() {
-      if (Date.now() - started >= TIMEOUT_MS) { onFail('timeout'); return; }
+      if (Date.now() - started >= TIMEOUT_MS) {
+        /* Position confirmation timed out. The order MAY have gone through on HL
+           but the backend hasn't confirmed it yet. T1-A reconciliation will detect
+           any untracked HL positions on the next cycle and flag them for review. */
+        console.warn('[HLBroker] _pollFill timeout after ' + (TIMEOUT_MS / 1000) + 's for ' +
+          coin + ' ' + side + ' — calling onFail. T1-A reconciliation will catch any dangling position.');
+        onFail('timeout');
+        return;
+      }
       _get('/api/hl/positions')
         .then(function (data) {
           if (!data.ok) { setTimeout(_check, POLL_MS); return; }
