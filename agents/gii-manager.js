@@ -181,27 +181,37 @@
         _resolve('ee_dupes');
       }
 
-      /* Win rate on last 20 closed trades */
-      var closed = trades.filter(function (t) { return t.status === 'CLOSED'; }).slice(-20);
-      if (closed.length >= 10) {
-        var wins = closed.filter(function (t) { return (t.pnl_pct || 0) > 0; }).length;
-        var wr   = wins / closed.length;
+      /* Win rate on last 20 closed trades — session only */
+      var sessionTs = 0;
+      try {
+        var _sStart = localStorage.getItem('geodash_session_start_v1');
+        if (_sStart) sessionTs = new Date(_sStart).getTime();
+      } catch (e) {}
+      var sessionClosed = trades.filter(function (t) {
+        return t.status === 'CLOSED' &&
+               t.timestamp_close &&
+               new Date(t.timestamp_close).getTime() >= sessionTs;
+      }).slice(-20);
+      if (sessionClosed.length >= 10) {
+        var wins = sessionClosed.filter(function (t) { return (t.pnl_pct || 0) > 0; }).length;
+        var wr   = wins / sessionClosed.length;
         // At 2.5 R:R breakeven = 28.6%.
-        // Audit fix: old thresholds (28% error / 33% warn) were too low —
-        // 28% is already below breakeven, so the error fired too late.
         // New: warn at 35% (meaningful buffer above breakeven), error at 30%
         // (clearly in loss territory with no room for variance).
         if (wr < 0.30) {
           _addAlert('ee_winrate', 'error', 'EE',
-            'Win rate critically low: ' + Math.round(wr * 100) + '% on last ' + closed.length +
+            'Win rate critically low: ' + Math.round(wr * 100) + '% on last ' + sessionClosed.length +
             ' trades (breakeven: 29% at 2.5R — system is losing money)');
         } else if (wr < 0.35) {
           _addAlert('ee_winrate', 'warn', 'EE',
-            'Win rate below target: ' + Math.round(wr * 100) + '% on last ' + closed.length +
+            'Win rate below target: ' + Math.round(wr * 100) + '% on last ' + sessionClosed.length +
             ' trades (target: 35%+ for healthy margin above breakeven)');
         } else {
           _resolve('ee_winrate');
         }
+      } else {
+        // Not enough session trades to evaluate — clear any existing alert
+        _resolve('ee_winrate');
       }
 
       /* Escalation chain spam — check signal log for repeated reasons */

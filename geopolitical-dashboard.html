@@ -1977,6 +1977,12 @@
     .ee-mode-btn:hover { opacity:0.8; }
     .ee-toggle-btn        { font-size:9px; font-weight:700; letter-spacing:1px; padding:4px 12px; border:1px solid rgba(255,149,0,0.40); background:rgba(255,149,0,0.08); color:#ff9500; cursor:pointer; font-family:inherit; border-radius:2px; }
     .ee-toggle-btn.active { border-color:var(--green); background:rgba(40,192,96,0.12); color:var(--green); }
+    .ee-toggle-btn.live-danger {
+      background: rgba(255,68,68,0.18) !important;
+      border-color: rgba(255,68,68,0.7) !important;
+      color: #ff6b6b !important;
+      box-shadow: 0 0 8px rgba(255,68,68,0.3) !important;
+    }
     .ee-toggle-btn:hover  { opacity:0.8; }
 
     .ee-live-warning      { background:rgba(224,48,48,0.08); border:1px solid rgba(224,48,48,0.35); border-left:4px solid var(--red); padding:10px 14px; margin-bottom:16px; font-size:11px; color:var(--red); display:none; }
@@ -5217,17 +5223,17 @@
         <span class="ee-live-dot"></span>
         <div>
           <div class="ee-title">&#9889; Execution Engine</div>
-          <div class="ee-subtitle">Signal-driven trade automation &middot; Paper trading &middot; Venues: Hyperliquid &middot; Alpaca &middot; More coming</div>
+          <div class="ee-subtitle" id="eeSubtitle">Signal-driven trade automation &middot; Paper trading &middot; Venues: Hyperliquid &middot; Alpaca &middot; OANDA</div>
         </div>
       </div>
       <div class="ee-hdr-right">
         <span class="ee-badge" id="eeBadgeMode">SIMULATION</span>
         <span class="ee-badge" id="eeBadgeEnabled">AUTO OFF</span>
-        <span class="ee-badge" id="macroRegimeBadge" style="color:#555" title="Macro regime loading...">REGIME —</span>
-        <span class="ee-badge" id="optionsMarketBadge" style="color:#555" title="Options market loading...">OPT —</span>
-        <span class="ee-badge" id="cotBadge" style="color:#555" title="COT positioning loading...">COT —</span>
-        <span class="ee-badge" id="fundingRateBadge" style="color:#555" title="Funding rates loading...">FR —</span>
-        <span class="ee-badge" id="econCalBadge" style="color:#555" title="Economic calendar loading...">CAL —</span>
+        <span class="ee-badge" id="macroRegimeBadge" style="color:#555" title="Market Regime: Risk-On / Transitioning / Risk-Off — affects position sizing multiplier">REGIME —</span>
+        <span class="ee-badge" id="optionsMarketBadge" style="color:#555" title="Options Market Sentiment: Put/Call ratio and skew — loading...">OPT —</span>
+        <span class="ee-badge" id="cotBadge" style="color:#555" title="COT (Commitment of Traders): net positioning of institutional traders — loading...">COT —</span>
+        <span class="ee-badge" id="fundingRateBadge" style="color:#555" title="Funding Rate: crypto perp funding — positive = longs paying shorts, negative = shorts paying longs">FR —</span>
+        <span class="ee-badge" id="econCalBadge" style="color:#555" title="Economic Calendar: upcoming high-impact events — gates new trades within the configured window">CAL —</span>
         <span class="ee-badge" id="eeBadgeBalance">$10,000</span>
         <span class="ee-badge" id="eeBadgeOpen">0 OPEN</span>
         <span class="ee-badge" id="eeBadgePnl">+$0 P&amp;L</span>
@@ -5257,7 +5263,7 @@
         <div class="ee-cfg-field"><label>Max Open Trades</label> <input type="number" id="eeCfg_max_open_trades"    value="5"     min="1"   max="20"        step="1"></div>
         <div class="ee-cfg-field"><label>Max / Region</label>    <input type="number" id="eeCfg_max_per_region"     value="2"     min="1"   max="5"         step="1"></div>
         <div class="ee-cfg-field"><label>Max / Sector</label>    <input type="number" id="eeCfg_max_per_sector"     value="2"     min="1"   max="5"         step="1"></div>
-        <div class="ee-cfg-field"><label>Virtual Balance $</label><input type="number" id="eeCfg_virtual_balance"   value="10000" min="100" max="10000000"   step="100"></div>
+        <div class="ee-cfg-field" title="Auto-synced from connected brokers every 60s. Edit only to override manually."><label style="display:flex;align-items:center;gap:4px">Portfolio Balance $ <span id="eeBalanceSyncBadge" style="font-size:7px;padding:1px 5px;border-radius:8px;background:rgba(0,200,160,0.15);color:#00c8a0;border:1px solid rgba(0,200,160,0.3);font-weight:700;letter-spacing:0.3px">AUTO</span></label><input type="number" id="eeCfg_virtual_balance" value="10000" min="100" max="10000000" step="100" title="Auto-synced from broker equity. Edit to override."></div>
       </div>
 
       <!-- ── Advanced risk controls ─────────────────────────────────── -->
@@ -5290,15 +5296,13 @@
         <button class="ee-cfg-ghost" onclick="EE.softReset()" title="Close all open trades at market price — history and balance preserved" style="margin-right:4px">Soft Reset</button>
         <button class="ee-cfg-ghost" onclick="EE.accountReset()">Account Reset</button>
         <button class="ee-cfg-ghost" onclick="EE.clearHistory()">Clear History</button>
-        <button class="ee-cfg-ghost" style="color:#00c8a0;border-color:rgba(0,200,160,0.4)" onclick="EE.analyticsReset()">&#9654; New Session</button>
+        <button class="ee-cfg-ghost" style="color:#ff8c42;border-color:rgba(255,140,66,0.5);font-weight:700" onclick="EE.analyticsReset()" title="Wipe all history, stats and agent learning — risk settings are kept">&#9888; Full Reset</button>
         <button class="ee-cfg-ghost" style="color:#60a5fa;border-color:rgba(96,165,250,0.4)" onclick="EE.sessionReset()" title="Reset Balance / Unrealised / Realised / Session Returns display to now — trades and history untouched">&#8635; Reset Stats</button>
-        <button class="ee-cfg-ghost" style="color:#ff4444;border-color:rgba(255,68,68,0.4)" onclick="EE.fullReset()">&#9888; Full Reset</button>
+        <button class="ee-cfg-ghost" style="color:#00c8a0;border-color:rgba(0,200,160,0.4)" onclick="EE.syncBalance()" title="Re-fetch equity from all connected brokers and update the balance now">&#8635; Sync Balance</button>
+        <button class="ee-cfg-ghost" style="color:#ff4444;border-color:rgba(255,68,68,0.4)" onclick="EE.forceCloseAll()" title="Emergency: close ALL open positions immediately at market price">&#9940; Force Close All</button>
+        <button class="ee-cfg-ghost" style="color:#c084fc;border-color:rgba(192,132,252,0.4)" onclick="EE.resetICEngine()" title="Reset scaling engine: clear probation, smoke-alarm and agent feedback — use after a session reset">&#9881; Reset IC Engine</button>
         <button class="ee-cfg-ghost" onclick="EE.exportJSON()">&#8595; JSON</button>
         <button class="ee-cfg-ghost" onclick="EE.exportCSV()">&#8595; CSV</button>
-      </div>
-      <div style="margin-top:6px;font-size:11px;opacity:0.7">
-        Backups: <span id="eeBackupCount">—</span> saved &nbsp;
-        <button onclick="var b=EE.listBackups();console.table(b);alert(b.length+' backup(s). See browser console for details (F12).');" style="font-size:10px">View in Console</button>
       </div>
 
       <!-- Backend URL — locked to local backend -->
@@ -5313,6 +5317,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Daily loss limit gauge — rendered by renderPortfolioSummary -->
+    <div id="eeDailyLossGauge" style="padding:6px 14px 8px;border-bottom:1px solid var(--border)"></div>
 
     <!-- Data safety banner — shown until user has closed trades on record -->
     <div id="eeDataSafetyBanner" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(232,160,32,0.1);border:1px solid var(--amber);border-left:4px solid var(--amber);font-size:11px;line-height:1.6">
@@ -14479,8 +14486,8 @@ window._TT_BOOTSTRAP = {
     try {
       if (window.EE) {
         /* Balance */
-        var bal = typeof EE.balance === 'function' ? EE.balance() : null;
-        if (bal != null) cs('csBalance', '$' + bal.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}), null);
+        var bal = EE.getConfig ? EE.getConfig().virtual_balance : (typeof EE.balance === 'function' ? EE.balance() : null);
+        if (bal != null && bal > 0) cs('csBalance', '$' + bal.toLocaleString('en', {minimumFractionDigits: 0, maximumFractionDigits: 0}), null);
 
         /* Open trades */
         var open = EE.getOpenTrades ? EE.getOpenTrades() : [];

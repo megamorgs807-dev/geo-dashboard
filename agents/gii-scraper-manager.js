@@ -555,7 +555,7 @@
         reason: '🔍 Scraper spawned: ' + asset + ' (' + watchItem.hlTicker + ')' +
                 '  vol-spike=' + voltPct.toFixed(2) + '%' +
                 '  sector=' + watchItem.sector +
-                '  thresh=' + thresh.toFixed(1) + '% — monitoring for TA signals',
+                '  thresh=RSI' + thresh.rsiLong + '/' + thresh.rsiShort + ' — monitoring for TA signals',
         from:   'GII-SCRAPER-MGR'
       }]);
     }
@@ -786,6 +786,15 @@
 
       console.info('[SCRAPER MGR] Signal: ' + bestDir.toUpperCase() + ' ' +
         inst.asset + '  conf=' + conf + '  ' + reasons.join(' | '));
+
+      // Block short signals for crypto assets when Alpaca is the only covering venue (Alpaca is buy-only for spot crypto)
+      if (bestDir === 'short' && inst.sector === 'crypto' &&
+          window.AlpacaBroker && typeof AlpacaBroker.isConnected === 'function' && AlpacaBroker.isConnected() &&
+          typeof AlpacaBroker.covers === 'function' && AlpacaBroker.covers(inst.asset) &&
+          !(window.HLBroker && typeof HLBroker.isConnected === 'function' && HLBroker.isConnected())) {
+        console.info('[SCRAPER MGR] Skipping SHORT ' + inst.asset + ' — Alpaca is buy-only for spot crypto and HL is not connected');
+        return;
+      }
 
       // Submit through gii-entry confluence scoring if available, else direct to EE
       if (window.GII_AGENT_ENTRY && typeof GII_AGENT_ENTRY.submit === 'function') {

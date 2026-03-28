@@ -22,7 +22,8 @@
      All thresholds are conservative and tunable at runtime via GK.setConfig().  */
   var GK_CONFIG = {
     maxSignalsPerRegionPerBatch: 4,   // thundering-herd cap: max signals per region per cycle
-    maxSignalAgeMins:            5,   // hard-reject stale signals older than this
+    maxSignalAgeMins:            2,   // hard-reject stale signals older than this (tightened 5→2 min)
+    maxScalperAgeSecs:          45,   // scalper signals must be < 45s old (5m/15m timeframes)
     elevatedGTIThreshold:       70,   // intermediate GTI tier: elevated tension floor
     elevatedGTIMinConf:         72,   // min conf% required when GTI is elevated (70-79)
     extremeGTIThreshold:        80,   // GTI level that tightens the confidence floor further
@@ -88,6 +89,11 @@
   function _checkStaleness(sig) {
     if (!sig.timestamp || typeof sig.timestamp !== 'number') return null;
     var ageMs = Date.now() - sig.timestamp;
+    // Scalper signals use 5m/15m candles — tighter age limit (Smart Improvement 4)
+    var isScalper = (sig.source || '').toLowerCase().indexOf('scalp') !== -1;
+    if (isScalper && ageMs > GK_CONFIG.maxScalperAgeSecs * 1000) {
+      return 'Scalper signal stale — ' + Math.round(ageMs / 1000) + 's old (max ' + GK_CONFIG.maxScalperAgeSecs + 's)';
+    }
     if (ageMs > GK_CONFIG.maxSignalAgeMins * 60000) {
       return 'Stale — ' + Math.round(ageMs / 60000) + 'min old (max ' + GK_CONFIG.maxSignalAgeMins + 'min)';
     }

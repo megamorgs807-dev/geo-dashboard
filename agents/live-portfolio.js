@@ -77,18 +77,11 @@
   }
 
   function _totalEquityUsd() {
-    var fx  = _gbpUsd();
-    var tot = 0;
+    // EE.virtual_balance is kept in sync with the sum of all connected broker
+    // equities by _pollBrokerEquity (runs every 60s, first poll at 8s after load).
+    // Use it directly — adding individual broker balances on top would double-count.
     var cfg = _getCfg();
-    if (cfg.virtual_balance) tot += cfg.virtual_balance;
-    if (window.OANDABroker && OANDABroker.status().connected) {
-      var oSt = OANDABroker.status();
-      tot += (oSt.nav || 0) * fx;
-    }
-    if (window.AlpacaBroker && AlpacaBroker.status().connected) {
-      tot += AlpacaBroker.status().equity || 0;
-    }
-    return tot;
+    return cfg.virtual_balance || 0;
   }
 
   function _todayPnlUsd() {
@@ -270,7 +263,7 @@
 
     /* total equity */
     html += '<div style="background:rgba(0,255,136,0.06);border:1px solid rgba(0,255,136,0.2);border-radius:4px;padding:6px 8px">' +
-      '<div style="font-size:7px;color:var(--dim);margin-bottom:1px">TOTAL DEMO EQUITY</div>' +
+      '<div style="font-size:7px;color:var(--dim);margin-bottom:1px">' + ((window.EE && EE.getConfig && EE.getConfig().mode === 'LIVE') ? 'TOTAL LIVE EQUITY' : 'TOTAL DEMO EQUITY') + '</div>' +
       '<div style="font-size:14px;color:#00ff88;font-weight:bold">' + _fmtUsd(totalEq) + '</div>' +
       '<div style="font-size:7px;color:var(--dim)">USD equivalent</div>' +
       '</div>';
@@ -335,9 +328,15 @@
     var aSt  = window.AlpacaBroker ? AlpacaBroker.status() : {};
     var ttSt = window.TTBroker     ? TTBroker.status()     : {};
 
+    // If OANDA is connected but account cache not yet populated, trigger a fetch
+    // so subsequent renders (10s later) will have the real NAV value.
+    if (oSt.connected && oSt.nav == null && window.OANDABroker && OANDABroker.getAccount) {
+      OANDABroker.getAccount().catch(function () {});
+    }
+
     html += _brokerPill('OANDA', oSt.connected,
-      oSt.connected ? '£' + (oSt.nav || 0).toFixed(0) : 'Disconnected',
-      oSt.connected ? '≈$' + ((oSt.nav || 0) * fx).toFixed(0) : '');
+      oSt.connected ? (oSt.nav != null ? '£' + oSt.nav.toFixed(0) : 'Loading…') : 'Disconnected',
+      oSt.connected && oSt.nav != null ? '≈$' + (oSt.nav * fx).toFixed(0) : '');
 
     html += _brokerPill('Alpaca', aSt.connected,
       aSt.connected ? '$' + (aSt.equity || 0).toFixed(0) : 'Disconnected',

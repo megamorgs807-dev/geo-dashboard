@@ -651,6 +651,38 @@ async def api_cot():
     return JSONResponse(content=get_cot_cache())
 
 
+# ── EE Config sync (Smart Improvement 2) ─────────────────────────────────────
+# Stores the latest EE risk config so it survives localStorage wipes (e.g. Chrome crash).
+
+_EE_CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'ee_config_backup.json')
+_ee_config_cache: dict = {}
+
+# Load from disk on startup
+try:
+    with open(_EE_CONFIG_FILE) as f:
+        _ee_config_cache = json.load(f)
+except Exception:
+    pass
+
+@app.post('/api/config')
+async def config_save(request: Request):
+    """Save EE config to backend — called automatically when settings are updated."""
+    global _ee_config_cache
+    body = await request.json()
+    _ee_config_cache = body
+    try:
+        with open(_EE_CONFIG_FILE, 'w') as f:
+            json.dump(body, f, indent=2)
+    except Exception as e:
+        return JSONResponse(content={'ok': False, 'error': str(e)})
+    return JSONResponse(content={'ok': True})
+
+@app.get('/api/config')
+async def config_load():
+    """Return last saved EE config — used to restore settings after localStorage wipe."""
+    return JSONResponse(content=_ee_config_cache or {})
+
+
 # ── Trades API ────────────────────────────────────────────────────────────────
 
 @app.get('/api/trades')

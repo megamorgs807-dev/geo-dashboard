@@ -83,9 +83,8 @@
     'INDA':  { sector: 'em',      name: 'iShares India ETF' },
     'LIT':   { sector: 'energy',  name: 'Global X Lithium ETF' },
     'XME':   { sector: 'mining',  name: 'SPDR Metals & Mining ETF' },
-    /* GLD and SLV: previously on HL spot, now fallback here when HL unfunded */
-    'GLD':   { sector: 'commodity', name: 'SPDR Gold ETF' },
-    'SLV':   { sector: 'commodity', name: 'iShares Silver ETF' },
+    /* GLD and SLV intentionally NOT here — routed to OANDA as XAU_USD / XAG_USD
+       CFDs (leverage + short/long both available). Alpaca only offers long-only ETFs. */
     /* Note: SPY, QQQ, AAPL, TSLA, META, MSFT, AMZN, GOOGL, HOOD
              still on HL spot tokens → HL handles those when HLBroker funded. */
     /* ── Crypto — routed here when HLBroker is unavailable ──────────── */
