@@ -537,6 +537,7 @@
   var _stalePriceSymbols    = [];   // symbols with stale:true from backend (e.g. futures roll period)
   var _backendPriceInterval = null; // stored so a second _apiInit call can't create a duplicate interval
   var _sessionStart  = null; // ISO timestamp — set on init, reset on analyticsReset/fullReset
+  var _initTs        = Date.now(); // page-load time — used for broker startup grace period
   var _lastRegime    = null; // Fix #26: tracks last known MacroRegime to detect transitions
   var _priceFeedHealth = {}; // source → { ok: bool, lastOk: ms, lastFail: ms }
 
@@ -4454,7 +4455,14 @@
           liveWarn.style.borderColor   = 'rgba(255,68,68,0.5)';
           liveWarn.style.color         = '#ff8888';
         } else {
-          liveWarn.innerHTML = '&#9888; LIVE MODE &mdash; No brokers connected. Orders will be rejected until a broker is connected. Switch to SIMULATION to paper trade.';
+          // Grace period: brokers auto-reconnect asynchronously on startup.
+          // Don't show "No brokers connected" for the first 15s — show "connecting" instead.
+          var _sinceInit = Date.now() - _initTs;
+          if (_sinceInit < 15000) {
+            liveWarn.innerHTML = '&#8987; LIVE MODE &mdash; Brokers connecting&hellip; (' + Math.ceil((15000 - _sinceInit) / 1000) + 's)';
+          } else {
+            liveWarn.innerHTML = '&#9888; LIVE MODE &mdash; No brokers connected. Orders will be rejected until a broker is connected. Switch to SIMULATION to paper trade.';
+          }
           liveWarn.style.background  = '';
           liveWarn.style.borderColor = '';
           liveWarn.style.color       = '';
@@ -5944,6 +5952,14 @@
       // Clear closed trade history so Strategy Analytics resets too
       _trades = _trades.filter(function (t) { return t.status === 'OPEN'; });
       saveTrades();
+      // Also purge closed trades from the backend DB so they don't reload on next page refresh.
+      // Uses ?closed=true to preserve any OPEN trades in the DB.
+      if (_apiOnline) {
+        _apiFetch('/api/trades?closed=true', { method: 'DELETE' })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { log('CONFIG', 'Backend: ' + (d.deleted || 0) + ' closed trade(s) purged from DB', 'amber'); })
+          .catch(function () { log('CONFIG', 'Backend closed-trade purge failed — old trades may reappear on reload', 'amber'); });
+      }
       log('CONFIG', 'Stats reset: session counters and Strategy Analytics cleared. Balance $' +
           _cfg.virtual_balance.toFixed(2), 'amber');
       renderUI();

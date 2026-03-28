@@ -730,9 +730,13 @@ async def trades_delete(trade_id: str):
 
 
 @app.delete('/api/trades')
-async def trades_delete_all():
-    """Wipe all trade records — used by Full Reset in the dashboard."""
-    n = await asyncio.get_event_loop().run_in_executor(None, trades_store.delete_all)
+async def trades_delete_all(closed: bool = False):
+    """Wipe trade records. ?closed=true deletes only CLOSED trades (session reset);
+    without the flag, all records are deleted (full reset)."""
+    if closed:
+        n = await asyncio.get_event_loop().run_in_executor(None, trades_store.delete_closed)
+    else:
+        n = await asyncio.get_event_loop().run_in_executor(None, trades_store.delete_all)
     return JSONResponse(content={'ok': True, 'deleted': n})
 
 

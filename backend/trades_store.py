@@ -173,6 +173,15 @@ def delete_all() -> int:
             return cur.rowcount
 
 
+def delete_closed() -> int:
+    """Delete only CLOSED trades. OPEN trades are preserved."""
+    with _lock:
+        with _get_conn() as conn:
+            cur = conn.execute("DELETE FROM trades WHERE status != 'OPEN'")
+            conn.commit()
+            return cur.rowcount
+
+
 def count() -> int:
     with _lock:
         with _get_conn() as conn:
