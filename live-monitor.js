@@ -67,7 +67,8 @@
     m.ee.heartbeat    = window._eeLastMonitor || null;
     m.ee.heartbeatAge = m.ee.heartbeat ? (now - m.ee.heartbeat) : null;
     m.ee.fillLatency  = _safe(function(){ return EE.fillLatencyStats(); }, null);
-    m.ee.apiOnline    = _safe(function(){ return window._apiOnline; }, null);
+    /* _apiOnline is private inside the EE closure — read via the exposed method */
+    m.ee.apiOnline    = _safe(function(){ return EE.isBackendOnline(); }, null);
 
     /* Session P&L — read from status badge text */
     m.ee.sessionPnl = _safe(function(){

@@ -6056,6 +6056,9 @@
       }
     },
 
+    /* ── Backend connectivity status (readable from outside the closure) ── */
+    isBackendOnline: function () { return _apiOnline; },
+
     /* ── Toggle auto-execution on/off ── */
     toggleAuto: function () {
       _cfg.enabled = !_cfg.enabled;

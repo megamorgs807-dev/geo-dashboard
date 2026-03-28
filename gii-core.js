@@ -826,6 +826,29 @@
       });
     }
 
+    // Fallback 3: infer attribution from trade.reason string.
+    // Scalper signals bypass _portfolioDecision() so _giiTradeMap is never populated for them.
+    // Without this fallback, ALL scalper-sourced trades silently skip feedback, leaving
+    // gii_agent_feedback_v1 permanently empty despite hundreds of qualifying TP/SL closes.
+    if (!agentNames.length) {
+      var reason = (trade.reason || '').toLowerCase();
+      if (reason.indexOf('scalper') !== -1) {
+        agentNames = ['scalper'];
+        if (reason.indexOf('session') !== -1) agentNames.push('scalper-session');
+      } else if (reason.indexOf('gii') !== -1) {
+        // Generic GII-attributed trade: attribute to all agents that currently have a signal
+        // for this asset/bias so at least some feedback flows through the system
+        _lastSignals.forEach(function (s) {
+          if (s.asset === trade.asset && s._agentName &&
+              agentNames.indexOf(s._agentName) === -1) {
+            agentNames.push(s._agentName);
+          }
+        });
+        // If _lastSignals also empty (page reload etc.), use core agents as default attribution
+        if (!agentNames.length) agentNames = ['energy', 'conflict', 'macro'];
+      }
+    }
+
     if (!agentNames.length) return; // not a GII-originated trade
 
     // Normalise P&L — EE stores as pnl_usd; accept either field
