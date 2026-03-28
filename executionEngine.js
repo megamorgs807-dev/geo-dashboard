@@ -3427,9 +3427,17 @@
       var _asset = normaliseAsset(sig.asset);
       var _venue;
       /* HL venue requires BOTH a price feed AND a broker execution layer.
-         HLFeed provides prices only — without HLBroker, fall through to Alpaca. */
-      if (!_hlStale && window.HLFeed && HLFeed.covers(_asset) &&
-          window.HLBroker && typeof HLBroker.isConnected === 'function' && HLBroker.isConnected()) {
+         HLFeed provides prices only — without HLBroker, fall through to Alpaca.
+         In SIMULATION mode: accept HL as a venue even with $0 equity — no real orders
+         are sent, so the equity guard (which protects live execution) is unnecessary.
+         In LIVE mode: full isConnected() check including equity > 0 is required. */
+      var _hlReady = !_hlStale && window.HLFeed && HLFeed.covers(_asset) &&
+          window.HLBroker && typeof HLBroker.isConnected === 'function';
+      var _hlConnectedCheck = _hlReady && (
+          HLBroker.isConnected() ||
+          (_cfg.broker === 'SIMULATION' && HLBroker.status && HLBroker.status().connected)
+      );
+      if (_hlConnectedCheck) {
         _venue = 'HL';
       } else if (window.AlpacaBroker && AlpacaBroker.covers(_asset)) {
         // Alpaca spot crypto cannot be shorted (buy-only). Block crypto SHORTs only.
