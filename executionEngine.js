@@ -3631,20 +3631,33 @@
 
       var _asset = normaliseAsset(sig.asset);
       var _venue;
-      /* HL venue requires BOTH a price feed AND a broker execution layer.
-         HLFeed provides prices only — without HLBroker, fall through to Alpaca.
-         In SIMULATION mode: accept HL as a venue even with $0 equity — no real orders
-         are sent, so the equity guard (which protects live execution) is unnecessary.
-         In LIVE mode: full isConnected() check including equity > 0 is required. */
-      var _hlReady = !_hlStale && window.HLFeed && HLFeed.covers(_asset) &&
-          window.HLBroker && typeof HLBroker.isConnected === 'function' &&
-          HLBroker.covers(_asset);  // must be a tradeable HL perp, not just a feed asset
+      /* An asset is "HL-native" if BOTH the price feed and the broker list it.
+         HL-native assets must NEVER fall through to Alpaca / OANDA / TickTrader.
+         They either trade on HL or they are skipped.  This prevents the situation
+         where GLD (or any tokenised stock/ETF/commodity) opens on OANDA-FX and
+         immediately closes because OANDA cannot accept the instrument.
+         In SIMULATION mode: accept HL even with $0 equity — no real orders sent. */
+      var _isHLNative = !_hlStale &&
+          window.HLFeed  && typeof HLFeed.covers  === 'function' && HLFeed.covers(_asset) &&
+          window.HLBroker && typeof HLBroker.covers === 'function' && HLBroker.covers(_asset);
+      var _hlReady = _isHLNative && typeof HLBroker.isConnected === 'function';
       var _hlConnectedCheck = _hlReady && (
           HLBroker.isConnected() ||
           (_cfg.broker === 'SIMULATION' && HLBroker.status && HLBroker.status().connected)
       );
       if (_hlConnectedCheck) {
         _venue = 'HL';
+      } else if (_isHLNative) {
+        /* Asset is HL-only but HL is momentarily disconnected — skip, do not
+           misdirect to another broker. Throttled to once per asset per hour. */
+        var _hlSkipKey = 'HL_NOT_READY:' + _asset;
+        var _hlSkipLast = _noVenueThrottle[_hlSkipKey] || 0;
+        if (Date.now() - _hlSkipLast >= 3600000) {
+          _noVenueThrottle[_hlSkipKey] = Date.now();
+          _flagTrade(sig, 'HL not ready — ' + _asset + ' is HL-only. Will retry when reconnected.');
+          _logSignal(sig, 'SKIPPED', 'HL not ready: ' + _asset);
+        }
+        return;
       } else if (window.AlpacaBroker && AlpacaBroker.isConnected() && AlpacaBroker.covers(_asset)) {
         // Alpaca spot crypto cannot be shorted (buy-only). Block crypto SHORTs only.
         // Stock shorts are fine — Alpaca paper supports margin shorting for equities.
