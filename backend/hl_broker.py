@@ -120,9 +120,11 @@ def connect(wallet: str, private_key: str, testnet: bool = True) -> dict:
         state      = _info_post({'type': 'clearinghouseState', 'user': wallet})
         ms         = state.get('marginSummary', {})
         perp_eq    = float(ms.get('accountValue', 0))
-        spot_usdc  = _spot_usdc(wallet)
+        spot_usdc  = _spot_usdc(wallet)          # free (unheld) spot only
         equity     = perp_eq + spot_usdc
-        available  = float(state.get('withdrawable', 0)) + spot_usdc
+        # available = free margin for new positions = equity minus margin already in use
+        margin_used = float(ms.get('totalMarginUsed', 0))
+        available   = max(0.0, equity - margin_used)
         unrealised = float(ms.get('totalUnrealizedPnl', 0))
 
         # Build Exchange with patched spot_meta
@@ -153,13 +155,21 @@ def disconnect():
 
 
 def _spot_usdc(wallet: str = '') -> float:
-    """Return USDC balance in the spot account (separate from perp margin)."""
+    """Return FREE spot USDC not already pledged as perp collateral.
+
+    When spot USDC is used as cross-margin collateral, HL sets hold = total
+    and the same amount is already reflected in clearinghouseState.accountValue.
+    Adding the held amount again would double-count it.
+    Only the unheld (free) portion is genuinely separate from the perp equity.
+    """
     try:
         addr = wallet or _cfg.get('wallet', '')
         spot = _info_post({'type': 'spotClearinghouseState', 'user': addr})
         for b in spot.get('balances', []):
             if b.get('coin') == 'USDC':
-                return float(b.get('total', 0))
+                total = float(b.get('total', 0))
+                hold  = float(b.get('hold',  0))
+                return max(0.0, total - hold)  # only the free (unheld) portion
     except Exception:
         pass
     return 0.0
@@ -169,14 +179,17 @@ def get_account() -> dict:
     if not _cfg.get('wallet'):
         return {'ok': False, 'error': 'Not connected'}
     try:
-        state      = _info_post({'type': 'clearinghouseState', 'user': _cfg['wallet']})
-        ms         = state.get('marginSummary', {})
-        perp_eq    = float(ms.get('accountValue', 0))
-        spot_usdc  = _spot_usdc()
+        state       = _info_post({'type': 'clearinghouseState', 'user': _cfg['wallet']})
+        ms          = state.get('marginSummary', {})
+        perp_eq     = float(ms.get('accountValue', 0))
+        spot_usdc   = _spot_usdc()          # free (unheld) spot only
+        equity      = perp_eq + spot_usdc
+        margin_used = float(ms.get('totalMarginUsed', 0))
+        available   = max(0.0, equity - margin_used)
         return {
             'ok':        True,
-            'equity':    perp_eq + spot_usdc,
-            'available': float(state.get('withdrawable', 0)) + spot_usdc,
+            'equity':    equity,
+            'available': available,
             'unrealised': float(ms.get('totalUnrealizedPnl', 0)),
         }
     except Exception as e:
@@ -194,9 +207,12 @@ def place_order(coin: str, is_buy: bool, size_usd: float, leverage: int = 1) -> 
         if not price:
             return {'ok': False, 'error': f'No mid price for {coin}'}
 
-        # Cap order size to available balance (perp withdrawable + spot USDC)
-        state     = _info_post({'type': 'clearinghouseState', 'user': _cfg['wallet']})
-        available = float(state.get('withdrawable', 0)) + _spot_usdc()
+        # Cap order size to free margin (equity minus margin already in use)
+        state       = _info_post({'type': 'clearinghouseState', 'user': _cfg['wallet']})
+        ms_         = state.get('marginSummary', {})
+        equity_     = float(ms_.get('accountValue', 0)) + _spot_usdc()
+        margin_used_= float(ms_.get('totalMarginUsed', 0))
+        available   = max(0.0, equity_ - margin_used_)
         lev       = min(max(int(leverage), 1), 50)
         max_notional = available * lev * 0.95  # 5% buffer for fees/slippage
         if max_notional <= 0:
