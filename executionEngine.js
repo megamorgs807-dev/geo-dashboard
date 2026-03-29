@@ -3576,7 +3576,7 @@
       );
     }
 
-    if (window.AlpacaBroker && AlpacaBroker.isConnected()) {
+    if (window.AlpacaBroker && AlpacaBroker.isConnected() && !AlpacaBroker.isPaper()) {
       checks.push(
         AlpacaBroker.getAccount().then(function (acct) {
           var eq = parseFloat(acct.equity || acct.portfolio_value || 0);
@@ -3585,7 +3585,7 @@
       );
     }
 
-    if (window.OANDABroker && OANDABroker.isConnected()) {
+    if (window.OANDABroker && OANDABroker.isConnected() && !OANDABroker.isDemo()) {
       checks.push(
         OANDABroker.getAccount().then(function (acct) {
           var nav = acct && parseFloat(acct.nav || 0);
