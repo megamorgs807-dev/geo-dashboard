@@ -106,12 +106,19 @@
     'ZRO':      ['ZRO'],
     'BLUR':     ['BLUR'],
     'GMX':      ['GMX'],
+    /* Additional active perps on HL — confirmed live (Mar 2026) */
+    'TRUMP':    ['TRUMP'],
+    'WLD':      ['WLD'],
+    'ENA':      ['ENA'],
+    'EIGEN':    ['EIGEN'],
+    'PYTH':     ['PYTH'],
+    'CRV':      ['CRV'],
 
     /* Commodity perps — confirmed live on HL (Mar 2026)
        NOTE: WTI and BRENTOIL crude perps were DELISTED from HL.
        Only natural gas remains. HL allMids key = 'GAS' (not 'NATGAS'). */
     'GAS':      ['GAS', 'NATGAS'],        // Natural gas perp (allMids key = 'GAS')
-    'PAXG':     ['PAXG'],                 // PAX Gold — gold-backed token on HL
+    'PAXG':     ['PAXG', 'XAU', 'GOLD'],  // PAX Gold — gold-backed token on HL; XAU/GOLD aliases
 
     /* Spot equity/ETF tokens — @N pair-index, full USD price (Mar 2026 spotMeta)
        Prices ~10-20% of real stock price on some tokens due to oracle/synthetic
@@ -165,7 +172,7 @@
     'MSFT':    'equity',
     'SLV':     'precious','SILVER':  'precious','XAG': 'precious',
     'GLD':     'precious',
-    'PAXG':    'precious',
+    'PAXG':    'precious', 'XAU': 'precious', 'GOLD': 'precious',
     /* Energy commodity perps (only GAS/NATGAS remain on HL — WTI/BRENT delisted) */
     'GAS':     'energy',  'NATGAS': 'energy',
     /* Extended crypto perps */
@@ -185,7 +192,9 @@
     'JUP':     'crypto',  'ENS':    'crypto',  'MKR':    'crypto',
     'COMP':    'crypto',  'SNX':    'crypto',  'LDO':    'crypto',
     'ZRO':     'crypto',  'BLUR':   'crypto',  'GMX':    'crypto',
-    'kPEPE':   'crypto',  'kBONK':  'crypto',  'kFLOKI': 'crypto', 'kSHIB': 'crypto'
+    'kPEPE':   'crypto',  'kBONK':  'crypto',  'kFLOKI': 'crypto', 'kSHIB': 'crypto',
+    'TRUMP':   'crypto',  'WLD':    'crypto',  'ENA':    'crypto',
+    'EIGEN':   'crypto',  'PYTH':   'crypto',  'CRV':    'crypto'
   };
 
   /* ── Build static coverage set and reverse-map at init ─────────────────────

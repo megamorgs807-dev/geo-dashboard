@@ -100,6 +100,27 @@
     'XAG':       { name: 'Silver token', hlCoin: '@265' },
     'HOOD':      { name: 'Robinhood token', hlCoin: '@271' },
     'CRCL':      { name: 'Circle token',    hlCoin: '@263' },
+    /* ── k-prefix meme aliases (HL uses kPEPE/kBONK/kFLOKI/kSHIB tickers) ─ */
+    'kPEPE':     { name: 'Pepe',     hlCoin: 'PEPE'  },
+    'kBONK':     { name: 'Bonk',     hlCoin: 'BONK'  },
+    'FLOKI':     { name: 'Floki',    hlCoin: 'FLOKI' },
+    'kFLOKI':    { name: 'Floki',    hlCoin: 'FLOKI' },
+    'SHIB':      { name: 'Shiba Inu',hlCoin: 'SHIB'  },
+    'kSHIB':     { name: 'Shiba Inu',hlCoin: 'SHIB'  },
+    /* ── Additional active HL perps ──────────────────────────────────────── */
+    'FIL':       { name: 'Filecoin' },
+    'FET':       { name: 'Fetch.ai' },
+    'IMX':       { name: 'Immutable X' },
+    'SAND':      { name: 'The Sandbox' },
+    'ALGO':      { name: 'Algorand' },
+    'XLM':       { name: 'Stellar' },
+    'HBAR':      { name: 'Hedera' },
+    'ETC':       { name: 'Ethereum Classic' },
+    'PENDLE':    { name: 'Pendle' },
+    'ENS':       { name: 'Ethereum Name Service' },
+    'LDO':       { name: 'Lido DAO' },
+    'ZRO':       { name: 'LayerZero' },
+    'BLUR':      { name: 'Blur' },
   };
 
   /* Maps dashboard asset names to the actual HL coin ticker for order placement */
