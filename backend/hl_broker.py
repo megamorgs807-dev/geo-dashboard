@@ -104,9 +104,10 @@ def connect(wallet: str, private_key: str, testnet: bool = True) -> dict:
         # Verify connection with a direct account state fetch
         state      = _info_post({'type': 'clearinghouseState', 'user': wallet})
         ms         = state.get('marginSummary', {})
-        # accountValue already reflects spot USDC as collateral (HL unified account)
-        equity     = float(ms.get('accountValue', 0))
-        available  = float(state.get('withdrawable', 0))
+        perp_eq    = float(ms.get('accountValue', 0))
+        spot_usdc  = _spot_usdc(wallet)
+        equity     = perp_eq + spot_usdc
+        available  = float(state.get('withdrawable', 0)) + spot_usdc
         unrealised = float(ms.get('totalUnrealizedPnl', 0))
 
         # Build Exchange with patched spot_meta
@@ -135,6 +136,18 @@ def disconnect():
     _cfg['connected'] = False
 
 
+def _spot_usdc(wallet: str = '') -> float:
+    """Return USDC balance in the spot account (separate from perp margin)."""
+    try:
+        addr = wallet or _cfg.get('wallet', '')
+        spot = _info_post({'type': 'spotClearinghouseState', 'user': addr})
+        for b in spot.get('balances', []):
+            if b.get('coin') == 'USDC':
+                return float(b.get('total', 0))
+    except Exception:
+        pass
+    return 0.0
+
 
 def get_account() -> dict:
     if not _cfg.get('wallet'):
@@ -142,11 +155,12 @@ def get_account() -> dict:
     try:
         state      = _info_post({'type': 'clearinghouseState', 'user': _cfg['wallet']})
         ms         = state.get('marginSummary', {})
-        # accountValue already reflects spot USDC as collateral (HL unified account)
+        perp_eq    = float(ms.get('accountValue', 0))
+        spot_usdc  = _spot_usdc()
         return {
             'ok':        True,
-            'equity':    float(ms.get('accountValue', 0)),
-            'available': float(state.get('withdrawable', 0)),
+            'equity':    perp_eq + spot_usdc,
+            'available': float(state.get('withdrawable', 0)) + spot_usdc,
             'unrealised': float(ms.get('totalUnrealizedPnl', 0)),
         }
     except Exception as e:
