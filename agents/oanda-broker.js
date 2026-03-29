@@ -87,6 +87,14 @@
   var _acctFetchTs = 0;
   var ACCT_TTL_MS  = 30000;  // refresh account every 30s max
 
+  /* GBP→USD rate: use live OANDA_RATES feed if available, else fallback */
+  function _gbpUsd() {
+    try {
+      var r = window.OANDA_RATES && OANDA_RATES.getRate ? OANDA_RATES.getRate('GBPUSD') : null;
+      return (r && r > 0) ? r : 1.27;
+    } catch (e) { return 1.27; }
+  }
+
   /* ── Helpers: share token from OANDA_RATES ─────────────────────────────── */
 
   function _isRatesConnected() {
@@ -173,9 +181,10 @@
     var isDemo = cfg.demo !== false;
 
     if (connected) {
-      var nav = _acctCache ? '$' + _acctCache.nav.toFixed(2) : '—';
+      var fx  = _gbpUsd();
+      var nav = _acctCache ? '$' + (_acctCache.nav * fx).toFixed(2) : '—';
       var pl  = _acctCache ? (_acctCache.unrealizedPL >= 0 ? '+' : '') +
-                             '$' + _acctCache.unrealizedPL.toFixed(2) : '—';
+                             '$' + (_acctCache.unrealizedPL * fx).toFixed(2) : '—';
       var plColor = _acctCache ? (_acctCache.unrealizedPL >= 0 ? '#00e676' : '#ff5252') : '#aaa';
 
       card.innerHTML =
@@ -420,11 +429,13 @@
           console.log('[OANDA] No open positions');
           return;
         }
+        var _fx = _gbpUsd();
         positions.forEach(function (p) {
-          var side = parseFloat(p.long.units) > 0 ? 'LONG' : 'SHORT';
-          var pl   = parseFloat(p.unrealizedPL);
+          var side  = parseFloat(p.long.units) > 0 ? 'LONG' : 'SHORT';
+          var plGbp = parseFloat(p.unrealizedPL);
+          var plUsd = plGbp * _fx;
           console.log('[OANDA POSITION]', p.instrument, side,
-            'P/L: ' + (pl >= 0 ? '+' : '') + pl.toFixed(2));
+            'P/L: $' + (plUsd >= 0 ? '+' : '') + plUsd.toFixed(2) + ' (£' + plGbp.toFixed(2) + ')');
         });
       } catch (e) {
         console.warn('[OANDA] Positions fetch failed:', e.message);
