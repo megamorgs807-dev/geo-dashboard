@@ -62,10 +62,27 @@
     'COMP':      { name: 'Compound' },
     'INJ':       { name: 'Injective' },
     'RUNE':      { name: 'THORChain' },
+    'LDO':       { name: 'Lido DAO' },
+    'PENDLE':    { name: 'Pendle' },
+    'ZRO':       { name: 'LayerZero' },
+    'BLUR':      { name: 'Blur' },
+    /* ── Layer 1 extended ────────────────────────────────────────────── */
+    'ALGO':      { name: 'Algorand' },
+    'XLM':       { name: 'Stellar' },
+    'HBAR':      { name: 'Hedera' },
+    'FIL':       { name: 'Filecoin' },
+    'ETC':       { name: 'Ethereum Classic' },
+    /* ── Gaming / metaverse ──────────────────────────────────────────── */
+    'SAND':      { name: 'The Sandbox' },
+    'IMX':       { name: 'Immutable X' },
+    /* ── AI / infra extended ─────────────────────────────────────────── */
+    'FET':       { name: 'Fetch.ai' },
     /* ── Memes / trending ────────────────────────────────────────────── */
     'WIF':       { name: 'dogwifhat' },
     'PEPE':      { name: 'Pepe' },
     'BONK':      { name: 'Bonk' },
+    'FLOKI':     { name: 'FLOKI' },
+    'SHIB':      { name: 'Shiba Inu' },
     'TRUMP':     { name: 'TRUMP' },
     'WLD':       { name: 'Worldcoin' },
     'HYPE':      { name: 'Hyperliquid' },
@@ -78,6 +95,7 @@
     'TIA':       { name: 'Celestia' },
     'PYTH':      { name: 'Pyth Network' },
     'JUP':       { name: 'Jupiter' },
+    'ENS':       { name: 'Ethereum Name Service' },
     /* ── Commodities ─────────────────────────────────────────────────── */
     'GAS':       { name: 'Natural Gas', hlCoin: 'GAS' },
     'NATGAS':    { name: 'Natural Gas', hlCoin: 'GAS' },  // alias → GAS on HL

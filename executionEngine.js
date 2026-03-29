@@ -139,8 +139,21 @@
     'XAU':'precious', 'GLD':'precious', 'SLV':'precious', 'SILVER':'precious',
     /* Defense — not on HL spot (flagged) */
     'XAR':'defense',  'LMT':'defense',  'RTX':'defense',  'NOC':'defense',
-    /* Crypto perps */
+    /* Crypto perps — all HL-covered assets */
     'BTC':'crypto',   'ETH':'crypto',   'SOL':'crypto',   'BNB':'crypto',   'ADA':'crypto',
+    'DOGE':'crypto',  'AVAX':'crypto',  'DOT':'crypto',   'LINK':'crypto',  'LTC':'crypto',
+    'UNI':'crypto',   'AAVE':'crypto',  'INJ':'crypto',   'SUI':'crypto',   'APT':'crypto',
+    'TIA':'crypto',   'TON':'crypto',   'NEAR':'crypto',  'FIL':'crypto',   'ARB':'crypto',
+    'OP':'crypto',    'ATOM':'crypto',  'HYPE':'crypto',  'WIF':'crypto',   'PEPE':'crypto',
+    'BONK':'crypto',  'FLOKI':'crypto', 'SHIB':'crypto',  'TAO':'crypto',   'RENDER':'crypto',
+    'FET':'crypto',   'IMX':'crypto',   'SAND':'crypto',  'ALGO':'crypto',  'XLM':'crypto',
+    'HBAR':'crypto',  'ICP':'crypto',   'ETC':'crypto',   'BCH':'crypto',   'TRX':'crypto',
+    'SEI':'crypto',   'RUNE':'crypto',  'ONDO':'crypto',  'PENDLE':'crypto','JUP':'crypto',
+    'ENS':'crypto',   'MKR':'crypto',   'COMP':'crypto',  'SNX':'crypto',   'LDO':'crypto',
+    'ZRO':'crypto',   'BLUR':'crypto',  'GMX':'crypto',   'TRUMP':'crypto', 'WLD':'crypto',
+    'ENA':'crypto',   'EIGEN':'crypto', 'PYTH':'crypto',  'CRV':'crypto',
+    'kPEPE':'crypto', 'kBONK':'crypto', 'kFLOKI':'crypto','kSHIB':'crypto',
+    'PAXG':'precious','XAG':'precious',
     /* HL spot equity tokens */
     'TSLA':'equity',  'AAPL':'equity',  'AMZN':'equity',  'META':'equity',
     'QQQ':'equity',   'MSFT':'equity',  'GOOGL':'equity', 'HOOD':'equity',
@@ -357,12 +370,32 @@
     'VIX':  'VXX'   // volatility index → tradeable VIX ETN
   };
 
+  /* ── Known no-venue assets — silenced at pipeline entry ─────────────────────
+     These assets generate signals from IC/GII agents but are not available on
+     Hyperliquid, Alpaca, OANDA, or TickTrader. Without this early filter they
+     burn a pipeline slot every hour (throttled flag) and add noise to the log.
+     WTI/BRENT crude perps were delisted from HL in Mar 2026.
+     Defense stocks (LMT, RTX, NOC), semis (NVDA, TSM, ASML), and various ETFs
+     have no HL spot token and no other connected broker.
+     Add assets here — not to ASSET_REMAP — when there is truly no tradeable proxy.
+     The flag panel will still show them but only once ever (vs once per hour).    */
+  var NO_VENUE_ASSETS = {
+    'WTI':true,  'BRENT':true, 'BRENTOIL':true, 'CRUDE':true, 'OIL':true,
+    'LMT':true,  'RTX':true,   'NOC':true,  'XAR':true,
+    'NVDA':true, 'TSM':true,   'ASML':true, 'SMH':true,  'SOXX':true,
+    'XLE':true,  'XOM':true,   'GDX':true,  'GD':true,   'BA':true,
+    'TLT':true,  'CORN':true,  'WEAT':true, 'WHEAT':true, 'WHT':true,
+    'DAL':true,  'UAL':true,   'DIA':true,  'EEM':true,  'FXI':true,
+    'AMD':true,  'INDA':true,  'LIT':true,  'COPX':true, 'XME':true,
+    'URA':true,  'EWZ':true,   'EWJ':true,  'SOYB':true,
+  };
+
   /* ── Correlation groups — assets within each group are treated as equivalent
      exposure. Only ONE asset per group (in the same direction) can be open at
      a time. Prevents doubling up on WTI + BRENT, BTC + ETH, etc.              */
   var CORR_GROUPS = [
     ['WTI',  'BRENT', 'XLE', 'XOM'],    // oil / energy
-    ['GLD',  'XAU'],                     // gold
+    ['GLD',  'XAU',  'PAXG', 'GOLD'],   // gold (all gold instruments treated as one exposure)
     ['BTC',  'ETH',  'SOL'],            // crypto
     ['LMT',  'RTX',  'NOC',  'XAR'],   // defense
     ['TSM',  'NVDA', 'SMH',  'ASML'],  // semis
@@ -3525,6 +3558,22 @@
         var remapped = ASSET_REMAP[normaliseAsset(sig.asset)];
         log('SYSTEM', sig.asset + ' remapped → ' + remapped + ' (untradeable asset replaced with proxy)', 'dim');
         sig = Object.assign({}, sig, { asset: remapped });
+      }
+
+      // Dead-signal pre-filter: assets known to have no venue at all are dropped
+      // immediately to avoid burning pipeline slots and throttle windows.
+      // These never have any connected broker and can never be traded.
+      // Still flag them on first-ever encounter (not hourly) so the flag panel
+      // captures them for context, but they skip all further pipeline stages.
+      if (sig.asset && NO_VENUE_ASSETS[normaliseAsset(sig.asset)]) {
+        var _dvKey = 'NO_VENUE_EVER:' + normaliseAsset(sig.asset);
+        if (!_noVenueThrottle[_dvKey]) {
+          _noVenueThrottle[_dvKey] = Date.now();
+          _flagTrade(sig, 'No venue (pre-filtered) — ' + normaliseAsset(sig.asset) +
+            ' has no broker integration. Add to ASSET_REMAP to proxy or integrate a broker.');
+          _logSignal(sig, 'SKIPPED', 'No venue pre-filter: ' + sig.asset);
+        }
+        return;
       }
 
       // Stop enrichment: if signal doesn't have stopPct/tpRatio (e.g. scalper, momentum,

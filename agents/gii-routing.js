@@ -153,6 +153,27 @@
     'JUP':    { hlAsset: 'JUP',   sector: 'crypto',   maxLev: 3 },
     'MKR':    { hlAsset: 'MKR',   sector: 'crypto',   maxLev: 3 },
     'PAXG':   { hlAsset: 'PAXG',  sector: 'precious', maxLev: 2 },
+    /* Extended HL crypto perps — synced from hl-feed.js HL_MAP (Mar 2026) */
+    'ALGO':   { hlAsset: 'ALGO',  sector: 'crypto',   maxLev: 3 },
+    'XLM':    { hlAsset: 'XLM',   sector: 'crypto',   maxLev: 3 },
+    'FIL':    { hlAsset: 'FIL',   sector: 'crypto',   maxLev: 3 },
+    'TRX':    { hlAsset: 'TRX',   sector: 'crypto',   maxLev: 3 },
+    'PENDLE': { hlAsset: 'PENDLE',sector: 'crypto',   maxLev: 3 },
+    'ZRO':    { hlAsset: 'ZRO',   sector: 'crypto',   maxLev: 3 },
+    'BLUR':   { hlAsset: 'BLUR',  sector: 'crypto',   maxLev: 2 },
+    'ENS':    { hlAsset: 'ENS',   sector: 'crypto',   maxLev: 3 },
+    'LDO':    { hlAsset: 'LDO',   sector: 'crypto',   maxLev: 3 },
+    'SAND':   { hlAsset: 'SAND',  sector: 'crypto',   maxLev: 3 },
+    'FLOKI':  { hlAsset: 'FLOKI', sector: 'crypto',   maxLev: 2 },
+    'SHIB':   { hlAsset: 'SHIB',  sector: 'crypto',   maxLev: 2 },
+    'WLD':    { hlAsset: 'WLD',   sector: 'crypto',   maxLev: 3 },
+    'TRUMP':  { hlAsset: 'TRUMP', sector: 'crypto',   maxLev: 2 },
+    'ENA':    { hlAsset: 'ENA',   sector: 'crypto',   maxLev: 3 },
+    'EIGEN':  { hlAsset: 'EIGEN', sector: 'crypto',   maxLev: 3 },
+    'PYTH':   { hlAsset: 'PYTH',  sector: 'crypto',   maxLev: 3 },
+    'CRV':    { hlAsset: 'CRV',   sector: 'crypto',   maxLev: 3 },
+    'SNX':    { hlAsset: 'SNX',   sector: 'crypto',   maxLev: 3 },
+    'GMX':    { hlAsset: 'GMX',   sector: 'crypto',   maxLev: 3 },
     /* FX pairs — routed via OANDA when connected */
     'EURUSD': { hlAsset: null, oandaInstrument: 'EUR_USD', sector: 'fx', maxLev: 10 },
     'GBPUSD': { hlAsset: null, oandaInstrument: 'GBP_USD', sector: 'fx', maxLev: 10 },
@@ -518,7 +539,16 @@
     if (finalLev > 1) _stats.leveraged++;
     if (remapAsset)   _stats.remapped++;
 
-    if (!useHL) return sig;
+    var bestEV = bestHLRow ? bestHLRow.evPerRisk : (tradRow ? tradRow.evPerRisk : null);
+
+    if (!useHL) {
+      /* Attach best-available EV so EE can apply the EV gate even for TRAD path */
+      if (bestEV !== null) {
+        var sigWithEV = Object.assign({}, sig, { _ev: bestEV });
+        return sigWithEV;
+      }
+      return sig;
+    }
 
     /* ── Build routing note ─────────────────────────────────────────────────── */
     var parts = [];
@@ -539,6 +569,7 @@
     if (remapAsset)   { routed.asset = hlAsset; routed.original_asset = sig.asset; }
     if (finalLev > 1) { routed.stopPct = finalSLPct; routed.leverage = finalLev; }
     routed.reason = (sig.reason ? sig.reason + ' | ' : '') + 'GII-ROUTING: ' + parts.join(' | ');
+    if (bestEV !== null) routed._ev = bestEV;
     return routed;
   }
 
