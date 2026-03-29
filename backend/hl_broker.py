@@ -178,8 +178,17 @@ def place_order(coin: str, is_buy: bool, size_usd: float, leverage: int = 1) -> 
         if not price:
             return {'ok': False, 'error': f'No mid price for {coin}'}
 
+        # Cap order size to available balance (perp withdrawable + spot USDC)
+        state     = _info_post({'type': 'clearinghouseState', 'user': _cfg['wallet']})
+        available = float(state.get('withdrawable', 0)) + _spot_usdc()
+        lev       = min(max(int(leverage), 1), 50)
+        max_notional = available * lev * 0.95  # 5% buffer for fees/slippage
+        if max_notional <= 0:
+            return {'ok': False, 'error': f'Insufficient balance: ${available:.2f} available'}
+        if size_usd > max_notional:
+            size_usd = round(max_notional, 2)
+
         # Set leverage (cross-margin) before placing order
-        lev = min(max(int(leverage), 1), 50)
         if lev > 1:
             try:
                 _exchange.update_leverage(lev, coin, is_cross=True)
@@ -195,9 +204,15 @@ def place_order(coin: str, is_buy: bool, size_usd: float, leverage: int = 1) -> 
 
         if result and result.get('status') == 'ok':
             statuses = (result.get('response', {}).get('data', {}) or {}).get('statuses', [])
-            filled   = (statuses[0] if statuses else {}).get('filled', {})
-            fill_px  = float(filled.get('avgPx', price))
-            fill_sz  = float(filled.get('totalSz', sz))
+            first    = statuses[0] if statuses else {}
+            # Check for order-level error (e.g. insufficient margin, bad size)
+            if 'error' in first:
+                return {'ok': False, 'error': first['error']}
+            filled  = first.get('filled', {})
+            fill_px = float(filled.get('avgPx') or 0)
+            fill_sz = float(filled.get('totalSz') or 0)
+            if fill_px <= 0 or fill_sz <= 0:
+                return {'ok': False, 'error': f'Order not filled — HL response: {first}'}
             return {
                 'ok':        True,
                 'fillPrice': fill_px,
