@@ -83,10 +83,10 @@
     /* Crypto perps */
     'BTC':    { hlAsset: 'BTC',    sector: 'crypto',   maxLev: 3 },
     'ETH':    { hlAsset: 'ETH',    sector: 'crypto',   maxLev: 3 },
-    'SOL':    { hlAsset: 'SOL',    sector: 'crypto',   maxLev: 2 },
-    'XRP':    { hlAsset: 'XRP',    sector: 'crypto',   maxLev: 2 },
-    'BNB':    { hlAsset: 'BNB',    sector: 'crypto',   maxLev: 2 },
-    'ADA':    { hlAsset: 'ADA',    sector: 'crypto',   maxLev: 2 },
+    'SOL':    { hlAsset: 'SOL',    sector: 'crypto',   maxLev: 3 },
+    'XRP':    { hlAsset: 'XRP',    sector: 'crypto',   maxLev: 3 },
+    'BNB':    { hlAsset: 'BNB',    sector: 'crypto',   maxLev: 3 },
+    'ADA':    { hlAsset: 'ADA',    sector: 'crypto',   maxLev: 3 },
     /* HL spot equity tokens (full USD price, @263-@289) */
     'CRCL':   { hlAsset: 'CRCL',   sector: 'equity',   maxLev: 2 },
     'TSLA':   { hlAsset: 'TSLA',   sector: 'equity',   maxLev: 2 },
@@ -119,39 +119,39 @@
     'LIT':    { hlAsset: 'LIT',   sector: 'energy',   maxLev: 2 },
     'XME':    { hlAsset: 'XME',   sector: 'mining',   maxLev: 2 },
     /* Extended HL crypto perps — added from full 229 asset list */
-    'DOGE':   { hlAsset: 'DOGE',  sector: 'crypto',   maxLev: 2 },
-    'AVAX':   { hlAsset: 'AVAX',  sector: 'crypto',   maxLev: 2 },
-    'DOT':    { hlAsset: 'DOT',   sector: 'crypto',   maxLev: 2 },
-    'LINK':   { hlAsset: 'LINK',  sector: 'crypto',   maxLev: 2 },
-    'LTC':    { hlAsset: 'LTC',   sector: 'crypto',   maxLev: 2 },
-    'UNI':    { hlAsset: 'UNI',   sector: 'crypto',   maxLev: 2 },
-    'AAVE':   { hlAsset: 'AAVE',  sector: 'crypto',   maxLev: 2 },
-    'INJ':    { hlAsset: 'INJ',   sector: 'crypto',   maxLev: 2 },
-    'SUI':    { hlAsset: 'SUI',   sector: 'crypto',   maxLev: 2 },
-    'APT':    { hlAsset: 'APT',   sector: 'crypto',   maxLev: 2 },
-    'TIA':    { hlAsset: 'TIA',   sector: 'crypto',   maxLev: 2 },
-    'TON':    { hlAsset: 'TON',   sector: 'crypto',   maxLev: 2 },
-    'NEAR':   { hlAsset: 'NEAR',  sector: 'crypto',   maxLev: 2 },
-    'ARB':    { hlAsset: 'ARB',   sector: 'crypto',   maxLev: 2 },
-    'OP':     { hlAsset: 'OP',    sector: 'crypto',   maxLev: 2 },
-    'ATOM':   { hlAsset: 'ATOM',  sector: 'crypto',   maxLev: 2 },
-    'HYPE':   { hlAsset: 'HYPE',  sector: 'crypto',   maxLev: 2 },
-    'WIF':    { hlAsset: 'WIF',   sector: 'crypto',   maxLev: 2 },
-    'PEPE':   { hlAsset: 'PEPE',  sector: 'crypto',   maxLev: 1 },
-    'BONK':   { hlAsset: 'BONK',  sector: 'crypto',   maxLev: 1 },
-    'TAO':    { hlAsset: 'TAO',   sector: 'crypto',   maxLev: 2 },
-    'RENDER': { hlAsset: 'RENDER',sector: 'crypto',   maxLev: 2 },
-    'FET':    { hlAsset: 'FET',   sector: 'crypto',   maxLev: 2 },
-    'IMX':    { hlAsset: 'IMX',   sector: 'crypto',   maxLev: 2 },
-    'HBAR':   { hlAsset: 'HBAR',  sector: 'crypto',   maxLev: 2 },
-    'ICP':    { hlAsset: 'ICP',   sector: 'crypto',   maxLev: 2 },
-    'ETC':    { hlAsset: 'ETC',   sector: 'crypto',   maxLev: 2 },
-    'BCH':    { hlAsset: 'BCH',   sector: 'crypto',   maxLev: 2 },
-    'SEI':    { hlAsset: 'SEI',   sector: 'crypto',   maxLev: 2 },
-    'RUNE':   { hlAsset: 'RUNE',  sector: 'crypto',   maxLev: 2 },
-    'ONDO':   { hlAsset: 'ONDO',  sector: 'crypto',   maxLev: 2 },
-    'JUP':    { hlAsset: 'JUP',   sector: 'crypto',   maxLev: 2 },
-    'MKR':    { hlAsset: 'MKR',   sector: 'crypto',   maxLev: 2 },
+    'DOGE':   { hlAsset: 'DOGE',  sector: 'crypto',   maxLev: 3 },
+    'AVAX':   { hlAsset: 'AVAX',  sector: 'crypto',   maxLev: 3 },
+    'DOT':    { hlAsset: 'DOT',   sector: 'crypto',   maxLev: 3 },
+    'LINK':   { hlAsset: 'LINK',  sector: 'crypto',   maxLev: 3 },
+    'LTC':    { hlAsset: 'LTC',   sector: 'crypto',   maxLev: 3 },
+    'UNI':    { hlAsset: 'UNI',   sector: 'crypto',   maxLev: 3 },
+    'AAVE':   { hlAsset: 'AAVE',  sector: 'crypto',   maxLev: 3 },
+    'INJ':    { hlAsset: 'INJ',   sector: 'crypto',   maxLev: 3 },
+    'SUI':    { hlAsset: 'SUI',   sector: 'crypto',   maxLev: 3 },
+    'APT':    { hlAsset: 'APT',   sector: 'crypto',   maxLev: 3 },
+    'TIA':    { hlAsset: 'TIA',   sector: 'crypto',   maxLev: 3 },
+    'TON':    { hlAsset: 'TON',   sector: 'crypto',   maxLev: 3 },
+    'NEAR':   { hlAsset: 'NEAR',  sector: 'crypto',   maxLev: 3 },
+    'ARB':    { hlAsset: 'ARB',   sector: 'crypto',   maxLev: 3 },
+    'OP':     { hlAsset: 'OP',    sector: 'crypto',   maxLev: 3 },
+    'ATOM':   { hlAsset: 'ATOM',  sector: 'crypto',   maxLev: 3 },
+    'HYPE':   { hlAsset: 'HYPE',  sector: 'crypto',   maxLev: 3 },
+    'WIF':    { hlAsset: 'WIF',   sector: 'crypto',   maxLev: 3 },
+    'PEPE':   { hlAsset: 'PEPE',  sector: 'crypto',   maxLev: 2 },
+    'BONK':   { hlAsset: 'BONK',  sector: 'crypto',   maxLev: 2 },
+    'TAO':    { hlAsset: 'TAO',   sector: 'crypto',   maxLev: 3 },
+    'RENDER': { hlAsset: 'RENDER',sector: 'crypto',   maxLev: 3 },
+    'FET':    { hlAsset: 'FET',   sector: 'crypto',   maxLev: 3 },
+    'IMX':    { hlAsset: 'IMX',   sector: 'crypto',   maxLev: 3 },
+    'HBAR':   { hlAsset: 'HBAR',  sector: 'crypto',   maxLev: 3 },
+    'ICP':    { hlAsset: 'ICP',   sector: 'crypto',   maxLev: 3 },
+    'ETC':    { hlAsset: 'ETC',   sector: 'crypto',   maxLev: 3 },
+    'BCH':    { hlAsset: 'BCH',   sector: 'crypto',   maxLev: 3 },
+    'SEI':    { hlAsset: 'SEI',   sector: 'crypto',   maxLev: 3 },
+    'RUNE':   { hlAsset: 'RUNE',  sector: 'crypto',   maxLev: 3 },
+    'ONDO':   { hlAsset: 'ONDO',  sector: 'crypto',   maxLev: 3 },
+    'JUP':    { hlAsset: 'JUP',   sector: 'crypto',   maxLev: 3 },
+    'MKR':    { hlAsset: 'MKR',   sector: 'crypto',   maxLev: 3 },
     'PAXG':   { hlAsset: 'PAXG',  sector: 'precious', maxLev: 2 },
     /* FX pairs — routed via OANDA when connected */
     'EURUSD': { hlAsset: null, oandaInstrument: 'EUR_USD', sector: 'fx', maxLev: 10 },
@@ -203,17 +203,16 @@
   var MIN_SL_PCT = {
     precious: 0.50,
     energy:   0.80,
-    crypto:   2.00,
+    crypto:   1.50,   // lowered from 2.0% → allows 3× on 5.5% stop assets (adjSL=1.83% > 1.5%)
     equity:   0.40
   };
 
-  /* ── Max leverage by confidence band (v3: lower thresholds, HL-first) ──────
-     User is exploring HL — be more willing to leverage higher-confidence signals.
+  /* ── Max leverage by confidence band ────────────────────────────────────────
      GTI context still applies an override cap on top of these.                */
   var MAX_LEV_BY_CONF = [
     { minConf: 85, maxLev: 5 },
-    { minConf: 75, maxLev: 3 },   // was 80 in v2
-    { minConf: 65, maxLev: 2 },   // was 70 in v2
+    { minConf: 72, maxLev: 3 },   // 3× from 72% (was 75%)
+    { minConf: 65, maxLev: 2 },
     { minConf:  0, maxLev: 1 }    // below 65%: no leverage
   ];
 
