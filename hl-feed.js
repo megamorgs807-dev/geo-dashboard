@@ -205,6 +205,7 @@
   var _ws                = null;
   var _connected         = false;
   var _lastTs            = null;
+  var _reconnectTs       = null;  // timestamp of most recent successful reconnection
   var _pairsReceived     = 0;
   var _injected          = 0;
   var _errors            = 0;
@@ -237,6 +238,7 @@
         _connected         = true;
         _errors            = 0;
         _reconnectAttempts = 0;   // reset backoff on successful connection
+        _reconnectTs       = Date.now();  // track reconnect time for price cooldown
         _ws.send(JSON.stringify({
           method: 'subscribe',
           subscription: { type: 'allMids' }
@@ -378,6 +380,7 @@
       return {
         connected:     _connected,
         lastTs:        _lastTs,
+        reconnectTs:   _reconnectTs,
         lastUpdate:    _lastTs
           ? Math.round((Date.now() - _lastTs) / 1000) + 's ago'
           : 'never',

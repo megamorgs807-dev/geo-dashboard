@@ -204,12 +204,11 @@ def place_order(coin: str, is_buy: bool, size_usd: float, leverage: int = 1) -> 
         if size_usd > max_notional:
             size_usd = round(max_notional, 2)
 
-        # Set leverage (cross-margin) before placing order
-        if lev > 1:
-            try:
-                _exchange.update_leverage(lev, coin, is_cross=True)
-            except Exception:
-                pass  # non-fatal
+        # Always set leverage before placing — resets any stale leverage on the account
+        try:
+            _exchange.update_leverage(lev, coin, is_cross=True)
+        except Exception:
+            pass  # non-fatal
 
         # Coin quantity = full notional ÷ price, rounded to HL's required decimal places
         decimals = _sz_decimals.get(coin, 5)

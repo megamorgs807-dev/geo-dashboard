@@ -1122,17 +1122,31 @@
                  t.broker_order_id &&
                  t.venue === 'ALPACA';
         });
-        // T1-B: auto-purge phantom trades on startup — OPEN trades with no broker_status
-        // that are >5 min old. These are positions that opened while no broker was connected
-        // and were never sent. They block asset slots and corrupt analytics indefinitely.
+        // T1-B: auto-purge phantom trades on startup — OPEN trades stuck in PENDING_FILL
+        // for >5 min. These are orders that were sent but never confirmed (page crash, timeout).
+        // They block asset slots and corrupt analytics indefinitely.
         var _phantomCutoff = Date.now() - 300000;
         _trades.forEach(function (t) {
-          if (t.status === 'OPEN' && !t.broker_status &&
+          if (t.status === 'OPEN' &&
+              (t.broker_status === 'PENDING_FILL' || !t.broker_status) &&
               new Date(t.timestamp_open).getTime() < _phantomCutoff) {
-            log('SYSTEM', t.asset + ' phantom trade purged on startup (no broker fill, >5min old)', 'amber');
+            log('SYSTEM', t.asset + ' phantom trade purged on startup (stuck PENDING_FILL, >5min old)', 'amber');
             closeTrade(t.trade_id, t.entry_price || 0.01, 'PHANTOM-PURGE');
           }
         });
+
+        // T1-C: also run phantom purge every 5 min so stuck trades don't persist
+        // between page reloads (startup purge only catches them on next load otherwise).
+        setInterval(function () {
+          var cutoff = Date.now() - 300000;
+          openTrades().forEach(function (t) {
+            if ((t.broker_status === 'PENDING_FILL' || !t.broker_status) &&
+                new Date(t.timestamp_open).getTime() < cutoff) {
+              log('SYSTEM', t.asset + ' phantom trade purged (stuck PENDING_FILL, >5min old)', 'amber');
+              closeTrade(t.trade_id, t.entry_price || 0.01, 'PHANTOM-PURGE');
+            }
+          });
+        }, 5 * 60 * 1000);
 
         if (_pendingFill.length) {
           // Fix 7: event-driven resume — poll until AlpacaBroker is connected
@@ -2657,6 +2671,11 @@
       return;
     }
 
+    // Mark as PENDING_FILL before saving so phantom purge can identify
+    // stuck trades even if the page crashes before the fill callback fires.
+    if (trade.venue === 'HL' || trade.venue === 'ALPACA' || trade.venue === 'OANDA' || trade.venue === 'TICKTRADER') {
+      trade.broker_status = 'PENDING_FILL';
+    }
     _trades.unshift(trade);
     _cooldown[normaliseAsset(sig.asset) + '_' + dir] = Date.now();
     saveTrades();
@@ -2665,7 +2684,7 @@
     // ── Fire HL order if this trade is routed to Hyperliquid ─────────────
     if (trade.venue === 'HL' && window.HLBroker && HLBroker.isConnected()) {
       var _hlSide = trade.direction === 'LONG' ? 'buy' : 'sell';
-      var _hlLev  = trade.leverage ? Math.round(trade.leverage) : 1;
+      var _hlLev  = trade.leverage ? Math.floor(trade.leverage) : 1;
       HLBroker.placeOrderWithConfirmation(
         trade.asset, null, _hlSide,
         // Fix #19: cloid = idempotency key — HL rejects a second order with the same cloid
@@ -2674,10 +2693,12 @@
           trade.broker_status     = 'FILLED';
           trade.broker_fill_price = fillPrice;
           if (fillPrice > 0 && isFinite(fillPrice)) trade.entry_price = fillPrice;
-          // Update size/units to actual fill (backend may have capped the notional)
-          if (pos && pos.fillSize > 0 && isFinite(pos.fillSize)) {
-            trade.units    = +pos.fillSize.toFixed(6);
-            trade.size_usd = +(pos.fillSize * fillPrice).toFixed(2);
+          // Update size/units to actual fill (backend may have capped the notional).
+          // Direct SDK fill returns pos.fillSize; position-poll path returns pos.size.
+          var _actualSz = pos ? (pos.fillSize > 0 ? pos.fillSize : Math.abs(pos.size || 0)) : 0;
+          if (_actualSz > 0 && isFinite(_actualSz)) {
+            trade.units    = +_actualSz.toFixed(6);
+            trade.size_usd = +(_actualSz * fillPrice).toFixed(2);
           }
           if (trade.signal_ts) {
             var _hlLatMs = Date.now() - trade.signal_ts;
@@ -2718,8 +2739,7 @@
         }
       ).then(function (result) {
         if (!result || !result.ok) return;
-        trade.broker_status = 'PENDING_FILL';
-        saveTrades();
+        // broker_status already set to PENDING_FILL before save — just log
         log('HL', trade.asset + ' order submitted — awaiting fill', 'cyan');
       }).catch(function (e) {
         trade.broker_status   = 'REJECTED';
@@ -3445,11 +3465,17 @@
         try {
           var st = HLFeed.status();
           if (!st.lastTs) return false;                   // never connected — not stale
-          return (Date.now() - st.lastTs) > 300000;       // > 5 minutes since last tick
+          var age = Date.now() - st.lastTs;
+          if (age > 300000) return true;                  // > 5 minutes since last tick
+          // Reconnect cooldown: if the feed just came back after being down, wait 60s
+          // before trusting prices — avoids trading on a stale cache that only just
+          // got a fresh tick after a long outage.
+          if (st.reconnectTs && (Date.now() - st.reconnectTs) < 60000) return true;
+          return false;
         } catch (e) { return false; }
       })();
       if (_hlStale) {
-        log('SYSTEM', 'HL price feed stale (>5 min) — bypassing HL venue for ' + sig.asset, 'warn');
+        log('SYSTEM', 'HL price feed stale or reconnecting — bypassing HL venue for ' + sig.asset, 'warn');
       }
 
       var _asset = normaliseAsset(sig.asset);
@@ -3573,10 +3599,16 @@
 
     if (window.HLBroker && HLBroker.isConnected()) {
       checks.push(
-        Promise.resolve().then(function () {
+        HLBroker.getAccount().then(function (data) {
+          if (data && data.ok && data.equity > 0) {
+            total += data.equity;
+            sources.push('HL:$' + data.equity.toFixed(2));
+          }
+        }).catch(function () {
+          // Fall back to cached status if live fetch fails
           try {
             var s = HLBroker.status();
-            if (s && s.equity > 0) { total += s.equity; sources.push('HL:$' + s.equity.toFixed(2)); }
+            if (s && s.equity > 0) { total += s.equity; sources.push('HL(cached):$' + s.equity.toFixed(2)); }
           } catch (e) {}
         })
       );
