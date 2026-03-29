@@ -3424,6 +3424,19 @@
         sig = Object.assign({}, sig, { asset: remapped });
       }
 
+      // Stop enrichment: if signal doesn't have stopPct/tpRatio (e.g. scalper, momentum,
+      // technicals, crypto-signals — any agent that bypasses gii-entry), look them up
+      // from GII_AGENT_ENTRY.getStops() so routing can calculate correct leverage.
+      // Signals from gii-entry already have stopPct set — this is a no-op for them.
+      if ((!sig.stopPct || !isFinite(sig.stopPct)) && window.GII_AGENT_ENTRY &&
+          typeof GII_AGENT_ENTRY.getStops === 'function') {
+        var _stops = GII_AGENT_ENTRY.getStops(sig.asset);
+        sig = Object.assign({}, sig, {
+          stopPct: _stops.stopPct,
+          tpRatio: sig.tpRatio || _stops.tpRatio
+        });
+      }
+
       // GII Routing: check if there is a better HL instrument (e.g. GLD → XAU)
       // and whether leverage improves EV for this confidence level.
       // Runs after ASSET_REMAP so routing sees the final tradeable asset name.

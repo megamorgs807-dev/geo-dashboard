@@ -107,7 +107,57 @@
     'VXX':    { stopPct: 6.0, tpRatio: 2.0 },  /* VXX ETF — same signal, lower raw vol than VIX index */
     'SILVER': { stopPct: 2.5, tpRatio: 2.5 },  /* v54: was missing — fell through to 3% default */
     'CRUDE':  { stopPct: 3.5, tpRatio: 2.5 },  /* v54: alias for WTI */
-    'OIL':    { stopPct: 3.5, tpRatio: 2.5 }   /* v54: alias for WTI */
+    'OIL':    { stopPct: 3.5, tpRatio: 2.5 },  /* v54: alias for WTI */
+    /* ── Crypto altcoins — wider stops needed for intraday volatility ── */
+    'SOL':    { stopPct: 5.0, tpRatio: 2.5 },
+    'BNB':    { stopPct: 4.5, tpRatio: 2.5 },
+    'XRP':    { stopPct: 5.0, tpRatio: 2.5 },
+    'ADA':    { stopPct: 5.0, tpRatio: 2.5 },
+    'AVAX':   { stopPct: 5.5, tpRatio: 2.5 },
+    'DOT':    { stopPct: 5.5, tpRatio: 2.5 },
+    'LINK':   { stopPct: 5.5, tpRatio: 2.5 },
+    'LTC':    { stopPct: 5.0, tpRatio: 2.5 },
+    'BCH':    { stopPct: 5.0, tpRatio: 2.5 },
+    'UNI':    { stopPct: 6.0, tpRatio: 2.5 },
+    'AAVE':   { stopPct: 6.0, tpRatio: 2.5 },
+    'ATOM':   { stopPct: 5.5, tpRatio: 2.5 },
+    'NEAR':   { stopPct: 5.5, tpRatio: 2.5 },
+    'SUI':    { stopPct: 6.0, tpRatio: 2.5 },
+    'APT':    { stopPct: 6.0, tpRatio: 2.5 },
+    'ARB':    { stopPct: 5.5, tpRatio: 2.5 },
+    'OP':     { stopPct: 5.5, tpRatio: 2.5 },
+    'TRX':    { stopPct: 5.0, tpRatio: 2.5 },
+    'TON':    { stopPct: 5.5, tpRatio: 2.5 },
+    'ICP':    { stopPct: 6.0, tpRatio: 2.5 },
+    'SEI':    { stopPct: 6.5, tpRatio: 2.5 },
+    'INJ':    { stopPct: 6.5, tpRatio: 2.5 },
+    'RUNE':   { stopPct: 7.0, tpRatio: 2.5 },
+    'MKR':    { stopPct: 5.5, tpRatio: 2.5 },
+    'SNX':    { stopPct: 7.0, tpRatio: 2.5 },
+    'CRV':    { stopPct: 7.0, tpRatio: 2.5 },
+    'GMX':    { stopPct: 7.0, tpRatio: 2.5 },
+    'COMP':   { stopPct: 6.0, tpRatio: 2.5 },
+    /* ── Meme / high-volatility tokens ── */
+    'DOGE':   { stopPct: 8.0, tpRatio: 2.5 },
+    'WIF':    { stopPct: 9.0, tpRatio: 2.5 },
+    'PEPE':   { stopPct: 10.0, tpRatio: 2.5 },
+    'BONK':   { stopPct: 10.0, tpRatio: 2.5 },
+    'TRUMP':  { stopPct: 10.0, tpRatio: 2.5 },
+    'WLD':    { stopPct: 8.0, tpRatio: 2.5 },
+    'HYPE':   { stopPct: 8.0, tpRatio: 2.5 },
+    /* ── AI / tech tokens ── */
+    'TAO':    { stopPct: 8.0, tpRatio: 2.5 },
+    'RENDER': { stopPct: 7.5, tpRatio: 2.5 },
+    'ONDO':   { stopPct: 7.0, tpRatio: 2.5 },
+    'ENA':    { stopPct: 8.0, tpRatio: 2.5 },
+    'EIGEN':  { stopPct: 7.5, tpRatio: 2.5 },
+    'TIA':    { stopPct: 7.5, tpRatio: 2.5 },
+    'PYTH':   { stopPct: 7.5, tpRatio: 2.5 },
+    'JUP':    { stopPct: 7.0, tpRatio: 2.5 },
+    /* ── Commodity / precious metals on HL ── */
+    'PAXG':   { stopPct: 2.0, tpRatio: 2.5 },
+    'GAS':    { stopPct: 4.5, tpRatio: 2.5 },
+    'NATGAS': { stopPct: 4.5, tpRatio: 2.5 }
   };
   var VOL_STOP_DEFAULT = { stopPct: 3.0, tpRatio: 2.5 };
 
@@ -991,6 +1041,15 @@
 
     accuracy: function () {
       return { total: _stats.approved, approved: _stats.approved, rejected: _stats.rejected };
+    },
+
+    /* Returns per-asset volatility stop config for any signal source.
+       Called by EE signal pipeline to enrich signals that bypass gii-entry
+       (scalper, momentum, technicals, etc.) so they get correct stopPct/tpRatio
+       instead of the flat 3% config default. */
+    getStops: function (asset) {
+      var key = String(asset || '').toUpperCase();
+      return VOL_STOPS[key] || VOL_STOP_DEFAULT;
     }
   };
 
