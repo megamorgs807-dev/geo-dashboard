@@ -58,7 +58,6 @@
     max_per_sector:        6,
     max_exposure_pct:      45,
     max_risk_usd:          30,           // hard cap $30 risk per trade
-    broker_budget_usd:     25,           // per-broker position cap — keeps all venues equal regardless of demo account size
     // ── Risk management toggles ───────────────────────────────────────────────
     trailing_stop_enabled:  false,       // gii-exit owns progressive trailing — keep off here
     trailing_stop_pct:      1.0,
@@ -2517,15 +2516,6 @@
       log('AUDIT', '⚠ SIZE CAP: ' + sig.asset + ' capped at 50% balance ($' + _maxNotional.toFixed(0) + ')', 'amber');
     }
 
-    // Reality check 6c — per-broker budget cap: keeps all venues trading equal size
-    // regardless of how large the demo/paper account balances are.
-    var _budget = _cfg.broker_budget_usd || 0;
-    if (_budget > 0 && sizeUsd > _budget) {
-      units   = _budget / entryPrice;
-      sizeUsd = _budget;
-      log('AUDIT', sig.asset + ' capped to broker budget $' + _budget.toFixed(0), 'dim');
-    }
-
     // Reality check 7 — reject zero-size positions: risk budget exhausted or SL too wide.
     // Previously these slipped through as phantom trades (units=0) blocking asset slots.
     var MIN_SIZE_USD = 1.0;  // absolute floor — $1 minimum position
@@ -4884,7 +4874,7 @@
   function renderConfigFields() {
     var fields = ['min_confidence','risk_per_trade_pct','stop_loss_pct',
                   'take_profit_ratio','max_open_trades','max_per_region','max_per_sector',
-                  'virtual_balance','max_risk_usd','broker_budget_usd','trailing_stop_pct','daily_loss_limit_pct',
+                  'virtual_balance','max_risk_usd','trailing_stop_pct','daily_loss_limit_pct',
                   'daily_profit_target_pct','event_gate_hours'];
     fields.forEach(function (f) {
       var el = document.getElementById('eeCfg_' + f);
@@ -6143,7 +6133,6 @@
         virtual_balance:      { min: 100, max: 10000000, int: false },
         // A21: min=1 so that 0 can't accidentally disable the hard risk cap entirely
         max_risk_usd:         { min: 1,   max: 10000,    int: false },
-        broker_budget_usd:    { min: 1,   max: 100000,   int: false },
         trailing_stop_pct:    { min: 0.1, max: 10,       int: false },
         daily_loss_limit_pct:    { min: 1,   max: 100,  int: false },
         daily_profit_target_pct: { min: 0,   max: 50,   int: false },
