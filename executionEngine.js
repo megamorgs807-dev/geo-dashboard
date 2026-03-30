@@ -5519,7 +5519,7 @@
                     : '&#8212; SKIP';
       var dirCls  = e.dir === 'LONG' ? 'sl-long' : e.dir === 'SHORT' ? 'sl-short' : 'sl-watch-dir';
       // For skipped signals, show reason prominently in place of region (more useful than region name)
-      var lastCol = (e.action === 'SKIP' && e.skip_reason)
+      var lastCol = (e.action === 'SKIPPED' && e.skip_reason)
         ? '<span class="sl-skip-reason prominent" style="color:#ff9500;font-style:normal;font-weight:600;grid-column:auto">' + _esc(e.skip_reason) + '</span>'
         : '<span class="ee-sl-region">' + _esc(e.region) + '</span>';
       return '<div class="ee-sl-row">' +
