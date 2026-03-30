@@ -5350,7 +5350,7 @@
         <button class="ee-cfg-ghost" onclick="EE.clearHistory()">Clear History</button>
         <button class="ee-cfg-ghost" style="color:#ff8c42;border-color:rgba(255,140,66,0.5);font-weight:700" onclick="EE.analyticsReset()" title="Wipe all history, stats and agent learning — risk settings are kept">&#9888; Full Reset</button>
         <button class="ee-cfg-ghost" style="color:#60a5fa;border-color:rgba(96,165,250,0.4)" onclick="EE.sessionReset()" title="Reset Balance / Unrealised / Realised / Session Returns display to now — trades and history untouched">&#8635; Reset Stats</button>
-        <button class="ee-cfg-ghost" style="color:#00c8a0;border-color:rgba(0,200,160,0.4)" onclick="EE.syncBalance()" title="Re-fetch equity from all connected brokers and update the balance now">&#8635; Sync Balance</button>
+        <button class="ee-cfg-ghost" style="color:#00c8a0;border-color:rgba(0,200,160,0.4)" onclick="EE.syncBalance()" title="Sync balance AND import any open positions from HL that EE isn't tracking">&#8635; Sync All</button>
         <button class="ee-cfg-ghost" style="color:#ff4444;border-color:rgba(255,68,68,0.4)" onclick="EE.forceCloseAll()" title="Emergency: close ALL open positions immediately at market price">&#9940; Force Close All</button>
         <button class="ee-cfg-ghost" style="color:#c084fc;border-color:rgba(192,132,252,0.4)" onclick="EE.resetICEngine()" title="Reset scaling engine: clear probation, smoke-alarm and agent feedback — use after a session reset">&#9881; Reset IC Engine</button>
         <button class="ee-cfg-ghost" onclick="EE.exportJSON()">&#8595; JSON</button>
@@ -5394,6 +5394,54 @@
       <button id="eeNotifBtn" onclick="EE.requestNotifications()" style="background:none;border:1px solid var(--dim);color:var(--dim);font-family:inherit;font-size:9px;padding:4px 10px;cursor:pointer;letter-spacing:1px;border-radius:3px;white-space:nowrap" title="Get browser alerts when a trade hits TP or SL">🔔 Alerts</button>
     </div>
 
+    <!-- Quick Reference Guide Button -->
+    <div style="margin-bottom:12px">
+      <button id="eeHelpBtn" onclick="document.getElementById('eeHelpModal').style.display='block'" style="background:none;border:1px solid var(--dim);color:var(--dim);font-family:inherit;font-size:10px;padding:6px 12px;cursor:pointer;letter-spacing:1px;border-radius:3px">❓ Trading Guide</button>
+    </div>
+
+    <!-- Quick Reference Guide Modal -->
+    <div id="eeHelpModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:9999;overflow-y:auto">
+      <div style="background:var(--bg1);color:var(--text);max-width:800px;margin:40px auto;padding:20px;border:1px solid var(--border);border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <h2 style="margin:0">Trading Dashboard Quick Reference</h2>
+          <button onclick="document.getElementById('eeHelpModal').style.display='none'" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:11px;line-height:1.7">
+          <div>
+            <h3 style="color:#00c8a0;margin-top:0">Trade Card Badges</h3>
+            <p><strong>DEC</strong> — Decimal precision for this asset. Affects order sizing. (Hover for details)</p>
+            <p><strong>Risk %</strong> — % of your account at risk: GREEN=Low (&lt;3%), ORANGE=Medium (3-5%), RED=High (&gt;5%)</p>
+            <p><strong>Exchange badge</strong> — HL (Hyperliquid), ALP (Alpaca), FX (OANDA), TT (TickTrader)</p>
+            <p><strong>%</strong> — Signal confidence (higher = stronger signal)</p>
+          </div>
+          <div>
+            <h3 style="color:#00c8a0;margin-top:0">Signal History Codes</h3>
+            <p><strong>✓ TRADED</strong> — Signal executed successfully</p>
+            <p><strong>⚠ WATCH</strong> — Signal watchlisted, not yet executed</p>
+            <p><strong>— SKIP</strong> — Signal rejected (shows reason on hover)</p>
+            <p><strong>[SOURCE]</strong> — Where signal came from (SCALPER, GII, IC, etc)</p>
+          </div>
+          <div>
+            <h3 style="color:#00c8a0">Order Sizing Validator</h3>
+            <p>Shows how each trade's size is calculated and adjusted for decimal precision.</p>
+            <p><strong>✓ Valid</strong> — Order met minimum notional on first try</p>
+            <p><strong>⚠ Adjusted</strong> — Notional incremented to meet minimum after rounding</p>
+            <p><strong>✗ Failed</strong> — Could not meet minimum (price too low or precision too tight)</p>
+          </div>
+          <div>
+            <h3 style="color:#00c8a0">Activity Log Colors</h3>
+            <p><strong style="color:#00c8a0">GREEN</strong> — Successful execution or trade opened</p>
+            <p><strong style="color:#ff9500">ORANGE</strong> — Warning (near limits, price changes, retries)</p>
+            <p><strong style="color:#ff4444">RED</strong> — Error or trade rejected</p>
+            <p><strong style="color:#888">GRAY</strong> — Informational (idle periods, checks)</p>
+          </div>
+        </div>
+        <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border);font-size:10px;color:var(--dim)">
+          <strong>Pro Tip:</strong> Hover over any badge or label for more details. Check the Order Sizing Validator for precision issues before trading commodities (GLD, SLV) or stocks (NVDA, HOOD).
+        </div>
+      </div>
+    </div>
+
     <!-- Open trades + Closed trades -->
     <div class="ee-body">
       <div class="ee-panel">
@@ -5413,6 +5461,20 @@
         <div id="eeClosedTrades">
           <div class="ee-placeholder">No closed trades yet.</div>
         </div>
+      </div>
+    </div>
+
+    <!-- Order Sizing Validator — shows precision-aware sizing details for each trade -->
+    <div class="ee-config-section" style="margin-bottom:16px">
+      <div class="ee-panel-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>⚙ Order Sizing Validator</span>
+        <span id="eeSizingMeta" style="font-size:9px;color:var(--dim)">tracking precision-aware adjustments</span>
+      </div>
+      <div style="display:grid;grid-template-columns:50px 60px 90px 100px 80px 1fr;gap:0;font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:0.8px;padding:0 4px 4px;border-bottom:1px solid var(--border);margin-bottom:4px;margin-top:8px">
+        <span>Asset</span><span>Decimals</span><span>Target Notional</span><span>Actual Notional</span><span>Status</span><span>Details</span>
+      </div>
+      <div id="eeSizingValidator" style="max-height:180px;overflow-y:auto;font-size:9px">
+        <div class="ee-placeholder">Waiting for first trade signal…</div>
       </div>
     </div>
 
@@ -5439,6 +5501,16 @@
       .ee-pw-asset { font-weight:700; color:var(--bright); }
       .ee-pw-score { color:#ff9500; }
       .ee-pw-reason { color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .ee-sv-row { display:grid; grid-template-columns:50px 60px 90px 100px 80px 1fr; gap:0; padding:6px 4px; font-size:9px; border-bottom:1px solid rgba(255,255,255,0.04); align-items:center; }
+      .ee-sv-row:hover { background:var(--bg3); }
+      .ee-sv-asset { font-weight:700; color:var(--bright); }
+      .ee-sv-decimals { color:var(--dim); }
+      .ee-sv-notional { font-family:monospace; }
+      .ee-sv-status { font-weight:700; }
+      .ee-sv-status.valid { color:#00c8a0; }
+      .ee-sv-status.adjusted { color:#ff9500; }
+      .ee-sv-status.failed { color:#ff4444; }
+      .ee-sv-details { color:var(--dim); font-size:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     </style>
 
     <!-- Flagged Trades — signals blocked by HL-only gate -->
@@ -14713,7 +14785,39 @@ window._TT_BOOTSTRAP = {
     updateCmdStrip();
     setInterval(updateBadgesAndOverview, 8000);
     setInterval(updateCmdStrip, 5000);
+    setInterval(updateSizingValidator, 2000);  // Update sizing validator every 2s
   }, 3000);
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     SIZING VALIDATOR — Display precision-aware sizing events in the UI
+     ═══════════════════════════════════════════════════════════════════════════ */
+  function updateSizingValidator() {
+    if (!window.EE || !EE.getSizingHistory) return;
+    var hist = EE.getSizingHistory();
+    var el = document.getElementById('eeSizingValidator');
+    if (!el) return;
+
+    if (!hist.length) {
+      el.innerHTML = '<div class="ee-placeholder">Waiting for first trade signal…</div>';
+      return;
+    }
+
+    var html = hist.slice(0, 20).map(function(item) {
+      var statusClass = 'ee-sv-status ' + item.status;
+      var statusText = item.status === 'valid' ? '✓ Valid' : (item.status === 'adjusted' ? '⚠ Adjusted' : '✗ Failed');
+      var actualStr = item.actual > 0 ? '$' + item.actual.toFixed(2) : '—';
+      return '<div class="ee-sv-row">' +
+        '<span class="ee-sv-asset">' + item.asset + '</span>' +
+        '<span class="ee-sv-decimals">' + item.decimals + ' dec</span>' +
+        '<span class="ee-sv-notional">$' + item.target.toFixed(2) + '</span>' +
+        '<span class="ee-sv-notional">' + actualStr + '</span>' +
+        '<span class="' + statusClass + '">' + statusText + '</span>' +
+        '<span class="ee-sv-details">' + item.details + '</span>' +
+        '</div>';
+    }).join('');
+
+    el.innerHTML = html;
+  }
 
 })();
 </script>

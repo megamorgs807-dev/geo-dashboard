@@ -617,6 +617,7 @@
   var _peakEquity           = null;  // highest virtual_balance since session start — drawdown-from-peak guard
   var _ddFromPeak           = 0;     // current % drawdown from peak — read by buildTrade for size scaling
   var _liveBrokerEquity     = null;  // sum of all connected broker equities — polled every 60s, used for sizing
+  var _sizingHistory        = [];    // recent sizing adjustments (asset, target, actual, status) — for UI display
   var _liveBrokerEquityTs   = 0;     // timestamp of last successful equity fetch
   var _liveBrokerSources    = [];    // which brokers contributed to _liveBrokerEquity
   var _halted               = false; // emergency kill switch — blocks all new trade execution when true
@@ -4045,55 +4046,111 @@
       .catch(function () { /* silent — Alpaca may be temporarily unavailable */ });
   }
 
-  // T1-A: HL position reconciliation — mirrors _reconcileAlpacaPositions().
-  // If HL liquidates a position (margin call, exchange risk limit, server-side close),
-  // the EE trade stays permanently OPEN, corrupting balance and blocking the asset slot.
-  // This runs every 5 minutes alongside Alpaca reconciliation.
+  // T1-A: HL position reconciliation — bidirectional sync.
+  // 1. Closes EE trades where HL no longer has the position (liquidated/externally closed)
+  // 2. IMPORTS HL positions that aren't tracked in EE (manually opened, prior sessions, etc.)
+  // This runs every 5 minutes and on-demand via EE.syncPositions().
   var _lastHLReconcile = 0;
-  function _reconcileHLPositions() {
+  function _reconcileHLPositions(force) {
     if (!window.HLBroker || !HLBroker.isConnected()) return;
     if (typeof HLBroker.getPositions !== 'function') return;
     var now = Date.now();
-    if (now - _lastHLReconcile < 4 * 60 * 1000) return;  // dedupe: max once per 4 min
+    if (!force && now - _lastHLReconcile < 4 * 60 * 1000) return;  // dedupe: max once per 4 min
     _lastHLReconcile = now;
     var hlTrades = openTrades().filter(function (t) {
       return t.venue === 'HL' && t.broker_status === 'FILLED';
     });
-    if (!hlTrades.length) return;
+    // BUG FIX: removed early return when hlTrades is empty —
+    // we still need to fetch HL positions to import orphans that EE doesn't know about.
     HLBroker.getPositions()
       .then(function (result) {
-        // getPositions returns {ok, positions:[]} or array directly
         var hlPositions = Array.isArray(result) ? result
           : (result && Array.isArray(result.positions)) ? result.positions
           : null;
-        // Safety: empty list when EE has open trades = connection gap, not mass liquidation.
-        // Only close trades when HL reports AT LEAST ONE position (proves feed is live).
+        // Safety: if HL returns empty AND EE has open trades, this is likely a connection gap.
+        // But if EE has no open trades, an empty HL response is fine — nothing to do.
         if (!hlPositions || !hlPositions.length) {
-          log('HL', 'Reconciliation skipped — HL returned empty position list (connection not ready?). ' + hlTrades.length + ' EE trade(s) left open.', 'amber');
+          if (hlTrades.length) {
+            log('HL', 'Reconciliation skipped — HL returned empty position list (connection gap?). ' + hlTrades.length + ' EE trade(s) left open.', 'amber');
+          }
           return;
         }
+        // Build lookup of HL assets
         var hlAssets = {};
         hlPositions.forEach(function (p) {
           var key = normaliseAsset(p.coin || p.asset || '');
           if (key) hlAssets[key] = p;
         });
+        // Step 1: Close EE trades that no longer exist on HL
         hlTrades.forEach(function (t) {
           if (!hlAssets[normaliseAsset(t.asset)]) {
             var fallback = _livePrice[t.trade_id] || _priceCache[normaliseAsset(t.asset)] || t.entry_price;
-            log('HL', t.asset + ' missing from HL positions — closed externally. Closing EE trade @ $' + (fallback || 0).toFixed(4), 'amber');
+            log('HL', t.asset + ' missing from HL — closed externally. Closing EE trade @ $' + (fallback || 0).toFixed(4), 'amber');
             closeTrade(t.trade_id, fallback || t.entry_price, 'EXTERNALLY_CLOSED');
           }
         });
-        // Log orphan HL positions not tracked by EE
+        // Step 2: Import HL positions not tracked in EE
+        var imported = 0;
         hlPositions.forEach(function (p) {
           var key = normaliseAsset(p.coin || p.asset || '');
-          var eeMatch = hlTrades.some(function (t) { return normaliseAsset(t.asset) === key; });
-          if (!eeMatch) {
-            log('HL', '⚠ Orphan HL position: ' + (p.coin || p.asset) + ' (not in EE trades — manually opened or prior session)', 'amber');
+          if (!key) return;
+          // Already tracked?
+          var eeMatch = openTrades().some(function (t) { return normaliseAsset(t.asset) === key; });
+          if (eeMatch) return;
+          // Import the position
+          var szi      = parseFloat(p.szi || p.size || 0);
+          var entryPx  = parseFloat(p.entryPx || p.entry_price || 0);
+          if (!szi || !entryPx) {
+            log('HL', '⚠ Cannot import ' + key + ' — missing size or entry price in HL data', 'amber');
+            return;
           }
+          var dir      = szi > 0 ? 'LONG' : 'SHORT';
+          var units    = Math.abs(szi);
+          var sizeUsd  = +(units * entryPx).toFixed(2);
+          var leverage = parseFloat(p.leverage || 1);
+          var slPct    = 0.05;  // 5% SL from entry as safe default
+          var tpPct    = 0.10;  // 10% TP from entry as safe default
+          var sl = dir === 'LONG' ? +(entryPx * (1 - slPct)).toFixed(6) : +(entryPx * (1 + slPct)).toFixed(6);
+          var tp = dir === 'LONG' ? +(entryPx * (1 + tpPct)).toFixed(6) : +(entryPx * (1 - tpPct)).toFixed(6);
+          var importedTrade = {
+            trade_id:         makeId('TRD'),
+            signal_id:        makeId('HL-IMPORT'),
+            timestamp_open:   new Date().toISOString(),
+            asset:            key,
+            direction:        dir,
+            confidence:       70,
+            entry_price:      entryPx,
+            stop_loss:        sl,
+            take_profit:      tp,
+            units:            units,
+            size_usd:         sizeUsd,
+            mode:             'LIVE',
+            status:           'OPEN',
+            venue:            'HL',
+            broker_status:    'FILLED',
+            source:           'HL-IMPORT',
+            signal_source:    'HL-IMPORT',
+            reason:           'Imported from HL — existed before EE tracking or from prior session',
+            leverage:         leverage,
+            initial_risk_usd: +(sizeUsd * slPct).toFixed(2),
+            original_asset:   null,
+            regime:           null
+          };
+          _trades.push(importedTrade);
+          imported++;
+          log('HL', '✓ Imported HL position: ' + key + ' ' + dir + ' ' + units + ' units @ $' + entryPx.toFixed(4) + ' ($' + sizeUsd.toFixed(2) + ')', 'green');
         });
+        if (imported > 0) {
+          saveTrades();
+          renderUI();
+          log('HL', '✓ Sync complete — ' + imported + ' position(s) imported from HL into EE', 'green');
+        } else {
+          log('HL', 'Sync complete — all HL positions already tracked in EE', 'dim');
+        }
       })
-      .catch(function () { /* silent — HL may be temporarily unavailable */ });
+      .catch(function (err) {
+        log('HL', '⚠ Position sync failed: ' + (err && err.message ? err.message : 'unknown error'), 'amber');
+      });
   }
 
   // OANDA position reconciliation — mirrors _reconcileAlpacaPositions().
@@ -5347,6 +5404,18 @@
           '</div>';
       }
 
+      // Asset precision badge — shows decimal requirement for this asset
+      var SZ_DECIMALS = {'BTC':6,'ETH':8,'SOL':2,'XRP':1,'DOGE':0,'ADA':0,'AVAX':1,'DOT':1,'LINK':2,'LTC':3,'GLD':2,'SLV':2,'PAXG':4,'WTI':2,'BRENT':2,'CRUDE':2,'NVDA':3,'HOOD':2,'CRCL':1};
+      var assetDecimals = SZ_DECIMALS[t.asset] || 2;
+      var sizingBadge = '<span title="Asset precision: ' + assetDecimals + ' decimal places. Affects order sizing accuracy." style="font-size:7px;padding:1px 4px;border-radius:2px;background:#1a2a1a;color:#88dd88;margin-left:4px;letter-spacing:0.5px;cursor:help">' + assetDecimals + ' DEC</span>';
+
+      // Risk score: % of balance at risk (size / balance)
+      var bal = _cfg.virtual_balance || 100;
+      var riskPct = bal > 0 ? (t.size_usd / bal * 100) : 0;
+      var riskColor = riskPct > 5 ? '#ff6666' : riskPct > 3 ? '#ffaa44' : '#88dd88';
+      var riskLabel = riskPct > 5 ? 'HIGH' : riskPct > 3 ? 'MED' : 'LOW';
+      var riskBadge = '<span title="Risk: ' + riskPct.toFixed(1) + '% of account balance at risk" style="font-size:7px;padding:1px 4px;border-radius:2px;background:rgba(' + (riskColor === '#ff6666' ? '255,102,102' : riskColor === '#ffaa44' ? '255,170,68' : '136,221,136') + ',0.15);color:' + riskColor + ';margin-left:4px;letter-spacing:0.5px;cursor:help">' + riskLabel + ' (' + riskPct.toFixed(1) + '%)</span>';
+
       var venueBadge = t.venue === 'ALPACA'
         ? '<span style="font-size:7px;padding:1px 4px;border-radius:2px;background:#1a2a4a;color:#4da6ff;margin-left:4px;letter-spacing:0.5px">ALPACA</span>'
         : t.venue === 'OANDA'
@@ -5358,10 +5427,12 @@
         '<div class="ee-tc-hdr">' +
           '<span class="' + dirCls + '">' + _esc(t.direction) + '</span>' +
           '<span class="ee-tc-asset">' + _esc(t.asset) + '</span>' +
+          sizingBadge +
+          riskBadge +
           venueBadge +
-          '<span class="ee-tc-conf">' + t.confidence + '%</span>' +
-          '<span class="ee-tc-age">' + _age(t.timestamp_open) + '</span>' +
-          '<span class="ee-tc-mode ' + (t.mode === 'LIVE' ? 'live' : 'sim') + '">' + _esc(t.mode) + '</span>' +
+          '<span class="ee-tc-conf" title="Signal confidence: higher % = stronger signal">' + t.confidence + '%</span>' +
+          '<span class="ee-tc-age" title="Time since trade opened">' + _age(t.timestamp_open) + '</span>' +
+          '<span class="ee-tc-mode ' + (t.mode === 'LIVE' ? 'live' : 'sim') + '" title="Trade mode: LIVE = real money, SIM = paper trading">' + _esc(t.mode) + '</span>' +
         '</div>' +
         '<div class="ee-tc-source" style="font-size:11px;color:#999;margin-bottom:6px">' +
           '[' + (t.source || t.signal_source || 'UNKNOWN').toUpperCase() + '] ' + (t.reason ? t.reason.substring(0, 60) : 'No reason recorded') +
@@ -5439,15 +5510,19 @@
         rMult = '<span style="font-size:9px;color:' + (r >= 0 ? '#00c8a0' : '#ff4444') + ';margin-left:3px">' +
           (r >= 0 ? '+' : '') + r.toFixed(1) + 'R</span>';
       }
+      // Asset precision badge for closed trades
+      var SZ_DECIMALS_CL = {'BTC':6,'ETH':8,'SOL':2,'XRP':1,'DOGE':0,'ADA':0,'AVAX':1,'DOT':1,'LINK':2,'LTC':3,'GLD':2,'SLV':2,'PAXG':4,'WTI':2,'BRENT':2,'CRUDE':2,'NVDA':3,'HOOD':2,'CRCL':1};
+      var assetDecimalsCL = SZ_DECIMALS_CL[t.asset] || 2;
       // Small venue badge on closed rows
       var crVenue = t.venue === 'ALPACA' ? '<span style="font-size:7px;color:#4da6ff;margin-left:3px">ALP</span>'
         : t.venue === 'OANDA'      ? '<span style="font-size:7px;color:#22dd88;margin-left:3px">FX</span>'
         : t.venue === 'TICKTRADER' ? '<span style="font-size:7px;color:#dd88ff;margin-left:3px">TT</span>'
         : '<span style="font-size:7px;color:#a78bfa;margin-left:3px">HL</span>';
+      var closedSizingBadge = '<span style="font-size:7px;color:#888;margin-left:3px">' + assetDecimalsCL + 'dec</span>';
       var closeReasonColor = t.close_reason === 'TAKE_PROFIT' || t.close_reason === 'TRAILING_STOP' ? '#00c800' : t.close_reason === 'STOP_LOSS' ? '#ff4444' : '#999';
       return '<div class="ee-closed-row">' +
         '<span class="ee-cr-reason ' + iconCls + '">' + icon + '</span>' +
-        '<span class="ee-cr-asset">' + _esc(t.asset) + crVenue + '</span>' +
+        '<span class="ee-cr-asset">' + _esc(t.asset) + closedSizingBadge + crVenue + '</span>' +
         '<span class="ee-cr-dir ' + t.direction.toLowerCase() + '">' + t.direction + '</span>' +
         '<span style="font-size:10px;color:#666;flex:1">[' + (t.source || t.signal_source || '?').toUpperCase() + ']</span>' +
         '<span style="font-size:9px;color:' + closeReasonColor + '">' + (t.close_reason || '?') + '</span>' +
@@ -5479,10 +5554,12 @@
     el.innerHTML = _log.slice(0, 20).map(function (e) {
       var ts = new Date(e.ts);
       var t  = String(ts.getHours()).padStart(2, '0') + ':' + String(ts.getMinutes()).padStart(2, '0');
-      return '<div class="ee-log-row">' +
-        '<span class="ee-log-ts">' + t + '</span>' +
-        '<span class="ee-log-action ' + (e.colour || 'dim') + '">' + e.action + '</span>' +
-        '<span class="ee-log-msg">' + _esc(e.msg) + '</span>' +
+      var actionColor = e.colour === 'green' ? '#00c8a0' : e.colour === 'warn' ? '#ff9500' : e.colour === 'amber' ? '#ffaa44' : e.colour === 'red' ? '#ff4444' : '#888';
+      var actionBg = e.colour === 'green' ? 'rgba(0,200,160,0.1)' : e.colour === 'warn' ? 'rgba(255,150,0,0.1)' : e.colour === 'amber' ? 'rgba(255,170,68,0.1)' : e.colour === 'red' ? 'rgba(255,68,68,0.1)' : 'rgba(136,136,136,0.05)';
+      return '<div class="ee-log-row" style="border-left:3px solid ' + actionColor + ';padding-left:8px">' +
+        '<span class="ee-log-ts" style="color:#666">' + t + '</span>' +
+        '<span class="ee-log-action" style="background:' + actionBg + ';color:' + actionColor + ';padding:1px 6px;border-radius:3px;font-weight:600;font-size:10px">' + e.action + '</span>' +
+        '<span class="ee-log-msg" style="color:#aaa;font-size:10px">' + _esc(e.msg) + '</span>' +
       '</div>';
     }).join('');
   }
@@ -6943,13 +7020,21 @@
         try { var s = AlpacaBroker.status(); if (s.equity > 0) { equity = s.equity; source = 'Alpaca'; } } catch (e) {}
       }
       if (!equity && window.OANDABroker && OANDABroker.isConnected()) {
-        try { var s = OANDABroker.status(); if (s.nav > 0) { equity = s.nav; source = 'OANDA'; } } catch (e) {}  // OANDA uses .nav
+        try { var s = OANDABroker.status(); if (s.nav > 0) { equity = s.nav; source = 'OANDA'; } } catch (e) {}
       }
       if (!equity) { log('SYSTEM', 'syncBalance: no connected broker with equity found', 'amber'); return; }
       _cfg.virtual_balance = equity;
       saveCfg();
-      log('CONFIG', 'Balance synced from ' + source + ' broker: $' + equity.toFixed(2), 'green');
+      log('CONFIG', 'Balance synced from ' + source + ': $' + equity.toFixed(2) + ' — also syncing positions…', 'green');
       renderUI();
+      // Also sync positions so open trades stay in sync
+      window.EE.syncPositions();
+    },
+
+    /* ── Sync all open positions from HL into EE ── */
+    syncPositions: function () {
+      log('HL', 'Syncing positions from HL…', 'dim');
+      _reconcileHLPositions(true);  // force = bypass 4-min debounce
     },
 
     /* ── Fill latency stats ── */
@@ -7020,6 +7105,7 @@
     /* ── Data access for external scripts / debugging ── */
     getOpenTrades:  function () { return openTrades().slice(); },
     getAllTrades:    function () { return _trades.slice(); },
+    getSizingHistory: function () { return _sizingHistory.slice(); },
 
     /* ── v60: Memory stats — call EE.memStats() in console to inspect sizes ── */
     memStats: function () {
