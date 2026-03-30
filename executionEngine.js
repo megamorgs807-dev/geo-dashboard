@@ -5363,6 +5363,9 @@
           '<span class="ee-tc-age">' + _age(t.timestamp_open) + '</span>' +
           '<span class="ee-tc-mode ' + (t.mode === 'LIVE' ? 'live' : 'sim') + '">' + _esc(t.mode) + '</span>' +
         '</div>' +
+        '<div class="ee-tc-source" style="font-size:11px;color:#999;margin-bottom:6px">' +
+          '[' + (t.source || t.signal_source || 'UNKNOWN').toUpperCase() + '] ' + (t.reason ? t.reason.substring(0, 60) : 'No reason recorded') +
+        '</div>' +
         '<div class="ee-tc-prices">' +
           'Entry: <b>' + _num(t.entry_price) + '</b>' +
           ' &nbsp; <span class="ee-tc-sl">SL: ' + _num(t.stop_loss) + '</span>' +
@@ -5445,6 +5448,7 @@
         '<span class="ee-cr-reason ' + iconCls + '">' + icon + '</span>' +
         '<span class="ee-cr-asset">' + _esc(t.asset) + crVenue + '</span>' +
         '<span class="ee-cr-dir ' + t.direction.toLowerCase() + '">' + t.direction + '</span>' +
+        '<span style="font-size:10px;color:#666;flex:1">[' + (t.source || t.signal_source || '?').toUpperCase() + ']</span>' +
         '<span class="ee-cr-pnl ' + cls + '">' + (pc >= 0 ? '+' : '') + pc + '%</span>' +
         '<span class="ee-cr-usd ' + cls + '">' + (pu >= 0 ? '+$' : '-$') + _num(Math.abs(pu)) + rMult + '</span>' +
         '<span class="ee-cr-ts">' + _age(t.timestamp_open) + '</span>' +
