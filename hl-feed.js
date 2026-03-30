@@ -3,7 +3,7 @@
    ══════════════════════════════════════════════════════════════════════════════
    Connects to Hyperliquid's WebSocket (wss://api.hyperliquid.xyz/ws) and
    subscribes to allMids — streaming mid-prices for 300+ trading pairs including
-   WTI, Brent crude, Gold, Silver, BTC/ETH/SOL, and 150+ US equities.
+   Gold, Silver, WTI/Brent crude (speculative), BTC/ETH/SOL, and 150+ US equities.
 
    v3 changes vs v2:
    ─ All dead named equity/commodity entries (CL, BRENTOIL, GOLD, NVDA…) removed
@@ -47,9 +47,10 @@
      full-USD-price equity tokens (TSLA at ~$246, META at ~$620, MSFT ~$399).
      Old fractional @247-@272 range (FI, MMOVE, RISK…) removed — wrong prices.
      Array order matters: first name is the "canonical" EE name for display.
-     Not on HL spot (flagged by HL gate): WTI, BRENT, BRENTOIL, LMT, RTX,
-     NOC, TSM, NVDA, ASML, XLE, SMH, SOXX, TLT, XOM, GDX, CORN, WHEAT,
-     DAL, UAL. WTI and BRENT crude perps were delisted from HL (Mar 2026).  */
+     Not on HL spot (flagged by HL gate): LMT, RTX, NOC, TSM, ASML, XLE,
+     SMH, SOXX, TLT, XOM, GDX, CORN, WHEAT, DAL, UAL.
+     NVDA has a registered spot token (@408) but no confirmed active trading pair.
+     WTI and BRENT are speculatively added — user-confirmed present on HL.  */
   var HL_MAP = {
     /* Crypto perps — named tickers present in allMids */
     'BTC':      ['BTC', 'BITCOIN'],
@@ -115,10 +116,13 @@
     'CRV':      ['CRV'],
 
     /* Commodity perps — confirmed live on HL (Mar 2026)
-       NOTE: WTI and BRENTOIL crude perps were DELISTED from HL.
-       Only natural gas remains. HL allMids key = 'GAS' (not 'NATGAS'). */
-    'GAS':      ['GAS', 'NATGAS'],        // Natural gas perp (allMids key = 'GAS')
-    'PAXG':     ['PAXG', 'XAU', 'GOLD'],  // PAX Gold — gold-backed token on HL; XAU/GOLD aliases
+       GAS maxLev confirmed = 3 (HL API, Mar 2026).
+       PAXG maxLev confirmed = 10 (HL API, Mar 2026).
+       WTI and BRENT added speculatively (user-confirmed present on HL). */
+    'GAS':      ['GAS', 'NATGAS'],        // Natural gas perp (allMids key = 'GAS'); maxLev 3 per HL API
+    'PAXG':     ['PAXG', 'XAU', 'GOLD'],  // PAX Gold — gold-backed token on HL; maxLev 10 per HL API; XAU/GOLD aliases
+    'WTI':      ['WTI', 'CRUDE', 'OIL'],  // WTI crude oil perp (user-confirmed on HL)
+    'BRENT':    ['BRENT', 'BRENTOIL'],    // Brent crude perp (user-confirmed on HL)
 
     /* Spot equity/ETF tokens — @N pair-index, full USD price (Mar 2026 spotMeta)
        Prices ~10-20% of real stock price on some tokens due to oracle/synthetic
@@ -173,8 +177,10 @@
     'SLV':     'precious','SILVER':  'precious','XAG': 'precious',
     'GLD':     'precious',
     'PAXG':    'precious', 'XAU': 'precious', 'GOLD': 'precious',
-    /* Energy commodity perps (only GAS/NATGAS remain on HL — WTI/BRENT delisted) */
+    /* Energy commodity perps on HL */
     'GAS':     'energy',  'NATGAS': 'energy',
+    'WTI':     'energy',  'CRUDE':  'energy',  'OIL':   'energy',
+    'BRENT':   'energy',  'BRENTOIL': 'energy',
     /* Extended crypto perps */
     'DOGE':    'crypto',  'AVAX':   'crypto',  'DOT':    'crypto',
     'LINK':    'crypto',  'LTC':    'crypto',  'UNI':    'crypto',
@@ -198,8 +204,8 @@
   };
 
   /* ── Build static coverage set and reverse-map at init ─────────────────────
-     _hlCoveredAssets: { 'WTI': true, 'BTC': true, ... }
-     _eeToHL:          { 'WTI': 'CL', 'BRENT': 'BRENTOIL', ... }             */
+     _hlCoveredAssets: { 'BTC': true, 'WTI': true, ... }
+     _eeToHL:          { 'BTC': 'BTC', 'WTI': 'WTI', 'CRUDE': 'WTI', ... }  */
   var _hlCoveredAssets = {};
   var _eeToHL          = {};
   Object.keys(HL_MAP).forEach(function (hlTicker) {
@@ -440,14 +446,13 @@
       { eeName:'QQQ',   hlTicker:'@288',  assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:false, notes:'Nasdaq 100 ETF token, ~$600' },
       { eeName:'MSFT',  hlTicker:'@289',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Microsoft, ~$399 (accurate)' },
       /* Commodity perps on HL */
-      { eeName:'GAS',    hlTicker:'GAS',     assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'Natural gas perp — allMids key GAS (~$1.66)' },
-      /* Crude perps DELISTED from HL (Mar 2026) — route via OANDA CFD instead */
-      { eeName:'WTI',    hlTicker:null,      assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:false, fullPrice:false, notes:'WTI crude perp DELISTED from HL — use OANDA CFD' },
-      { eeName:'BRENT',  hlTicker:null,      assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:false, fullPrice:false, notes:'Brent crude perp DELISTED from HL — use OANDA CFD' },
+      { eeName:'GAS',    hlTicker:'GAS',     assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'Natural gas perp — allMids key GAS (~$1.66); maxLev 3 per HL API' },
+      { eeName:'WTI',    hlTicker:'WTI',     assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'WTI crude oil perp — user-confirmed on HL (speculative)' },
+      { eeName:'BRENT',  hlTicker:'BRENT',   assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'Brent crude perp — user-confirmed on HL (speculative)' },
       { eeName:'LMT',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token — flag for Alpaca/TD' },
       { eeName:'RTX',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },
       { eeName:'NOC',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },
-      { eeName:'NVDA',  hlTicker:null,    assetClass:'equity',   region:'US',     sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token (high-demand, prioritize)' },
+      { eeName:'NVDA',  hlTicker:null,    assetClass:'equity',   region:'US',     sector:'semis',    onHL:false, fullPrice:false, notes:'Registered HL spot token @408 but no confirmed active trading pair — exclude until pair is live' },
       { eeName:'TSM',   hlTicker:null,    assetClass:'equity',   region:'TAIWAN', sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
       { eeName:'ASML',  hlTicker:null,    assetClass:'equity',   region:'EU',     sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
       { eeName:'XLE',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'energy',   onHL:false, fullPrice:false, notes:'No HL spot token' },

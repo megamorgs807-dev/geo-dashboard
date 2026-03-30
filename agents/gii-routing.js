@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   GII-ROUTING v5 — Instrument Router & Leverage Optimiser  [HL-FIRST MODE]
+   GII-ROUTING v14 — Instrument Router & Leverage Optimiser  [HL-FIRST MODE]
    ══════════════════════════════════════════════════════════════════════════════
    Called by EE.onSignals() before every signal is processed.
 
@@ -62,8 +62,8 @@
      HL trades spot GOLD (~$3000). Routing fixes the price and position sizing.  */
   /* hlAsset = EE canonical name (HLFeed.covers/isAvailable accept EE names,
      not raw @N indices — the @N→EEname mapping lives in hl-feed.js HL_MAP).
-     Assets NOT on HL spot (WTI, BRENT, LMT, TSM, NVDA…) are kept here so the
-     router can still compute EV/sector/leverage for the flagged-trade log.    */
+     Assets with no active HL pair (LMT, TSM, NVDA…) are still listed so the
+     router can compute EV/sector/leverage for the flagged-trade log.          */
   var INSTRUMENT_MAP = {
     /* Precious metals — GLD/SLV now on HL spot (@276/@265) */
     'GLD':    { hlAsset: 'GLD',    sector: 'precious', maxLev: 3 },
@@ -71,15 +71,15 @@
     'SILVER': { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
     'XAG':    { hlAsset: 'SLV',    sector: 'precious', maxLev: 3 },
     'XAU':    { hlAsset: 'GLD',    sector: 'precious', maxLev: 3 },
-    /* Energy — WTI/BRENT crude perps DELISTED from HL (Mar 2026); routed via OANDA */
-    'BRENT':    { hlAsset: null, oandaInstrument: 'BCO_USD',   sector: 'energy', maxLev: 5 },
-    'BRENTOIL': { hlAsset: null, oandaInstrument: 'BCO_USD',   sector: 'energy', maxLev: 5 },
-    'WTI':      { hlAsset: null, oandaInstrument: 'WTICO_USD', sector: 'energy', maxLev: 5 },
-    'OIL':      { hlAsset: null, oandaInstrument: 'WTICO_USD', sector: 'energy', maxLev: 5 },
-    'CRUDE':    { hlAsset: null, oandaInstrument: 'WTICO_USD', sector: 'energy', maxLev: 5 },
-    /* Natural gas perp still live on HL (allMids key = 'GAS') */
-    'GAS':    { hlAsset: 'GAS',    sector: 'energy',   maxLev: 5 },
-    'NATGAS': { hlAsset: 'GAS',    sector: 'energy',   maxLev: 5 },
+    /* Energy — WTI/BRENT user-confirmed on HL (speculative); routed to HL-first */
+    'WTI':      { hlAsset: 'WTI',   sector: 'energy', maxLev: 3 },
+    'OIL':      { hlAsset: 'WTI',   sector: 'energy', maxLev: 3 },
+    'CRUDE':    { hlAsset: 'WTI',   sector: 'energy', maxLev: 3 },
+    'BRENT':    { hlAsset: 'BRENT', sector: 'energy', maxLev: 3 },
+    'BRENTOIL': { hlAsset: 'BRENT', sector: 'energy', maxLev: 3 },
+    /* Natural gas perp live on HL (allMids key = 'GAS'); maxLev 3 per HL API */
+    'GAS':    { hlAsset: 'GAS',    sector: 'energy',   maxLev: 3 },
+    'NATGAS': { hlAsset: 'GAS',    sector: 'energy',   maxLev: 3 },
     /* Crypto perps */
     'BTC':    { hlAsset: 'BTC',    sector: 'crypto',   maxLev: 3 },
     'ETH':    { hlAsset: 'ETH',    sector: 'crypto',   maxLev: 3 },
@@ -152,7 +152,7 @@
     'ONDO':   { hlAsset: 'ONDO',  sector: 'crypto',   maxLev: 3 },
     'JUP':    { hlAsset: 'JUP',   sector: 'crypto',   maxLev: 3 },
     'MKR':    { hlAsset: 'MKR',   sector: 'crypto',   maxLev: 3 },
-    'PAXG':   { hlAsset: 'PAXG',  sector: 'precious', maxLev: 2 },
+    'PAXG':   { hlAsset: 'PAXG',  sector: 'precious', maxLev: 10 }, // maxLev 10 confirmed per HL API
     /* Extended HL crypto perps — synced from hl-feed.js HL_MAP (Mar 2026) */
     'ALGO':   { hlAsset: 'ALGO',  sector: 'crypto',   maxLev: 3 },
     'XLM':    { hlAsset: 'XLM',   sector: 'crypto',   maxLev: 3 },
@@ -646,7 +646,7 @@
   };
 
   if (typeof console !== 'undefined') {
-    console.log('[GII-ROUTING v3] Loaded — ' + Object.keys(INSTRUMENT_MAP).length +
+    console.log('[GII-ROUTING v14] Loaded — ' + Object.keys(INSTRUMENT_MAP).length +
                 ' instruments | HL-FIRST mode | WARM tier (30s-2min) routes at 1× | ' +
                 'lev: ≥65%→2×, ≥75%→3×, ≥85%→5× | GII_ROUTING.preview("GLD",80) to test');
 

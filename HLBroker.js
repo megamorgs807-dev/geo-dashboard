@@ -97,11 +97,16 @@
     'JUP':       { name: 'Jupiter' },
     'ENS':       { name: 'Ethereum Name Service' },
     /* ── Commodities ─────────────────────────────────────────────────── */
-    'GAS':       { name: 'Natural Gas', hlCoin: 'GAS' },
-    'NATGAS':    { name: 'Natural Gas', hlCoin: 'GAS' },  // alias → GAS on HL
-    'PAXG':      { name: 'PAX Gold',    hlCoin: 'PAXG' },
-    'XAU':       { name: 'Gold (PAXG)', hlCoin: 'PAXG' }, // alias → PAXG on HL
-    'GOLD':      { name: 'Gold (PAXG)', hlCoin: 'PAXG' }, // alias → PAXG on HL
+    'GAS':       { name: 'Natural Gas',         hlCoin: 'GAS'   },
+    'NATGAS':    { name: 'Natural Gas',          hlCoin: 'GAS'   },  // alias → GAS on HL
+    'PAXG':      { name: 'PAX Gold',             hlCoin: 'PAXG'  },
+    'XAU':       { name: 'Gold (PAXG)',          hlCoin: 'PAXG'  }, // alias → PAXG on HL
+    'GOLD':      { name: 'Gold (PAXG)',          hlCoin: 'PAXG'  }, // alias → PAXG on HL
+    'WTI':       { name: 'WTI Crude Oil perp',  hlCoin: 'WTI'   }, // user-confirmed on HL
+    'CRUDE':     { name: 'WTI Crude Oil alias',  hlCoin: 'WTI'   },
+    'OIL':       { name: 'WTI Crude Oil alias',  hlCoin: 'WTI'   },
+    'BRENT':     { name: 'Brent Crude perp',     hlCoin: 'BRENT' }, // user-confirmed on HL
+    'BRENTOIL':  { name: 'Brent Crude alias',    hlCoin: 'BRENT' },
     /* ── Equity tokens (HL spot) ─────────────────────────────────────── */
     'SPY':       { name: 'S&P 500 token' },
     'QQQ':       { name: 'Nasdaq token' },

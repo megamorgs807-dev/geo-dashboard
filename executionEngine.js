@@ -374,20 +374,23 @@
      These assets generate signals from IC/GII agents but are not available on
      Hyperliquid, Alpaca, OANDA, or TickTrader. Without this early filter they
      burn a pipeline slot every hour (throttled flag) and add noise to the log.
-     WTI/BRENT crude perps were delisted from HL in Mar 2026.
-     Defense stocks (LMT, RTX, NOC), semis (NVDA, TSM, ASML), and various ETFs
-     have no HL spot token and no other connected broker.
+     IMPORTANT: Do NOT add assets here if they could route to any connected broker.
+     WTI/BRENT are user-confirmed on HL (speculatively) and also routable via OANDA —
+     they must reach the venue router, NOT be pre-filtered here.
+     NVDA has an HL spot token (@408) but no active trading pair — leave out until
+     an active pair is confirmed; it will hit the venue router and fail gracefully.
+     Defense stocks (LMT, RTX, NOC), semis (TSM, ASML), and various ETFs with
+     truly no connected broker stay here.
      Add assets here — not to ASSET_REMAP — when there is truly no tradeable proxy.
      The flag panel will still show them but only once ever (vs once per hour).    */
   var NO_VENUE_ASSETS = {
-    'WTI':true,  'BRENT':true, 'BRENTOIL':true, 'CRUDE':true, 'OIL':true,
     'LMT':true,  'RTX':true,   'NOC':true,  'XAR':true,
-    'NVDA':true, 'TSM':true,   'ASML':true, 'SMH':true,  'SOXX':true,
+    'TSM':true,  'ASML':true,  'SMH':true,  'SOXX':true,
     'XLE':true,  'XOM':true,   'GDX':true,  'GD':true,   'BA':true,
     'TLT':true,  'CORN':true,  'WEAT':true, 'WHEAT':true, 'WHT':true,
     'DAL':true,  'UAL':true,   'DIA':true,  'EEM':true,  'FXI':true,
-    'AMD':true,  'INDA':true,  'LIT':true,  'COPX':true, 'XME':true,
-    'URA':true,  'EWZ':true,   'EWJ':true,  'SOYB':true,
+    'AMD':true,  'INDA':true,  'COPX':true, 'XME':true,
+    'URA':true,  'EWZ':true,   'EWJ':true,  'SOYB':true, 'XLE':true,
   };
 
   /* ── Correlation groups — assets within each group are treated as equivalent
@@ -1703,7 +1706,11 @@
     //   Standard    — srcCount >= 2: corroborated by 2+ independent sources.
     //   Blocked     — single source, conf < 88%, or non-specialist.
     // Scalper/GII signals are always exempt (they have their own scoring pipeline).
-    var _isSrcScalper = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
+    var _isSrcScalper = sig.reason && (
+        sig.reason.indexOf('SCALPER') === 0 ||
+        sig.reason.indexOf('GII:') === 0 ||
+        sig.reason.indexOf('GII-ROUTING:') !== -1
+    );
     if (!_isSrcScalper) {
       var _needsCorroboration = sig.srcCount === undefined || sig.srcCount < 2;
       if (_needsCorroboration) {
@@ -1756,7 +1763,7 @@
     // Correlation guard: block if a correlated asset is already open in the same direction.
     // Scalper signals are exempt — they have tight stops and short hold times,
     // so running BTC and ETH scalps simultaneously is acceptable.
-    var _isSrcScalperCorr = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
+    var _isSrcScalperCorr = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0 || sig.reason.indexOf('GII-ROUTING:') !== -1);
     if (!_isSrcScalperCorr) {
       var corrGroup = _getCorrGroup(normaliseAsset(sig.asset));
       if (corrGroup) {
@@ -1872,7 +1879,7 @@
     // This is a SOFT brake — it raises the bar rather than fully stopping.
     // Distinct from: daily loss limit (hard stop), _ddMult (size scaler), lossStreak (cooldown).
     // Scalper signals exempt — they use their own tight risk controls.
-    var _isScalperHealth = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
+    var _isScalperHealth = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0 || sig.reason.indexOf('GII-ROUTING:') !== -1);
     if (!_isScalperHealth) {
       var _rapWin = 45 * 60 * 1000;  // 45-minute window
       var _rapNow = Date.now();
@@ -1952,7 +1959,7 @@
     // Open (09:30–10:00 ET) and close (15:30–16:00 ET) have wide spreads,
     // erratic price action, and high false-signal rates for news-based entries.
     // Scalper signals and OANDA forex signals are exempt.
-    var _isScalperForTod = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
+    var _isScalperForTod = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0 || sig.reason.indexOf('GII-ROUTING:') !== -1);
     if (!_isScalperForTod && !_isOandaFx) {
       var _now = new Date();
       // Convert to US Eastern Time (UTC-5 standard, UTC-4 daylight saving).
@@ -1974,7 +1981,7 @@
     // T3-E: scalper signals get a 5-min age gate (was fully exempt).
     // Scalp theses (momentum, breakout, RSI extreme) decay within minutes;
     // a 20-min-old scalp signal is not just stale — it's likely a reversal risk.
-    var _isScalperForAge = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0);
+    var _isScalperForAge = sig.reason && (sig.reason.indexOf('SCALPER') === 0 || sig.reason.indexOf('GII:') === 0 || sig.reason.indexOf('GII-ROUTING:') !== -1);
     var _maxAgeMs = _isScalperForAge ? 5 * 60 * 1000 : 15 * 60 * 1000;
     if (sig.ts && (Date.now() - sig.ts) > _maxAgeMs) {
       return { ok: false, reason: 'Signal stale — ' + Math.round((Date.now() - sig.ts) / 60000) + 'min old (>' + (_maxAgeMs / 60000) + 'min threshold for ' + (_isScalperForAge ? 'scalper' : 'IC') + ')' };
@@ -3471,7 +3478,7 @@
     // Source quality tier
     var srcTier = 1.0;
     var _srcN = (sig.source || _inferSource(sig.reason || '')).toLowerCase();
-    if (sig.reason && sig.reason.indexOf('GII:') === 0)       srcTier = 1.25; // IC/GII direct signal
+    if (sig.reason && (sig.reason.indexOf('GII:') === 0 || sig.reason.indexOf('GII-ROUTING:') !== -1))  srcTier = 1.25; // IC/GII direct signal
     else if ((sig.srcCount || 0) >= 3)                         srcTier = 1.18; // 3+ agreeing agents
     else if ((sig.srcCount || 0) >= 2)                         srcTier = 1.10; // 2 agents
     else if (SPECIALIST_SOURCES[_srcN])                        srcTier = 1.05; // specialist solo
@@ -7201,6 +7208,30 @@
           if (status) { status.textContent = '✗ Unreachable — check URL'; status.style.color = 'var(--red)'; }
           log('SYSTEM', 'Backend unreachable: ' + url, 'red');
         });
+    },
+
+    /* ── Diagnostic snapshot — call EE.diagnose() from the browser console ── */
+    /* Returns a summary string and logs key state variables for debugging.      */
+    diagnose: function () {
+      var open  = openTrades();
+      var last5 = (_sigLog || []).slice(-5);
+      var lines = [
+        '=== EE.diagnose() — v121 ===',
+        'Halted:        ' + _halted,
+        'Enabled:       ' + (_cfg && _cfg.enabled),
+        'ScalperPaused: ' + _scalperPaused,
+        'Open trades:   ' + open.length,
+        'Last 5 signal log entries:'
+      ];
+      last5.forEach(function (e, i) {
+        lines.push('  [' + (i + 1) + '] asset=' + (e.asset || '?') +
+          ' dir=' + (e.dir || '?') +
+          ' action=' + (e.action || '?') +
+          ' reason=' + (e.reason || e.result || '?'));
+      });
+      var summary = lines.join('\n');
+      console.log(summary);
+      return summary;
     }
   };
 
