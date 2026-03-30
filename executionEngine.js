@@ -5444,11 +5444,13 @@
         : t.venue === 'OANDA'      ? '<span style="font-size:7px;color:#22dd88;margin-left:3px">FX</span>'
         : t.venue === 'TICKTRADER' ? '<span style="font-size:7px;color:#dd88ff;margin-left:3px">TT</span>'
         : '<span style="font-size:7px;color:#a78bfa;margin-left:3px">HL</span>';
+      var closeReasonColor = t.close_reason === 'TAKE_PROFIT' || t.close_reason === 'TRAILING_STOP' ? '#00c800' : t.close_reason === 'STOP_LOSS' ? '#ff4444' : '#999';
       return '<div class="ee-closed-row">' +
         '<span class="ee-cr-reason ' + iconCls + '">' + icon + '</span>' +
         '<span class="ee-cr-asset">' + _esc(t.asset) + crVenue + '</span>' +
         '<span class="ee-cr-dir ' + t.direction.toLowerCase() + '">' + t.direction + '</span>' +
         '<span style="font-size:10px;color:#666;flex:1">[' + (t.source || t.signal_source || '?').toUpperCase() + ']</span>' +
+        '<span style="font-size:9px;color:' + closeReasonColor + '">' + (t.close_reason || '?') + '</span>' +
         '<span class="ee-cr-pnl ' + cls + '">' + (pc >= 0 ? '+' : '') + pc + '%</span>' +
         '<span class="ee-cr-usd ' + cls + '">' + (pu >= 0 ? '+$' : '-$') + _num(Math.abs(pu)) + rMult + '</span>' +
         '<span class="ee-cr-ts">' + _age(t.timestamp_open) + '</span>' +
