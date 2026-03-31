@@ -115,7 +115,12 @@
         var wr = d.wins / d.total;
         var cur = EE_ASSET_CONF_FLOOR[asset] || 0;
         var next = cur;
-        if      (wr < 0.25) next = Math.max(cur, 85);
+        // Fix #8: auto-exclude assets with <15% WR over 12+ trades.
+        // These assets are consistently losing — raising the floor to 100
+        // effectively blocks them until the floor is manually reset or the
+        // WR improves enough to be re-evaluated.
+        if      (wr < 0.15) next = 100;  // effectively excluded — persistent loser
+        else if (wr < 0.25) next = Math.max(cur, 85);
         else if (wr < 0.35) next = Math.max(cur, 78);
         else if (wr < 0.45) next = Math.max(cur, 70);
         else if (wr > 0.70) next = Math.min(cur || 65, 55);
@@ -4911,8 +4916,11 @@
           hitSL = price >= trade.stop_loss;
         }
 
+        // Fix #5: Realistic SL fills — use actual market price, not SL level.
+        // When price gaps through the SL, the real fill is at the market price,
+        // not the stop level. TP is a limit order so it fills at the TP level.
         if (hitTP)      closeTrade(trade.trade_id, trade.take_profit, 'TAKE_PROFIT');
-        else if (hitSL) closeTrade(trade.trade_id, trade.stop_loss,   'STOP_LOSS');
+        else if (hitSL) closeTrade(trade.trade_id, isLong ? Math.min(price, trade.stop_loss) : Math.max(price, trade.stop_loss), 'STOP_LOSS');
         else            renderUI();
       }); }, _monIdx * 100); // closes fetchPrice callback + setTimeout (F33 stagger)
     });
@@ -5254,13 +5262,17 @@
     var closed     = allClosed.filter(function (t) {
       return t.timestamp_close && new Date(t.timestamp_close).getTime() >= sessionTs;
     });
-    var wins   = closed.filter(function (t) { return t.close_reason === 'TAKE_PROFIT' || t.close_reason === 'TRAILING_STOP'; });
+    // Fix #7: Count any profitable close as a win, not just TP/trailing.
+    // A manual close at +5% or a max-hold expiry in profit is still a win.
+    // Exclude BROKER_REJECTED (no real trade) from the count entirely.
+    var _realClosed = closed.filter(function (t) { return t.close_reason !== 'BROKER_REJECTED' && t.close_reason !== 'INSUFFICIENT_SIZE'; });
+    var wins   = _realClosed.filter(function (t) { return (t.pnl_usd || 0) > 0; });
     // Session P&L — balance change since session start (not vs hard-coded default)
     // A18: fall back to current balance (0 P&L) not the hardcoded default ($1000)
     // — avoids a misleading "+$4000" P&L flash on page load before init sets the baseline
     var startBal = _sessionStartBalance || _cfg.virtual_balance;
     var totPnl   = _cfg.virtual_balance - startBal;
-    var rate   = closed.length ? Math.round(wins.length / closed.length * 100) : null;
+    var rate   = _realClosed.length ? Math.round(wins.length / _realClosed.length * 100) : null;
 
     var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
     set('eeBadgeMode',    _cfg.mode);
@@ -5983,6 +5995,8 @@
     var closed = _trades.filter(function (t) {
       return t.status === 'CLOSED' &&
              t.timestamp_close &&
+             t.close_reason !== 'BROKER_REJECTED' &&
+             t.close_reason !== 'INSUFFICIENT_SIZE' &&
              new Date(t.timestamp_close).getTime() >= sessionTs;
     });
     var sorted = closed.slice().sort(function (a, b) {
