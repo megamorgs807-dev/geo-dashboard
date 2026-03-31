@@ -805,6 +805,37 @@ async def hl_order(request: Request):
     return JSONResponse(content=result)
 
 
+@app.post('/api/hl/trigger')
+async def hl_trigger(request: Request):
+    """Place a server-side trigger order (SL or TP) on HL.
+    Body: {coin, side, size, triggerPx, type: 'stop'|'tp'}"""
+    body       = await request.json()
+    coin       = (body.get('coin') or '').upper().strip()
+    side       = (body.get('side') or '').lower()
+    size       = float(body.get('size', 0))
+    trigger_px = float(body.get('triggerPx', 0))
+    order_type = body.get('type', 'stop')
+    if not coin or side not in ('buy', 'sell') or size <= 0 or trigger_px <= 0:
+        return JSONResponse(content={'ok': False, 'error': 'coin, side, size, triggerPx required'})
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _hl.place_trigger_order, coin, side == 'buy', size, trigger_px, order_type
+    )
+    return JSONResponse(content=result)
+
+
+@app.post('/api/hl/cancel-triggers')
+async def hl_cancel_triggers(request: Request):
+    """Cancel all trigger orders for a coin. Body: {coin}"""
+    body = await request.json()
+    coin = (body.get('coin') or '').upper().strip()
+    if not coin:
+        return JSONResponse(content={'ok': False, 'error': 'coin required'})
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, _hl.cancel_trigger_orders, coin
+    )
+    return JSONResponse(content=result)
+
+
 @app.post('/api/hl/close')
 async def hl_close(request: Request):
     """Close the full HL position for a coin. Body: {coin}"""

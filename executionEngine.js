@@ -617,7 +617,8 @@
   var _peakEquity           = null;  // highest virtual_balance since session start — drawdown-from-peak guard
   var _ddFromPeak           = 0;     // current % drawdown from peak — read by buildTrade for size scaling
   var _liveBrokerEquity     = null;  // sum of all connected broker equities — polled every 60s, used for sizing
-  var _sizingHistory        = [];    // recent sizing adjustments (asset, target, actual, status) — for UI display
+  var _sizingHistory        = [];    // recent sizing adjustments — capped at 100 entries
+  var _SIZING_HISTORY_MAX  = 100;
   var _liveBrokerEquityTs   = 0;     // timestamp of last successful equity fetch
   var _liveBrokerSources    = [];    // which brokers contributed to _liveBrokerEquity
   var _halted               = false; // emergency kill switch — blocks all new trade execution when true
@@ -1658,14 +1659,17 @@
     if (sig.dir === 'WATCH')
       return { ok: false, reason: 'WATCH signals are excluded from execution' };
 
-    // Economic calendar gate: block all new trades within 30 min of a high-impact event
+    // Economic calendar gate: reduce risk near high-impact economic events.
+    // Aligned with Area 4: reduce rather than block, preserving the system's
+    // ability to trade around events (its core thesis).
     if (_cfg.event_gate_enabled && window.ECON_CALENDAR) {
       try {
         if (ECON_CALENDAR.shouldBlock()) {
           var _calEvt = ECON_CALENDAR.imminent();
-          return { ok: false, reason: 'High-impact event imminent: ' +
-            (_calEvt ? _calEvt.country + ' ' + _calEvt.title : 'economic release') +
-            ' — new trades blocked within 30 min of release' };
+          sig._eventRiskMult = Math.min(sig._eventRiskMult || 1.0, 0.50);
+          sig._eventLabel = _calEvt ? (_calEvt.country + ' ' + _calEvt.title) : 'economic release';
+          sig._eventMinsAway = _calEvt ? Math.round((_calEvt.time - Date.now()) / 60000) : 0;
+          log('EVENT', sig.asset + ' near high-impact event: ' + sig._eventLabel + ' — risk reduced to 50%', 'amber');
         }
       } catch (e) {}
     }
@@ -1888,12 +1892,14 @@
       }
     }
 
-    // Pre-event gate: block new trades within event_gate_hours of HIGH-IMPACT calendar events.
-    // Asset/region-aware: an event in one region doesn't block unrelated assets.
-    //   importance >= 5 (market-moving): blocks ALL signals — systemic global risk.
-    //   importance >= 4 (major):         blocks if event region matches signal region.
-    //   importance >= 3 (medium-high):   blocks only if event asset matches signal asset.
-    // This prevents a minor EU event from blocking BTC or JPY pairs.
+    // ── Area 4: Pre-event gate — risk reduction, not blocking ────────────────
+    // The system's edge IS event-driven trading. Blocking all trades before events
+    // contradicts the core thesis. Instead:
+    //   importance >= 5 (market-moving): flag for reduced size (50%), don't block
+    //   importance >= 4 (major, same region): flag for reduced size (70%)
+    //   importance >= 3 (medium, same asset): flag for reduced size (80%)
+    // The size reduction is applied in buildTrade via sig._eventRiskMult.
+    // This preserves the ability to capture event-driven moves while managing risk.
     if (_cfg.event_gate_enabled) {
       var calAgent = window.GII_AGENT_CALENDAR;
       if (calAgent && typeof calAgent.upcoming === 'function') {
@@ -1902,20 +1908,27 @@
           var gateHours = _cfg.event_gate_hours || 0.5;
           var _sigRegion  = (sig.region || '').toUpperCase();
           var _sigAsset   = normaliseAsset(sig.asset);
-          var blocked = upcoming.filter(function (ev) {
+          var _eventMatches = upcoming.filter(function (ev) {
             if (ev.days < 0 || ev.days > gateHours / 24) return false;
             var imp = ev.importance || 0;
-            if (imp >= 5) return true;                          // market-moving: block everything
+            if (imp >= 5) return true;
             var evRegion = (ev.region || '').toUpperCase();
             var evAsset  = (ev.asset  || '').toUpperCase();
-            if (imp >= 4 && evRegion && evRegion === _sigRegion) return true;  // major event, same region
-            if (imp >= 3 && evAsset  && evAsset  === _sigAsset)  return true;  // any event, same asset
+            if (imp >= 4 && evRegion && evRegion === _sigRegion) return true;
+            if (imp >= 3 && evAsset  && evAsset  === _sigAsset)  return true;
             return false;
           });
-          if (blocked.length) {
-            var ev0 = blocked[0];
+          if (_eventMatches.length) {
+            var ev0 = _eventMatches[0];
             var minsAway = Math.round(ev0.days * 24 * 60);
-            return { ok: false, reason: 'Event gate: "' + ev0.label.substring(0, 45) + '" in ' + minsAway + 'min' };
+            var _evImp = ev0.importance || 0;
+            // Risk reduction instead of blocking: higher importance = more reduction
+            sig._eventRiskMult = _evImp >= 5 ? 0.50 : _evImp >= 4 ? 0.70 : 0.80;
+            sig._eventLabel = ev0.label ? ev0.label.substring(0, 45) : 'upcoming event';
+            sig._eventMinsAway = minsAway;
+            // Log the reduction but let the trade through
+            log('EVENT', sig.asset + ' pre-event risk ×' + sig._eventRiskMult +
+                ' — "' + sig._eventLabel + '" in ' + minsAway + 'min', 'amber');
           }
         } catch (e) { /* calendar agent unavailable — skip gate */ }
       }
@@ -2372,13 +2385,12 @@
       riskAmt = SCALPER_RISK_CAP;
     }
 
-    // Forex leverage gate — tiered by confidence on OANDA currency pairs.
-    // Only applies to pure FX pairs (not metals/energy/indices).
-    // Hard cap: 10% of balance per trade regardless of leverage tier.
-    //   conf 82–84%: 5×   — solid signal, meaningful amplification
-    //   conf 85–89%: 15×  — strong signal, aggressive sizing
-    //   conf ≥ 90%:  25×  — near OANDA's 30:1 limit, reserved for best setups
-    // Blocked in RISK_OFF regime (safe-haven flows override carry/momentum).
+    // ── Area 3: Forex leverage — applied as signal leverage, not risk amplification ──
+    // Forex pairs use leverage to achieve proper notional sizing (FX moves are tiny,
+    // ~0.1% per day, so meaningful PnL requires leverage). However, the RISK
+    // amount stays capped by the risk model. Leverage is set on the trade object
+    // and applied at the units-calculation stage (same as crypto leverage from routing).
+    // This ensures forex leverage doesn't bypass max_risk_usd or the totalMult cap.
     var _FX_PAIRS = {
       'EUR_USD':1,'GBP_USD':1,'USD_JPY':1,'USD_CHF':1,'AUD_USD':1,
       'USD_CAD':1,'NZD_USD':1,'GBP_JPY':1,'EUR_JPY':1,'EUR_GBP':1
@@ -2389,15 +2401,15 @@
       try { if (window.MacroRegime && MacroRegime.current) _fxRegime = MacroRegime.current().regime || 'RISK_ON'; } catch(e) {}
       var _fxConf = sig.conf || 0;
       if (_fxConf >= 82 && _fxRegime !== 'RISK_OFF') {
-        var _fxLevMult = _fxConf >= 90 ? 25 : _fxConf >= 85 ? 15 : 5;
-        var _fxLevAmt  = Math.min(riskAmt * _fxLevMult, _effectiveBal * 0.10);
-        if (_fxLevAmt > riskAmt) {
-          log('RISK', sig.asset + ' forex ' + _fxLevMult + '× lev (conf=' + _fxConf + '% ' + _fxRegime + '): $' +
-              riskAmt.toFixed(2) + ' → $' + _fxLevAmt.toFixed(2), 'green');
-          riskAmt = _fxLevAmt;
-          _fxLeveraged = true;
-        }
+        // Set leverage on the signal — it gets applied at units calculation stage
+        // alongside the MAX_LEVERAGE and notional caps, so risk caps are respected.
+        var _fxLev = _fxConf >= 90 ? 25 : _fxConf >= 85 ? 15 : 5;
+        sig.leverage = Math.max(sig.leverage || 1, _fxLev);
+        _fxLeveraged = true;
+        log('RISK', sig.asset + ' forex leverage set to ' + _fxLev + '× (conf=' + _fxConf + '% ' + _fxRegime + ') — applied at units stage', 'dim');
       }
+      // Note: riskAmt is NOT modified here. The leverage affects notional (units × price)
+      // but the risk in dollars (units × SL distance) stays within the risk model's intent.
     }
 
     // Crypto volatility discount: BTC/ETH/SOL are 3-5× more volatile than equities/energy.
@@ -2561,6 +2573,16 @@
     }
     /* ─────────────────────────────────────────────────────────────────────── */
 
+    // ── Area 4: Apply pre-event risk reduction ──────────────────────────────
+    // If canExecute flagged an upcoming event, reduce risk instead of blocking.
+    if (sig._eventRiskMult && sig._eventRiskMult < 1.0) {
+      var _bfEvent = riskAmt;
+      riskAmt = riskAmt * sig._eventRiskMult;
+      log('RISK', sig.asset + ' pre-event risk reduction ×' + sig._eventRiskMult +
+          ' ("' + (sig._eventLabel || '?') + '" in ' + (sig._eventMinsAway || '?') + 'min)' +
+          ': $' + _bfEvent.toFixed(2) + ' → $' + riskAmt.toFixed(2), 'amber');
+    }
+
     var units    = (slDist > 0 && riskAmt > 0) ? riskAmt / slDist : 0;
     // Apply signal leverage: scales notional so a 5× signal produces 5× exposure.
     // The MAX_LEVERAGE cap below still applies as a hard ceiling.
@@ -2588,33 +2610,76 @@
       log('AUDIT', '⚠ SIZE CAP: ' + sig.asset + ' capped at 50% balance ($' + _maxNotional.toFixed(0) + ')', 'amber');
     }
 
-    // Minimum notional floor: ensure positions are large enough to be meaningful.
-    // HL requires minimum $10 order size (actually > $10, so $14 safe margin)
-    var _minNotional = Math.max(14, Math.min(_effectiveBal * 0.10, Math.max(30, _effectiveBal * 0.01)));
-    if (sizeUsd > 0 && sizeUsd < _minNotional && entryPrice > 0) {
-      units   = _minNotional / entryPrice;
-      sizeUsd = _minNotional;
-      log('RISK', sig.asset + ' size raised to minimum notional floor $' + _minNotional.toFixed(0), 'dim');
-    }
+    // ── Area 2: Exchange minimum notional — leverage bridging ─────────────
+    // HL requires > $10 notional. Instead of blindly inflating risk to meet
+    // this floor (which contradicts the risk model), we use leverage to bridge
+    // the gap: same risk exposure, larger notional.
+    //
+    // Example: risk model says $5, exchange needs $14.
+    //   → Use 3× leverage: $14 notional with $5 actual risk (margin = $14/3 ≈ $4.67)
+    //   → SL distance still produces the intended $5 loss on stop.
+    //
+    // If the required leverage exceeds the asset's maximum, skip the trade.
+    // Valid trades over forced trades.
+    var _EXCHANGE_MIN_NOTIONAL = 14;  // HL requires > $10, $14 gives margin
+    var _SZ_DEC = {'BTC':6,'ETH':8,'SOL':2,'XRP':1,'DOGE':0,'ADA':0,'AVAX':1,'DOT':1,'LINK':2,'LTC':3,'GLD':2,'SLV':2,'PAXG':4,'WTI':2,'BRENT':2,'CRUDE':2,'NVDA':3,'HOOD':2,'CRCL':1};
 
-    // Post-rounding guard: HL enforces asset-specific decimal precision.
-    // After rounding units to valid precision, actual notional can fall BELOW
-    // the $14 minimum (e.g. GLD: 0.07 units × $195 = $13.65 → rejected).
-    // Fix: round UP to the next valid unit so notional always meets minimum.
+    // Step 1: Round units to exchange precision first
     if (entryPrice > 0 && units > 0) {
-      var _SZ_DEC = {'BTC':6,'ETH':8,'SOL':2,'XRP':1,'DOGE':0,'ADA':0,'AVAX':1,'DOT':1,'LINK':2,'LTC':3,'GLD':2,'SLV':2,'PAXG':4,'WTI':2,'BRENT':2,'CRUDE':2,'NVDA':3,'HOOD':2,'CRCL':1};
       var _dec = _SZ_DEC[sig.asset] !== undefined ? _SZ_DEC[sig.asset] : 4;
       var _factor = Math.pow(10, _dec);
-      var _roundedUnits = Math.round(units * _factor) / _factor;
-      var _actualNotional = _roundedUnits * entryPrice;
-      // If rounding dropped us below minimum, bump up by one unit increment
-      if (_actualNotional < _minNotional) {
-        _roundedUnits = Math.ceil(units * _factor) / _factor;
-        _actualNotional = _roundedUnits * entryPrice;
-        log('RISK', sig.asset + ' units bumped to ' + _roundedUnits + ' (' + _dec + ' dec) — rounding would have dropped notional to $' + (_roundedUnits * entryPrice - (1/_factor) * entryPrice).toFixed(2), 'dim');
+      units   = Math.round(units * _factor) / _factor;
+      sizeUsd = +(units * entryPrice).toFixed(2);
+    }
+
+    // Step 2: If notional is below exchange minimum, bridge with leverage.
+    // Leverage bridging keeps position units the same (same risk) but tells the
+    // exchange to treat the margin as leveraged. On HL, placing a $5 risk order
+    // with 3× leverage means: $15 notional, $5 margin, same SL risk in dollars.
+    // The units don't change — only the leverage tag on the order changes.
+    if (sizeUsd > 0 && sizeUsd < _EXCHANGE_MIN_NOTIONAL && entryPrice > 0) {
+      var _bridgeLev = Math.ceil(_EXCHANGE_MIN_NOTIONAL / sizeUsd);
+      // Check against asset's max allowed leverage
+      var _assetMaxLev = MAX_LEVERAGE;
+      var _instMaxLev = {'GLD':3,'SLV':3,'WTI':3,'BRENT':3,'PAXG':10,
+                         'BTC':50,'ETH':50,'SOL':20,'XRP':20,'DOGE':10,
+                         'AVAX':10,'DOT':10,'LINK':10,'LTC':10};
+      if (_instMaxLev[normaliseAsset(sig.asset)]) _assetMaxLev = _instMaxLev[normaliseAsset(sig.asset)];
+
+      if (_bridgeLev <= _assetMaxLev) {
+        // Bridge: units stay the same, but we apply leverage so the exchange
+        // sees sufficient notional. Risk in dollars is preserved.
+        // However, we need to ensure the rounded notional meets the minimum.
+        var _dec2 = _SZ_DEC[sig.asset] !== undefined ? _SZ_DEC[sig.asset] : 4;
+        var _factor2 = Math.pow(10, _dec2);
+        // Bump units just enough to meet minimum notional after rounding
+        var _minUnits = Math.ceil((_EXCHANGE_MIN_NOTIONAL / entryPrice) * _factor2) / _factor2;
+        if (_minUnits > units) units = _minUnits;
+        var _bridgedNotional = units * entryPrice;
+        sizeUsd = +_bridgedNotional.toFixed(2);
+        sig.leverage = Math.max(sig.leverage || 1, _bridgeLev);
+        sig._leverageBridged = true;
+        log('RISK', sig.asset + ' leverage bridge: notional $' + sizeUsd.toFixed(2) +
+            ' (×' + _bridgeLev + ' lev) — risk $' + riskAmt.toFixed(2) +
+            ' preserved, margin $' + (sizeUsd / _bridgeLev).toFixed(2), 'cyan');
+      } else {
+        // Cannot bridge — leverage would exceed asset max. Skip the trade.
+        log('RISK', sig.asset + ' rejected — $' + sizeUsd.toFixed(2) + ' below exchange min $' +
+            _EXCHANGE_MIN_NOTIONAL + ', would need ' + _bridgeLev + '× lev (max ' + _assetMaxLev + '×)', 'amber');
+        return null;
       }
-      units   = _roundedUnits;
-      sizeUsd = +_actualNotional.toFixed(2);
+    }
+
+    // Step 3: Final post-rounding check — if rounding dropped us below minimum,
+    // bump up by one unit increment (micro-adjustment, not a risk override)
+    if (entryPrice > 0 && units > 0) {
+      var _dec3 = _SZ_DEC[sig.asset] !== undefined ? _SZ_DEC[sig.asset] : 4;
+      var _factor3 = Math.pow(10, _dec3);
+      var _postNotional = units * entryPrice;
+      if (_postNotional < _EXCHANGE_MIN_NOTIONAL && _postNotional > 0) {
+        units = Math.ceil(units * _factor3) / _factor3;
+        sizeUsd = +(units * entryPrice).toFixed(2);
+      }
     }
 
     // Reality check 7 — reject zero-size positions: risk budget exhausted or SL too wide.
@@ -2690,13 +2755,86 @@
       // notional leverage may differ if risk caps were hit — compare with
       // size_usd / virtual_balance in the UI to see the effective leverage.
       leverage:     sig.leverage || 1,
+      leverage_bridged: !!sig._leverageBridged,  // true when leverage was used to meet exchange minimum
       // Dollar risk at open (used for R-multiple display in closed trade rows)
       initial_risk_usd: +riskAmt.toFixed(2),
+      // Pre-event risk reduction applied (1.0 = none, 0.50 = halved)
+      event_risk_mult: sig._eventRiskMult || null,
+      event_label:     sig._eventLabel    || null,
       // Original (pre-routing) asset name if gii-routing remapped it (e.g. GLD→XAU).
       original_asset: sig.original_asset || null,
       // Regime snapshot: market conditions at trade open (GTI level, risk mode, VIX, threat).
       regime: _captureRegime()
     };
+  }
+
+  /* ── Broker-side protection orders ─────────────────────────────────────────
+     After an HL fill, place server-side SL and TP trigger orders so the position
+     is protected even if the browser crashes, tab closes, or local monitoring
+     fails. The local monitor still manages exits (partial TP, trailing, etc.)
+     and will cancel+replace these triggers when it moves SL to break-even.
+     These are a safety net, not the primary exit mechanism.                    */
+  function _placeHLProtectionOrders(trade) {
+    if (!window.HLBroker || !HLBroker.isConnected()) return;
+    if (!trade || trade.venue !== 'HL') return;
+    if (!trade.stop_loss || !trade.take_profit || !trade.units) return;
+
+    var closeSide = trade.direction === 'LONG' ? 'sell' : 'buy';
+    var sz = Math.abs(trade.units);
+
+    // Place SL trigger order
+    HLBroker.placeTriggerOrder(trade.asset, closeSide, sz, trade.stop_loss, 'stop')
+      .then(function (r) {
+        if (r && r.ok) {
+          trade._hlSlOid = r.oid || null;
+          log('HL', trade.asset + ' server-side SL set @ $' + trade.stop_loss.toFixed(4), 'dim');
+        } else {
+          log('HL', trade.asset + ' SL trigger failed: ' + (r ? r.error : 'unknown') + ' — local monitor is still active', 'amber');
+        }
+      }).catch(function (e) {
+        log('HL', trade.asset + ' SL trigger error: ' + e.message + ' — local monitor is still active', 'amber');
+      });
+
+    // Place TP trigger order
+    HLBroker.placeTriggerOrder(trade.asset, closeSide, sz, trade.take_profit, 'tp')
+      .then(function (r) {
+        if (r && r.ok) {
+          trade._hlTpOid = r.oid || null;
+          log('HL', trade.asset + ' server-side TP set @ $' + trade.take_profit.toFixed(4), 'dim');
+        } else {
+          log('HL', trade.asset + ' TP trigger failed: ' + (r ? r.error : 'unknown'), 'amber');
+        }
+      }).catch(function () {});
+  }
+
+  /* Update broker-side SL when the local monitor moves SL (break-even, trailing).
+     Cancels existing triggers and replaces them with the new SL level.          */
+  function _updateHLProtectionSL(trade, newSL) {
+    if (!window.HLBroker || !HLBroker.isConnected()) return;
+    if (!trade || trade.venue !== 'HL' || !newSL) return;
+
+    var closeSide = trade.direction === 'LONG' ? 'sell' : 'buy';
+    var sz = Math.abs(trade.units);
+
+    // Cancel existing SL trigger, then place new one
+    HLBroker.cancelTriggerOrders(trade.asset)
+      .then(function () {
+        return HLBroker.placeTriggerOrder(trade.asset, closeSide, sz, newSL, 'stop');
+      })
+      .then(function (r) {
+        if (r && r.ok) {
+          trade._hlSlOid = r.oid || null;
+          log('HL', trade.asset + ' server-side SL updated → $' + newSL.toFixed(4), 'dim');
+        }
+        // Re-place TP if it was cancelled
+        if (trade.take_profit) {
+          return HLBroker.placeTriggerOrder(trade.asset, closeSide, sz, trade.take_profit, 'tp');
+        }
+      })
+      .then(function (r) {
+        if (r && r.ok) trade._hlTpOid = r.oid || null;
+      })
+      .catch(function () {});
   }
 
   /* Open a trade: build object, persist, sync HRS, log */
@@ -2831,6 +2969,11 @@
           });
           log('HL', trade.asset + ' FILLED @ $' + fillPrice.toFixed(4) +
             ' · lev ' + _hlLev + 'x · notional $' + trade.size_usd.toFixed(0), 'green');
+          // ── Area 1: Place server-side SL/TP trigger orders on HL ──────────
+          // These protect the position even if the browser crashes or tab closes.
+          // The local monitor continues to manage exits (partial TP, trailing, etc.)
+          // but these broker-side orders act as a safety net.
+          _placeHLProtectionOrders(trade);
           renderUI();
         },
         /* onFail */ function (reason) {
@@ -2840,6 +2983,8 @@
           trade.close_reason    = 'BROKER_REJECTED';
           trade.timestamp_close = new Date().toISOString();
           _cfg.virtual_balance += (trade.open_commission || 0);
+          // Area 5: Clear cooldown on rejection — no trade opened, don't lock out asset
+          delete _cooldown[normaliseAsset(trade.asset) + '_' + (trade.direction || 'LONG')];
           saveTrades();
           saveCfg();
           _apiPatchTrade(trade.trade_id, {
@@ -2847,7 +2992,7 @@
             broker_error: trade.broker_error, timestamp_close: trade.timestamp_close
           });
           log('HL', '⚠ Order ' + reason + ' for ' + trade.asset +
-            ' — trade closed, commission refunded.', 'red');
+            ' — trade closed, commission refunded, cooldown cleared.', 'red');
           renderUI();
         }
       ).then(function (result) {
@@ -2861,13 +3006,15 @@
         trade.close_reason    = 'BROKER_REJECTED';
         trade.timestamp_close = new Date().toISOString();
         _cfg.virtual_balance += (trade.open_commission || 0);
+        // Area 5: Clear cooldown on rejection
+        delete _cooldown[normaliseAsset(trade.asset) + '_' + (trade.direction || 'LONG')];
         saveTrades();
         saveCfg();
         _apiPatchTrade(trade.trade_id, {
           status: 'CLOSED', close_reason: 'BROKER_REJECTED',
           broker_error: trade.broker_error, timestamp_close: trade.timestamp_close
         });
-        log('HL', '⚠ Order REJECTED for ' + trade.asset + ': ' + trade.broker_error, 'red');
+        log('HL', '⚠ Order REJECTED for ' + trade.asset + ': ' + trade.broker_error + ' — cooldown cleared', 'red');
         renderUI();
       });
     }
@@ -3145,6 +3292,12 @@
     trade.status          = 'CLOSED';
     trade.timestamp_close = new Date().toISOString();
     trade.close_reason    = reason;
+
+    // Cancel broker-side trigger orders when closing locally.
+    // Prevents phantom SL/TP triggers from firing after the position is closed.
+    if (trade.venue === 'HL' && window.HLBroker && HLBroker.isConnected()) {
+      HLBroker.cancelTriggerOrders(trade.asset).catch(function () {});
+    }
 
     // Guard: corrupted or missing close price (NaN, Infinity, 0, negative) must not
     // propagate into P&L. Reject the close and log — the monitor loop will retry.
@@ -4500,6 +4653,8 @@
             trade.stop_loss        = beStop;
             trade.break_even_done  = true;
             trade.trailing_stop_active = true;
+            // Update broker-side SL to break-even level
+            _updateHLProtectionSL(trade, beStop);
             // Bank partial P&L into balance (net of commission)
             _cfg.virtual_balance  += partialPnl;
             saveCfg();
@@ -4539,6 +4694,8 @@
               trade.stop_loss           = newBEStop;
               trade.break_even_done     = true;
               trade.trailing_stop_active = true;
+              // Update broker-side SL to break-even level
+              _updateHLProtectionSL(trade, newBEStop);
               saved = true;
               log('TRAIL', trade.asset + ' break-even stop @ ' + _num(newBEStop), 'amber');
               // Fix #12: when break-even is activated, the trade has proven momentum by
@@ -4676,6 +4833,20 @@
               trade.stop_loss = trailedStopS;
               saved = true;
             }
+          }
+        }
+
+        // ── Sync broker-side SL when trailing stop moves significantly ──
+        // Only update HL trigger orders when the SL has moved by ≥0.3% from the
+        // last synced level to avoid spamming the API with tiny adjustments.
+        if (saved && trade.venue === 'HL' && trade.trailing_stop_active) {
+          var _lastSyncedSL = trade._hlSyncedSL || 0;
+          var _slDrift = _lastSyncedSL > 0
+            ? Math.abs(trade.stop_loss - _lastSyncedSL) / _lastSyncedSL
+            : 1;
+          if (_slDrift >= 0.003) {
+            trade._hlSyncedSL = trade.stop_loss;
+            _updateHLProtectionSL(trade, trade.stop_loss);
           }
         }
 

@@ -397,6 +397,26 @@
       return _post('/api/hl/close', { coin: _hlCoin(symbol) });
     },
 
+    /* Place a server-side trigger order (SL or TP) on HL.
+       type: 'stop' for stop-loss, 'tp' for take-profit.
+       side: 'buy' (to close a short) or 'sell' (to close a long).
+       size: position size in asset units.
+       triggerPx: price at which the order triggers as a market order. */
+    placeTriggerOrder: async function (symbol, side, size, triggerPx, type) {
+      return _post('/api/hl/trigger', {
+        coin:      _hlCoin(symbol),
+        side:      side,
+        size:      size,
+        triggerPx: triggerPx,
+        type:      type || 'stop'
+      });
+    },
+
+    /* Cancel all trigger orders for a symbol. */
+    cancelTriggerOrders: async function (symbol) {
+      return _post('/api/hl/cancel-triggers', { coin: _hlCoin(symbol) });
+    },
+
     getPositions: async function () {
       return _get('/api/hl/positions');
     },

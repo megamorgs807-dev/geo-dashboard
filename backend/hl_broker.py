@@ -261,6 +261,75 @@ def place_order(coin: str, is_buy: bool, size_usd: float, leverage: int = 1) -> 
         return {'ok': False, 'error': str(e)}
 
 
+def place_trigger_order(coin: str, is_buy: bool, sz: float, trigger_px: float,
+                        order_type: str = 'stop') -> dict:
+    """Place a server-side trigger (stop-loss or take-profit) order on HL.
+
+    order_type: 'stop' for stop-loss, 'tp' for take-profit.
+    is_buy: True to buy (closing a short), False to sell (closing a long).
+    sz: position size in asset units (must match open position size).
+    trigger_px: price at which the order triggers.
+    """
+    if not _exchange:
+        return {'ok': False, 'error': 'Not connected'}
+    try:
+        # HL trigger orders use the order API with trigger-specific parameters.
+        # We use the exchange's raw order endpoint for trigger orders.
+        decimals = _sz_decimals.get(coin, 5)
+        sz_rounded = round(abs(sz), decimals)
+        if sz_rounded <= 0:
+            return {'ok': False, 'error': f'Size too small after rounding: {sz}'}
+
+        # Build the trigger order via the SDK
+        # HL API: order type for triggers is {trigger: {triggerPx, isMarket, tpsl}}
+        # tpsl: 'sl' for stop-loss, 'tp' for take-profit
+        tpsl = 'sl' if order_type == 'stop' else 'tp'
+        order_result = _exchange.order(
+            coin,
+            is_buy,
+            sz_rounded,
+            trigger_px,  # limit price (ignored for market trigger)
+            {'trigger': {'triggerPx': trigger_px, 'isMarket': True, 'tpsl': tpsl}},
+            reduce_only=True
+        )
+
+        if order_result and order_result.get('status') == 'ok':
+            statuses = (order_result.get('response', {}).get('data', {}) or {}).get('statuses', [])
+            first = statuses[0] if statuses else {}
+            if 'error' in first:
+                return {'ok': False, 'error': first['error']}
+            resting = first.get('resting', {})
+            oid = resting.get('oid', None)
+            return {'ok': True, 'coin': coin, 'type': tpsl, 'triggerPx': trigger_px, 'oid': oid}
+
+        return {'ok': False, 'error': str(order_result)}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def cancel_trigger_orders(coin: str) -> dict:
+    """Cancel all open trigger orders for a coin."""
+    if not _exchange:
+        return {'ok': False, 'error': 'Not connected'}
+    try:
+        # Use frontendOpenOrders which includes isTrigger and orderType fields
+        open_orders = _info_post({
+            'type': 'frontendOpenOrders',
+            'user': _cfg['wallet']
+        })
+        cancelled = 0
+        for order in open_orders:
+            if order.get('coin') == coin and order.get('isTrigger', False):
+                try:
+                    _exchange.cancel(coin, order['oid'])
+                    cancelled += 1
+                except Exception:
+                    pass
+        return {'ok': True, 'cancelled': cancelled}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
 def close_position(coin: str) -> dict:
     if not _exchange:
         return {'ok': False, 'error': 'Not connected'}
