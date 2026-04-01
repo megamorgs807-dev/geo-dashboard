@@ -608,6 +608,7 @@
   var _seq         = 0;    // ID sequence counter
   var _livePrice   = {};   // trade_id → most-recently fetched market price
   var _lastSignals = [];   // most recent IC signal batch — used by the re-scan loop
+  var _sigDedupCache = {};  // asset+dir → last-processed timestamp (30s TTL, cross-batch dedup)
   var _signalLog   = [];   // full history of every IC signal seen (capped at 200)
   var _pnlHistory  = [];   // { ts, balance, event, pnl_usd } balance timeline (capped at 500)
   var _pendingOpen = {};   // asset → true while a fetchPrice is in-flight (prevents duplicate opens)
@@ -967,6 +968,13 @@
       if (existing) { Object.assign(existing.data, data); _saveWriteQueue(); return; }
     }
     _writeQueue.push({ op: op, tradeId: tradeId, data: data, ts: Date.now() });
+    // #20: Cap queue size — if backend is offline for a long time, don't let
+    // the queue grow unbounded. Keep newest items, drop oldest.
+    var _WQ_MAX = 200;
+    if (_writeQueue.length > _WQ_MAX) {
+      _writeQueue = _writeQueue.slice(-_WQ_MAX);
+      log('WARN', 'Write queue capped at ' + _WQ_MAX + ' items — oldest entries dropped', 'amber');
+    }
     _saveWriteQueue();
   }
 
@@ -2132,7 +2140,11 @@
     // Now: calculate global win rate from all closed trades as the default prior.
     var kellyMult = 1.0;
     (function () {
-      var R = _cfg.take_profit_ratio;
+      // Fix #11: use the actual TP ratio for this signal, not the config default.
+      // sigTpRatio/dynTPRatio may differ from config when signals carry atrTarget
+      // or dynamic regime adjustments are applied. Using the wrong R early on
+      // (before 10+ trades provide realised R) systematically mis-sizes.
+      var R = sigTpRatio || _cfg.take_profit_ratio;
       if (R <= 1.0) return;   // degenerate config — Kelly undefined
 
       // Global prior: use shared closed-trade cache (avoids double filter — F31 fix)
@@ -3701,6 +3713,18 @@
     // T2-B: fuse multi-agent agreement before processing
     sigs = _fuseSignals(sigs);
 
+    // Fix #16: Cross-batch dedup — reject signals for asset+direction combos
+    // that were already processed in the last 30 seconds. Prevents the same
+    // signal arriving in two rapid batches from opening duplicate trades.
+    sigs = sigs.filter(function (s) {
+      var _ddKey = normaliseAsset(s.asset) + '|' + (s.dir || 'LONG');
+      var _lastSeen = _sigDedupCache[_ddKey] || 0;
+      if (_now - _lastSeen < 30000) return false;  // seen in last 30s — skip
+      _sigDedupCache[_ddKey] = _now;
+      return true;
+    });
+    if (!sigs.length) return;
+
     // Scalper pause filter: drop scalper signals while _scalperPaused is active.
     // GII/IC and all other signals still pass through normally.
     if (_scalperPaused) {
@@ -3737,6 +3761,18 @@
       }
       if (sig.reasoning !== undefined && sig.reason === undefined) sig.reason = sig.reasoning;
       // ───────────────────────────────────────────────────────────────────────────
+
+      // Fix #17: Proportional confidence decay on first arrival.
+      // A 14-minute-old signal at 60% has lower expected value than a fresh 60%.
+      // Decay linearly: 100% at age 0, 85% at 10 min, 75% at 15 min.
+      if (sig._signalTs && sig.ts) {
+        var _arrivalAge = (Date.now() - sig._signalTs) / 60000;  // age in minutes
+        if (_arrivalAge > 2) {  // only decay if > 2 min old (avoid penalising normal latency)
+          var _arrivalDecay = Math.max(0.70, 1.0 - (_arrivalAge / 60));  // 0→1.0, 10→0.83, 15→0.75, 30→0.50
+          sig.conf       = Math.round((sig.conf       || 60) * _arrivalDecay);
+          sig.confidence = Math.round((sig.confidence || 60) * _arrivalDecay);
+        }
+      }
 
       // Asset remap: replace untradeable index/spot assets with their tradeable proxies.
       // Mutates a shallow copy so the original signal object is not modified.
@@ -4588,10 +4624,23 @@
             ? (Date.now() - _priceCacheTs[normaliseAsset(trade.asset)])
             : (Date.now() - new Date(trade.timestamp_open || 0).getTime());
           if (_cacheAge > _PRICE_STALE_TIMEOUT) {
-            var _fallback = _priceCache[normaliseAsset(trade.asset)] || trade.entry_price;
+            // Fix #10: use worst-case price on stale force-close.
+            // The cached price could be 29 min old. Using entry_price would fake
+            // a breakeven. Instead, use whichever is worse for the trade direction
+            // to be conservative about uncertain market conditions.
+            var _cached = _priceCache[normaliseAsset(trade.asset)] || 0;
+            var _entry  = trade.entry_price || 0;
+            var _fallback;
+            if (_cached > 0 && _entry > 0) {
+              _fallback = (trade.direction === 'LONG')
+                ? Math.min(_cached, _entry)    // worst case for LONG = lower price
+                : Math.max(_cached, _entry);   // worst case for SHORT = higher price
+            } else {
+              _fallback = _cached || _entry;
+            }
             log('TRADE', trade.asset + ' STALE-PRICE-TIMEOUT: no fresh price for ' +
-                Math.round(_cacheAge / 60000) + 'min — closing at last known $' +
-                (_fallback || 0).toFixed(2), 'amber');
+                Math.round(_cacheAge / 60000) + 'min — closing at worst-case $' +
+                (_fallback || 0).toFixed(2) + ' (cache=$' + _cached.toFixed(2) + ', entry=$' + _entry.toFixed(2) + ')', 'amber');
             closeTrade(trade.trade_id, _fallback || trade.entry_price || 0, 'STALE-PRICE-TIMEOUT');
           }
           renderUI(); return;
@@ -4649,6 +4698,14 @@
             trade.costs_usd         = +((trade.costs_usd || 0) + partialComm).toFixed(4);
             trade.units             = +(trade.units * (1 - _partialFrac)).toFixed(6);
             trade.size_usd          = +(trade.units * trade.entry_price).toFixed(2); // v48 fix: use entry price, not live price
+            // #19: If remaining notional is below broker minimum after partial close,
+            // close the entire trade instead — can't exit a sub-minimum remainder on HL.
+            if (trade.venue === 'HL' && trade.size_usd < 14 && trade.size_usd > 0) {
+              log('PARTIAL', trade.asset + ' remaining $' + _num(trade.size_usd) +
+                ' below $14 HL min — full close instead of partial', 'amber');
+              closeTrade(trade.trade_id, adjPartialClose, 'TAKE_PROFIT');
+              return;
+            }
             // Move stop to entry + round-trip exit cost (break-even) — v53: cost-based, not hardcoded
             var _beCosts = _getCosts(trade.asset);
             var _beBuf   = _beCosts.commission + _beCosts.spread * 0.5 + (_beCosts.slippage || 0);
@@ -4872,12 +4929,31 @@
         var _maxHoldMs = _isScalperTrade ? MAX_HOLD_MS_SCALPER : MAX_HOLD_MS_GEO;
         if (tradeAgeMs > _maxHoldMs) {
           var _expiredHrs = Math.round(tradeAgeMs / 3600000);
-          log('TRADE', trade.asset + ' ' + trade.direction + ' auto-expired after ' +
-            _expiredHrs + 'h (max=' + (_maxHoldMs / 3600000) + 'h)', 'amber');
-          // C3 fix: _getPrice doesn't exist — use cached price with fallbacks
           var _expiredPx = _livePrice[trade.trade_id] ||
                            _priceCache[normaliseAsset(trade.asset)] ||
                            trade.entry_price;
+          // #18: If trade is profitable at max-hold, activate trailing stop instead
+          // of flat-closing. Lets winners run while still cleaning up zombies.
+          var _expPnl = isLong ? _expiredPx - trade.entry_price : trade.entry_price - _expiredPx;
+          if (_expPnl > 0 && !trade._maxHoldTrailing) {
+            trade._maxHoldTrailing = true;
+            trade.trailing_stop_active = true;
+            // Set trailing stop at break-even + small buffer (0.3% above entry)
+            var _beBuffer = trade.entry_price * 0.003;
+            var _trailSL = isLong
+              ? Math.max(trade.stop_loss, +(trade.entry_price + _beBuffer).toFixed(6))
+              : Math.min(trade.stop_loss, +(trade.entry_price - _beBuffer).toFixed(6));
+            trade.stop_loss = _trailSL;
+            if (isLong) trade.highest_price = Math.max(_expiredPx, trade.highest_price || _expiredPx);
+            else trade.lowest_price = Math.min(_expiredPx, trade.lowest_price || _expiredPx);
+            saveTrades();
+            log('TRADE', trade.asset + ' ' + trade.direction + ' max-hold reached (' +
+              _expiredHrs + 'h) but profitable — trailing stop activated at ' + _trailSL, 'cyan');
+            renderUI();
+            return;
+          }
+          log('TRADE', trade.asset + ' ' + trade.direction + ' auto-expired after ' +
+            _expiredHrs + 'h (max=' + (_maxHoldMs / 3600000) + 'h)', 'amber');
           closeTrade(trade.trade_id, _expiredPx, 'MAX-HOLD-EXPIRED');
           return;
         }
@@ -6739,18 +6815,21 @@
     /* ── Risk Simulator: called by slider oninput events ── */
     updateSim: function () { renderSim(); },
 
-    /* ── Reset all learned weight adjustments (called by learning panel) ── */
+    /* ── Reset all learned data (attribution, dynamic floors, win-rate cache) ── */
     resetLearning: function () {
-      if (!confirm('Reset all learned weight adjustments?\n\nThis clears the model\'s training history. The IMPACT_MAP base scores will be used instead.')) return;
-      if (typeof window._learnedWeights !== 'undefined') {
-        // Clear via dashboard's exposed reset hook
-        if (typeof window.onLearnReset === 'function') window.onLearnReset();
-        else {
-          try { localStorage.removeItem('geodash_learned_weights_v1'); } catch(e) {}
-          log('LEARN', 'Learning weights reset — all adjustments cleared', 'amber');
-          renderUI();
-        }
-      }
+      if (!confirm('Reset all learned data?\n\nThis clears:\n• Attribution history (win rates by asset/regime)\n• Dynamic confidence floors\n• Win-rate caches\n\nThe system will revert to static confidence floors and rebuild from new trades.')) return;
+      try { localStorage.removeItem('geodash_learned_weights_v1'); } catch(e) {}
+      try { localStorage.removeItem('geodash_attribution_v1'); } catch(e) {}
+      // Reset dynamic floors to hardcoded defaults
+      Object.keys(EE_ASSET_CONF_FLOOR).forEach(function (k) { delete EE_ASSET_CONF_FLOOR[k]; });
+      // Restore initial static floors
+      EE_ASSET_CONF_FLOOR.ADA = 85; EE_ASSET_CONF_FLOOR.BNB = 80;
+      EE_ASSET_CONF_FLOOR.XRP = 75; EE_ASSET_CONF_FLOOR.LTC = 73;
+      EE_ASSET_CONF_FLOOR.DOGE = 70; EE_ASSET_CONF_FLOOR.DOT = 70;
+      // Clear win-rate cache
+      Object.keys(_attrWinRateCache).forEach(function (k) { delete _attrWinRateCache[k]; });
+      log('LEARN', 'All learned data reset — attribution cleared, floors restored to defaults', 'amber');
+      renderUI();
     },
 
     /* ── Backend connectivity status (readable from outside the closure) ── */
