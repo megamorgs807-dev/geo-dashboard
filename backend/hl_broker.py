@@ -44,13 +44,23 @@ _MIN_ORDER_USD = 11.0
 
 
 def _load_sz_decimals():
-    """Fetch and cache HL per-asset szDecimals so order sizes are rounded correctly."""
+    """Fetch and cache HL per-asset szDecimals so order sizes are rounded correctly.
+    Loads both the standard perp universe and the xyz builder-deployed DEX
+    (xyz:AAPL, xyz:GOOGL etc.) which has separate szDecimals per asset.
+    """
     global _sz_decimals
     try:
         meta = requests.post(_url() + '/info', json={'type': 'meta'}, timeout=10).json()
         _sz_decimals = {a['name']: int(a.get('szDecimals', 5))
                         for a in meta.get('universe', [])
                         if 'name' in a}
+        # Also load xyz DEX asset decimals (xyz:AAPL=3, xyz:INTC=2, xyz:EUR=1 etc.)
+        xyz_meta = requests.post(_url() + '/info', json={'type': 'meta', 'dex': 'xyz'}, timeout=10).json()
+        _sz_decimals.update({a['name']: int(a.get('szDecimals', 3))
+                             for a in xyz_meta.get('universe', [])
+                             if 'name' in a})
+        print(f'[HLBroker] Loaded szDecimals: {len(_sz_decimals)} assets '
+              f'({sum(1 for k in _sz_decimals if k.startswith("xyz:"))} xyz: perps)')
     except Exception as e:
         print(f'[HLBroker] Could not load szDecimals: {e}')
 
@@ -83,11 +93,17 @@ def _safe_spot_meta(raw_spot_meta: dict) -> dict:
 
 
 def _build_exchange(private_key: str, wallet: str) -> object:
-    """Build Exchange object using pre-filtered spot_meta to avoid SDK crash."""
+    """Build Exchange object using pre-filtered spot_meta to avoid SDK crash.
+    perp_dexs=['', 'xyz'] tells the SDK to also load the xyz builder-deployed
+    perp DEX (xyz:AAPL, xyz:GOOGL, xyz:CL etc.) at asset-index offset 110000.
+    Without this the SDK has no entry in coin_to_asset for xyz: coins and
+    raises KeyError when market_open() is called for them.
+    """
     acct      = eth_account.Account.from_key(private_key)
     raw_spot  = requests.post(_url() + '/info', json={'type': 'spotMeta'}, timeout=10).json()
     safe_spot = _safe_spot_meta(raw_spot)
-    return Exchange(acct, _url(), account_address=wallet, spot_meta=safe_spot)
+    return Exchange(acct, _url(), account_address=wallet,
+                    spot_meta=safe_spot, perp_dexs=['', 'xyz'])
 
 
 def load_config():
