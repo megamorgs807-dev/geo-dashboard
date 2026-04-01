@@ -52,93 +52,274 @@
      NVDA has a registered spot token (@408) but no confirmed active trading pair.
      WTI and BRENT are speculatively added — user-confirmed present on HL.  */
   var HL_MAP = {
-    /* Crypto perps — named tickers present in allMids */
-    'BTC':      ['BTC', 'BITCOIN'],
-    'ETH':      ['ETH', 'ETHEREUM'],
-    'SOL':      ['SOL'],
-    'XRP':      ['XRP'],
-    'BNB':      ['BNB'],
-    'ADA':      ['ADA'],
-    'DOGE':     ['DOGE'],
-    'AVAX':     ['AVAX'],
-    'DOT':      ['DOT'],
-    'LINK':     ['LINK'],
-    'LTC':      ['LTC'],
-    'UNI':      ['UNI'],
-    'AAVE':     ['AAVE'],
-    'INJ':      ['INJ'],
-    'SUI':      ['SUI'],
-    'APT':      ['APT'],
-    'TIA':      ['TIA'],
-    'TON':      ['TON'],
-    'NEAR':     ['NEAR'],
-    'FIL':      ['FIL'],
-    'ARB':      ['ARB'],
-    'OP':       ['OP'],
-    'ATOM':     ['ATOM'],
-    'HYPE':     ['HYPE'],
-    'WIF':      ['WIF'],
-    'PEPE':     ['kPEPE', 'PEPE'],
-    'BONK':     ['kBONK', 'BONK'],
-    'FLOKI':    ['kFLOKI', 'FLOKI'],
-    'SHIB':     ['kSHIB', 'SHIB'],
-    'TAO':      ['TAO'],
-    'RENDER':   ['RENDER'],
-    'FET':      ['FET'],
-    'IMX':      ['IMX'],
-    'SAND':     ['SAND'],
-    'ALGO':     ['ALGO'],
-    'XLM':      ['XLM'],
-    'HBAR':     ['HBAR'],
-    'ICP':      ['ICP'],
-    'ETC':      ['ETC'],
-    'BCH':      ['BCH'],
-    'TRX':      ['TRX'],
-    'SEI':      ['SEI'],
-    'RUNE':     ['RUNE'],
-    'ONDO':     ['ONDO'],
-    'PENDLE':   ['PENDLE'],
-    'JUP':      ['JUP'],
-    'ENS':      ['ENS'],
-    'MKR':      ['MKR'],
-    'COMP':     ['COMP'],
-    'SNX':      ['SNX'],
-    'LDO':      ['LDO'],
-    'ZRO':      ['ZRO'],
-    'BLUR':     ['BLUR'],
-    'GMX':      ['GMX'],
-    /* Additional active perps on HL — confirmed live (Mar 2026) */
-    'TRUMP':    ['TRUMP'],
-    'WLD':      ['WLD'],
-    'ENA':      ['ENA'],
-    'EIGEN':    ['EIGEN'],
-    'PYTH':     ['PYTH'],
-    'CRV':      ['CRV'],
+    /* ── Crypto perps — named tickers present in allMids ───────────────── */
+    'BTC':        ['BTC', 'BITCOIN'],
+    'ETH':        ['ETH', 'ETHEREUM'],
+    'SOL':        ['SOL'],
+    'XRP':        ['XRP'],
+    'BNB':        ['BNB'],
+    'ADA':        ['ADA'],
+    'DOGE':       ['DOGE'],
+    'AVAX':       ['AVAX'],
+    'DOT':        ['DOT'],
+    'LINK':       ['LINK'],
+    'LTC':        ['LTC'],
+    'UNI':        ['UNI'],
+    'AAVE':       ['AAVE'],
+    'INJ':        ['INJ'],
+    'SUI':        ['SUI'],
+    'APT':        ['APT'],
+    'TIA':        ['TIA'],
+    'TON':        ['TON'],
+    'NEAR':       ['NEAR'],
+    'FIL':        ['FIL'],
+    'ARB':        ['ARB'],
+    'OP':         ['OP'],
+    'ATOM':       ['ATOM'],
+    'HYPE':       ['HYPE'],
+    'WIF':        ['WIF'],
+    'PEPE':       ['kPEPE', 'PEPE'],
+    'BONK':       ['kBONK', 'BONK'],
+    'FLOKI':      ['kFLOKI', 'FLOKI'],
+    'SHIB':       ['kSHIB', 'SHIB'],
+    'TAO':        ['TAO'],
+    'RENDER':     ['RENDER', 'RNDR'],
+    'FET':        ['FET'],
+    'IMX':        ['IMX'],
+    'SAND':       ['SAND'],
+    'ALGO':       ['ALGO'],
+    'XLM':        ['XLM'],
+    'HBAR':       ['HBAR'],
+    'ICP':        ['ICP'],
+    'ETC':        ['ETC'],
+    'BCH':        ['BCH'],
+    'TRX':        ['TRX'],
+    'SEI':        ['SEI'],
+    'RUNE':       ['RUNE'],
+    'ONDO':       ['ONDO'],
+    'PENDLE':     ['PENDLE'],
+    'JUP':        ['JUP'],
+    'ENS':        ['ENS'],
+    'MKR':        ['MKR'],
+    'COMP':       ['COMP'],
+    'SNX':        ['SNX'],
+    'LDO':        ['LDO'],
+    'ZRO':        ['ZRO'],
+    'BLUR':       ['BLUR'],
+    'GMX':        ['GMX'],
+    'TRUMP':      ['TRUMP'],
+    'WLD':        ['WLD'],
+    'ENA':        ['ENA'],
+    'EIGEN':      ['EIGEN'],
+    'PYTH':       ['PYTH'],
+    'CRV':        ['CRV'],
+    /* Layer 1 / 2 extended */
+    'MATIC':      ['MATIC'],
+    'STX':        ['STX'],
+    'CFX':        ['CFX'],
+    'FTM':        ['FTM'],
+    'MNT':        ['MNT'],
+    'BLAST':      ['BLAST'],
+    'STRK':       ['STRK'],
+    'ZK':         ['ZK'],
+    'SCR':        ['SCR'],
+    'LINEA':      ['LINEA'],
+    'POL':        ['POL'],
+    'S':          ['S'],
+    'BERA':       ['BERA'],
+    'MOVE':       ['MOVE'],
+    'INIT':       ['INIT'],
+    'MON':        ['MON'],
+    'MEGA':       ['MEGA'],
+    'HEMI':       ['HEMI'],
+    'SOPH':       ['SOPH'],
+    '0G':         ['0G'],
+    'NIL':        ['NIL'],
+    'AZTEC':      ['AZTEC'],
+    'ZORA':       ['ZORA'],
+    'W':          ['W'],
+    'STRAX':      ['STRAX'],
+    /* DeFi extended */
+    'DYDX':       ['DYDX'],
+    'FXS':        ['FXS'],
+    'SUSHI':      ['SUSHI'],
+    'CAKE':       ['CAKE'],
+    'BNT':        ['BNT'],
+    'UMA':        ['UMA'],
+    'STG':        ['STG'],
+    'RDNT':       ['RDNT'],
+    'AERO':       ['AERO'],
+    'MORPHO':     ['MORPHO'],
+    'RESOLV':     ['RESOLV'],
+    'SYRUP':      ['SYRUP'],
+    'USUAL':      ['USUAL'],
+    'SKY':        ['SKY'],
+    'ETHFI':      ['ETHFI'],
+    'REZ':        ['REZ'],
+    'LISTA':      ['LISTA'],
+    /* Gaming / metaverse */
+    'GALA':       ['GALA'],
+    'AXS':        ['AXS'],
+    'YGG':        ['YGG'],
+    'SUPER':      ['SUPER'],
+    'XAI':        ['XAI'],
+    'MAVIA':      ['MAVIA'],
+    'BIGTIME':    ['BIGTIME'],
+    'PIXEL':      ['PIXEL'],
+    'DOOD':       ['DOOD'],
+    /* AI / tech */
+    'AI16Z':      ['AI16Z'],
+    'AIXBT':      ['AIXBT'],
+    'ZEREBRO':    ['ZEREBRO'],
+    'GRIFFAIN':   ['GRIFFAIN'],
+    'VIRTUAL':    ['VIRTUAL'],
+    'AI':         ['AI'],
+    'BIO':        ['BIO'],
+    'KAITO':      ['KAITO'],
+    'PROMPT':     ['PROMPT'],
+    'VVV':        ['VVV'],
+    'LAUNCHCOIN': ['LAUNCHCOIN'],
+    'AVNT':       ['AVNT'],
+    'APEX':       ['APEX'],
+    /* Memes / trending */
+    'FARTCOIN':   ['FARTCOIN'],
+    'MELANIA':    ['MELANIA'],
+    'PNUT':       ['PNUT'],
+    'CHILLGUY':   ['CHILLGUY'],
+    'MOODENG':    ['MOODENG'],
+    'GOAT':       ['GOAT'],
+    'POPCAT':     ['POPCAT'],
+    'BRETT':      ['BRETT'],
+    'TURBO':      ['TURBO'],
+    'NOT':        ['NOT'],
+    'MEME':       ['MEME'],
+    'ORDI':       ['ORDI'],
+    'BOME':       ['BOME'],
+    'APE':        ['APE'],
+    'GMT':        ['GMT'],
+    'BANANA':     ['BANANA'],
+    'HMSTR':      ['HMSTR'],
+    'MEW':        ['MEW'],
+    'GRASS':      ['GRASS'],
+    'PENGU':      ['PENGU'],
+    'SPX':        ['SPX'],
+    'ANIME':      ['ANIME'],
+    'VINE':       ['VINE'],
+    'JELLY':      ['JELLY'],
+    'PURR':       ['PURR'],
+    'TST':        ['TST'],
+    'BABY':       ['BABY'],
+    'HYPER':      ['HYPER'],
+    'PUMP':       ['PUMP'],
+    'FOGO':       ['FOGO'],
+    'YZY':        ['YZY'],
+    'WLFI':       ['WLFI'],
+    'WCT':        ['WCT'],
+    /* 1000x aliases */
+    'kNEIRO':     ['kNEIRO'],
+    'kDOGS':      ['kDOGS'],
+    'kLUNC':      ['kLUNC'],
+    /* Misc alts */
+    'TRB':        ['TRB'],
+    'FTT':        ['FTT'],
+    'KAS':        ['KAS'],
+    'BSV':        ['BSV'],
+    'MINA':       ['MINA'],
+    'POLYX':      ['POLYX'],
+    'NEO':        ['NEO'],
+    'ZEN':        ['ZEN'],
+    'ILV':        ['ILV'],
+    'RSR':        ['RSR'],
+    'JTO':        ['JTO'],
+    'NTRN':       ['NTRN'],
+    'ACE':        ['ACE'],
+    'MAV':        ['MAV'],
+    'PEOPLE':     ['PEOPLE'],
+    'MANTA':      ['MANTA'],
+    'ALT':        ['ALT'],
+    'ZETA':       ['ZETA'],
+    'DYM':        ['DYM'],
+    'SAGA':       ['SAGA'],
+    'MERL':       ['MERL'],
+    'LAYER':      ['LAYER'],
+    'IP':         ['IP'],
+    'OM':         ['OM'],
+    'NXPC':       ['NXPC'],
+    'IO':         ['IO'],
+    'TNSR':       ['TNSR'],
+    'OMNI':       ['OMNI'],
+    'ZEC':        ['ZEC'],
+    'XMR':        ['XMR'],
+    'DASH':       ['DASH'],
+    'AR':         ['AR'],
+    'LIT':        ['LIT'],
+    'ASTER':      ['ASTER'],
+    'STBL':       ['STBL'],
+    'STABLE':     ['STABLE'],
+    '2Z':         ['2Z'],
+    'CC':         ['CC'],
+    'SKR':        ['SKR'],
+    'PROVE':      ['PROVE'],
+    'XPL':        ['XPL'],
+    'MET':        ['MET'],
+    'CELO':       ['CELO'],
+    'IOTA':       ['IOTA'],
+    'ME':         ['ME'],
+    'NEIROETH':   ['NEIROETH'],
+    'CATI':       ['CATI'],
+    'HPOS':       ['HPOS'],
+    'BLZ':        ['BLZ'],
+    'CYBER':      ['CYBER'],
+    'ARK':        ['ARK'],
+    'BADGER':     ['BADGER'],
+    'ORBS':       ['ORBS'],
+    'USTC':       ['USTC'],
+    'FRIEND':     ['FRIEND'],
+    'SHIA':       ['SHIA'],
+    'SKY':        ['SKY'],
+    'AERO':       ['AERO'],
 
-    /* Commodity perps — confirmed live on HL (Mar 2026)
-       GAS maxLev confirmed = 3 (HL API, Mar 2026).
-       PAXG maxLev confirmed = 10 (HL API, Mar 2026).
-       WTI and BRENT added speculatively (user-confirmed present on HL). */
-    'GAS':      ['GAS', 'NATGAS'],        // Natural gas perp (allMids key = 'GAS'); maxLev 3 per HL API
-    'PAXG':     ['PAXG', 'XAU', 'GOLD'],  // PAX Gold — gold-backed token on HL; maxLev 10 per HL API; XAU/GOLD aliases
-    'WTI':      ['WTI', 'CRUDE', 'OIL'],  // WTI crude oil perp (user-confirmed on HL)
-    'BRENT':    ['BRENT', 'BRENTOIL'],    // Brent crude perp (user-confirmed on HL)
+    /* ── Commodity perps (regular HL) ───────────────────────────────────── */
+    'GAS':        ['GAS'],               // Natural gas perp; allMids key = GAS
+    'PAXG':       ['PAXG', 'XAU'],       // PAX Gold perp
 
-    /* Spot equity/ETF tokens — @N pair-index, full USD price (Mar 2026 spotMeta)
-       Prices ~10-20% of real stock price on some tokens due to oracle/synthetic
-       pricing; direction and TA signals remain valid.                        */
-    '@263':  ['CRCL'],                  // Circle (pre-IPO),  ~$126
-    '@264':  ['TSLA'],                  // Tesla,             ~$246
-    '@265':  ['SLV', 'SILVER', 'XAG'], // Silver ETF token,  ~$72
-    '@266':  ['GOOGL'],                 // Alphabet,          ~$310
-    '@268':  ['AAPL'],                  // Apple,             ~$253
-    '@271':  ['HOOD'],                  // Robinhood,         ~$77
-    '@276':  ['GLD'],                   // Gold ETF token,    ~$467
-    '@279':  ['SPY'],                   // S&P 500 ETF token, ~$665
-    '@280':  ['AMZN'],                  // Amazon,            ~$213
-    '@287':  ['META'],                  // Meta,              ~$620
-    '@288':  ['QQQ'],                   // Nasdaq 100 ETF,    ~$600
-    '@289':  ['MSFT']                   // Microsoft,         ~$399
+    /* ── xyz perps — NOT in allMids; prices polled via REST (10s interval)
+       API format: xyz:COINNAME for l2Book / order placement.
+       See XYZ_ASSETS map and _pollXyzPrices() below.                      */
+    'xyz:BRENTOIL': ['BRENT', 'BRENTOIL'],
+    'xyz:CL':       ['WTI', 'WTIOIL', 'CRUDE', 'OIL', 'CL'],
+    'xyz:SILVER':   ['SILVER'],
+    'xyz:GOLD':     ['GOLD'],
+    'xyz:NATGAS':   ['NATGAS'],
+    'xyz:SP500':    ['SP500'],
+    'xyz:XYZ100':   ['XYZ100'],
+    'xyz:EUR':      ['EUR'],
+    'xyz:JPY':      ['JPY'],
+    'xyz:COPPER':   ['COPPER'],
+    'xyz:PLATINUM': ['PLATINUM'],
+
+    /* ── HL spot equity/ETF tokens — @N pair-index (Apr 2026 spotMeta)
+       Prices stream in allMids as '@N' keys.
+       Indices verified via POST /info {type:'spotMeta'}.                   */
+    '@407':  ['TSLA'],
+    '@408':  ['NVDA'],
+    '@409':  ['CRCL'],
+    '@411':  ['SLV', 'XAG'],
+    '@412':  ['GOOGL'],
+    '@413':  ['AAPL'],
+    '@415':  ['HOOD'],
+    '@416':  ['SPACEX'],
+    '@417':  ['MSTR'],
+    '@418':  ['OPENAI'],
+    '@420':  ['SPY'],
+    '@421':  ['AMZN'],
+    '@422':  ['META'],
+    '@426':  ['QQQ'],
+    '@429':  ['MSFT'],
+    '@430':  ['ORCL'],
+    '@431':  ['AVGO'],
+    '@432':  ['GLD'],
+    '@435':  ['MU']
   };
 
   /* ── HL-accurate cost model for paper-trading simulation ───────────────────
@@ -152,55 +333,93 @@
      Funding: HL perpetuals use ~1h intervals. We store as 8h-equivalent
      (÷8 from 8h traditional rate) for compatibility with EE funding logic. */
   var HL_TRADING_COSTS = {
-    crypto:   { spread: 0.0002, slippage: 0.0001, commission: 0.0005, funding8h: 0.0001  },
-    energy:   { spread: 0.0003, slippage: 0.0002, commission: 0.0005, funding8h: 0.00005 },
-    precious: { spread: 0.0002, slippage: 0.0001, commission: 0.0005, funding8h: 0.00005 },
-    equity:   { spread: 0.0002, slippage: 0.0001, commission: 0.0005, funding8h: 0       },
-    def:      { spread: 0.0003, slippage: 0.0002, commission: 0.0005, funding8h: 0       }
+    crypto:    { spread: 0.0002, slippage: 0.0001, commission: 0.0005, funding8h: 0.0001  },
+    energy:    { spread: 0.0003, slippage: 0.0002, commission: 0.0005, funding8h: 0.00005 },
+    precious:  { spread: 0.0002, slippage: 0.0001, commission: 0.0005, funding8h: 0.00005 },
+    commodity: { spread: 0.0003, slippage: 0.0002, commission: 0.0005, funding8h: 0.00005 },
+    equity:    { spread: 0.0002, slippage: 0.0001, commission: 0.0005, funding8h: 0       },
+    forex:     { spread: 0.0001, slippage: 0.0001, commission: 0.0005, funding8h: 0       },
+    def:       { spread: 0.0003, slippage: 0.0002, commission: 0.0005, funding8h: 0       }
   };
 
   /* ── Sector classification for HL cost lookup ───────────────────────────────
      Maps every EE asset name that HL covers → cost sector key.               */
   var HL_SECTOR = {
-    /* Crypto perps */
-    'BTC':     'crypto',  'BITCOIN':  'crypto',
-    'ETH':     'crypto',  'ETHEREUM': 'crypto',
-    'SOL':     'crypto',  'XRP':      'crypto',
-    'BNB':     'crypto',  'ADA':      'crypto',
-    /* Spot equity/ETF tokens (canonical EE names from HL_MAP) */
-    'CRCL':    'equity',
-    'TSLA':    'equity',  'GOOGL':   'equity',
-    'AAPL':    'equity',  'HOOD':    'equity',
-    'SPY':     'equity',  'AMZN':    'equity',
-    'META':    'equity',  'QQQ':     'equity',
-    'MSFT':    'equity',
-    'SLV':     'precious','SILVER':  'precious','XAG': 'precious',
-    'GLD':     'precious',
-    'PAXG':    'precious', 'XAU': 'precious', 'GOLD': 'precious',
-    /* Energy commodity perps on HL */
-    'GAS':     'energy',  'NATGAS': 'energy',
-    'WTI':     'energy',  'CRUDE':  'energy',  'OIL':   'energy',
-    'BRENT':   'energy',  'BRENTOIL': 'energy',
-    /* Extended crypto perps */
-    'DOGE':    'crypto',  'AVAX':   'crypto',  'DOT':    'crypto',
-    'LINK':    'crypto',  'LTC':    'crypto',  'UNI':    'crypto',
-    'AAVE':    'crypto',  'INJ':    'crypto',  'SUI':    'crypto',
-    'APT':     'crypto',  'TIA':    'crypto',  'TON':    'crypto',
-    'NEAR':    'crypto',  'FIL':    'crypto',  'ARB':    'crypto',
-    'OP':      'crypto',  'ATOM':   'crypto',  'HYPE':   'crypto',
-    'WIF':     'crypto',  'PEPE':   'crypto',  'BONK':   'crypto',
-    'FLOKI':   'crypto',  'SHIB':   'crypto',  'TAO':    'crypto',
-    'RENDER':  'crypto',  'FET':    'crypto',  'IMX':    'crypto',
-    'SAND':    'crypto',  'ALGO':   'crypto',  'XLM':    'crypto',
-    'HBAR':    'crypto',  'ICP':    'crypto',  'ETC':    'crypto',
-    'BCH':     'crypto',  'TRX':    'crypto',  'SEI':    'crypto',
-    'RUNE':    'crypto',  'ONDO':   'crypto',  'PENDLE': 'crypto',
-    'JUP':     'crypto',  'ENS':    'crypto',  'MKR':    'crypto',
-    'COMP':    'crypto',  'SNX':    'crypto',  'LDO':    'crypto',
-    'ZRO':     'crypto',  'BLUR':   'crypto',  'GMX':    'crypto',
-    'kPEPE':   'crypto',  'kBONK':  'crypto',  'kFLOKI': 'crypto', 'kSHIB': 'crypto',
-    'TRUMP':   'crypto',  'WLD':    'crypto',  'ENA':    'crypto',
-    'EIGEN':   'crypto',  'PYTH':   'crypto',  'CRV':    'crypto'
+    /* Major crypto */
+    'BTC': 'crypto', 'BITCOIN': 'crypto', 'ETH': 'crypto', 'ETHEREUM': 'crypto',
+    'SOL': 'crypto', 'XRP': 'crypto', 'BNB': 'crypto', 'ADA': 'crypto',
+    'DOGE': 'crypto', 'AVAX': 'crypto', 'DOT': 'crypto', 'LINK': 'crypto',
+    'LTC': 'crypto', 'UNI': 'crypto', 'AAVE': 'crypto', 'INJ': 'crypto',
+    'SUI': 'crypto', 'APT': 'crypto', 'TIA': 'crypto', 'TON': 'crypto',
+    'NEAR': 'crypto', 'FIL': 'crypto', 'ARB': 'crypto', 'OP': 'crypto',
+    'ATOM': 'crypto', 'HYPE': 'crypto', 'WIF': 'crypto', 'PEPE': 'crypto',
+    'BONK': 'crypto', 'FLOKI': 'crypto', 'SHIB': 'crypto', 'TAO': 'crypto',
+    'RENDER': 'crypto', 'RNDR': 'crypto', 'FET': 'crypto', 'IMX': 'crypto',
+    'SAND': 'crypto', 'ALGO': 'crypto', 'XLM': 'crypto', 'HBAR': 'crypto',
+    'ICP': 'crypto', 'ETC': 'crypto', 'BCH': 'crypto', 'TRX': 'crypto',
+    'SEI': 'crypto', 'RUNE': 'crypto', 'ONDO': 'crypto', 'PENDLE': 'crypto',
+    'JUP': 'crypto', 'ENS': 'crypto', 'MKR': 'crypto', 'COMP': 'crypto',
+    'SNX': 'crypto', 'LDO': 'crypto', 'ZRO': 'crypto', 'BLUR': 'crypto',
+    'GMX': 'crypto', 'kPEPE': 'crypto', 'kBONK': 'crypto', 'kFLOKI': 'crypto',
+    'kSHIB': 'crypto', 'TRUMP': 'crypto', 'WLD': 'crypto', 'ENA': 'crypto',
+    'EIGEN': 'crypto', 'PYTH': 'crypto', 'CRV': 'crypto',
+    /* Extended crypto */
+    'MATIC': 'crypto', 'STX': 'crypto', 'CFX': 'crypto', 'FTM': 'crypto',
+    'MNT': 'crypto', 'BLAST': 'crypto', 'STRK': 'crypto', 'ZK': 'crypto',
+    'SCR': 'crypto', 'LINEA': 'crypto', 'POL': 'crypto', 'S': 'crypto',
+    'BERA': 'crypto', 'MOVE': 'crypto', 'INIT': 'crypto', 'MON': 'crypto',
+    'MEGA': 'crypto', 'HEMI': 'crypto', 'SOPH': 'crypto', '0G': 'crypto',
+    'NIL': 'crypto', 'AZTEC': 'crypto', 'ZORA': 'crypto', 'W': 'crypto',
+    'STRAX': 'crypto', 'DYDX': 'crypto', 'FXS': 'crypto', 'SUSHI': 'crypto',
+    'CAKE': 'crypto', 'BNT': 'crypto', 'UMA': 'crypto', 'STG': 'crypto',
+    'RDNT': 'crypto', 'AERO': 'crypto', 'MORPHO': 'crypto', 'RESOLV': 'crypto',
+    'SYRUP': 'crypto', 'USUAL': 'crypto', 'SKY': 'crypto', 'ETHFI': 'crypto',
+    'REZ': 'crypto', 'LISTA': 'crypto', 'GALA': 'crypto', 'AXS': 'crypto',
+    'YGG': 'crypto', 'SUPER': 'crypto', 'XAI': 'crypto', 'MAVIA': 'crypto',
+    'BIGTIME': 'crypto', 'PIXEL': 'crypto', 'DOOD': 'crypto',
+    'AI16Z': 'crypto', 'AIXBT': 'crypto', 'ZEREBRO': 'crypto', 'GRIFFAIN': 'crypto',
+    'VIRTUAL': 'crypto', 'AI': 'crypto', 'BIO': 'crypto', 'KAITO': 'crypto',
+    'PROMPT': 'crypto', 'VVV': 'crypto', 'LAUNCHCOIN': 'crypto', 'AVNT': 'crypto',
+    'APEX': 'crypto', 'FARTCOIN': 'crypto', 'MELANIA': 'crypto', 'PNUT': 'crypto',
+    'CHILLGUY': 'crypto', 'MOODENG': 'crypto', 'GOAT': 'crypto', 'POPCAT': 'crypto',
+    'BRETT': 'crypto', 'TURBO': 'crypto', 'NOT': 'crypto', 'MEME': 'crypto',
+    'ORDI': 'crypto', 'BOME': 'crypto', 'APE': 'crypto', 'GMT': 'crypto',
+    'BANANA': 'crypto', 'HMSTR': 'crypto', 'MEW': 'crypto', 'GRASS': 'crypto',
+    'PENGU': 'crypto', 'SPX': 'crypto', 'ANIME': 'crypto', 'VINE': 'crypto',
+    'JELLY': 'crypto', 'PURR': 'crypto', 'TST': 'crypto', 'BABY': 'crypto',
+    'HYPER': 'crypto', 'PUMP': 'crypto', 'FOGO': 'crypto', 'YZY': 'crypto',
+    'WLFI': 'crypto', 'WCT': 'crypto', 'kNEIRO': 'crypto', 'kDOGS': 'crypto',
+    'kLUNC': 'crypto', 'TRB': 'crypto', 'FTT': 'crypto', 'KAS': 'crypto',
+    'BSV': 'crypto', 'MINA': 'crypto', 'POLYX': 'crypto', 'NEO': 'crypto',
+    'ZEN': 'crypto', 'ILV': 'crypto', 'RSR': 'crypto', 'JTO': 'crypto',
+    'NTRN': 'crypto', 'ACE': 'crypto', 'MAV': 'crypto', 'PEOPLE': 'crypto',
+    'MANTA': 'crypto', 'ALT': 'crypto', 'ZETA': 'crypto', 'DYM': 'crypto',
+    'SAGA': 'crypto', 'MERL': 'crypto', 'LAYER': 'crypto', 'IP': 'crypto',
+    'OM': 'crypto', 'NXPC': 'crypto', 'IO': 'crypto', 'TNSR': 'crypto',
+    'OMNI': 'crypto', 'ZEC': 'crypto', 'XMR': 'crypto', 'DASH': 'crypto',
+    'AR': 'crypto', 'LIT': 'crypto', 'ASTER': 'crypto', 'STBL': 'crypto',
+    'STABLE': 'crypto', '2Z': 'crypto', 'CC': 'crypto', 'SKR': 'crypto',
+    'PROVE': 'crypto', 'XPL': 'crypto', 'MET': 'crypto', 'CELO': 'crypto',
+    'IOTA': 'crypto', 'ME': 'crypto', 'NEIROETH': 'crypto', 'CATI': 'crypto',
+    'HPOS': 'crypto', 'BLZ': 'crypto', 'CYBER': 'crypto', 'ARK': 'crypto',
+    'BADGER': 'crypto', 'ORBS': 'crypto', 'USTC': 'crypto', 'FRIEND': 'crypto',
+    'SHIA': 'crypto',
+    /* Spot equity/ETF tokens */
+    'TSLA': 'equity', 'NVDA': 'equity', 'CRCL': 'equity', 'GOOGL': 'equity',
+    'AAPL': 'equity', 'HOOD': 'equity', 'SPY': 'equity', 'AMZN': 'equity',
+    'META': 'equity', 'QQQ': 'equity', 'MSFT': 'equity', 'ORCL': 'equity',
+    'AVGO': 'equity', 'MU': 'equity', 'MSTR': 'equity', 'SPACEX': 'equity',
+    'OPENAI': 'equity', 'SP500': 'equity',
+    /* Spot precious metals */
+    'SLV': 'precious', 'XAG': 'precious', 'GLD': 'precious',
+    'PAXG': 'precious', 'XAU': 'precious',
+    /* xyz commodity perps */
+    'SILVER': 'precious', 'GOLD': 'precious', 'PLATINUM': 'precious',
+    'WTI': 'energy', 'WTIOIL': 'energy', 'CRUDE': 'energy', 'OIL': 'energy',
+    'CL': 'energy', 'BRENT': 'energy', 'BRENTOIL': 'energy',
+    'GAS': 'energy', 'NATGAS': 'energy', 'COPPER': 'commodity',
+    /* xyz forex/indices */
+    'EUR': 'forex', 'JPY': 'forex', 'XYZ100': 'equity'
   };
 
   /* ── Build static coverage set and reverse-map at init ─────────────────────
@@ -229,6 +448,47 @@
   var _lastRawPrices  = {};   // { 'CL': '73.50', ... } for HLFeed.tickers()
   var _hlPrices       = {};   // { 'WTI': { price: 73.5, ts: ..., hlTicker: 'CL' }, ... }
   var _eeReady        = false;
+
+  /* ── xyz perp REST polling ─────────────────────────────────────────────────
+     xyz perps (BRENTOIL, CL, SILVER, GOLD, etc.) are NOT in allMids WS.
+     We poll l2Book every 10s and inject mid-prices the same way WS does.   */
+  var XYZ_ASSETS = HL_MAP['xyz:BRENTOIL'] ? (function () {
+    var m = {};
+    Object.keys(HL_MAP).forEach(function (k) {
+      if (k.slice(0, 4) === 'xyz:') m[k] = HL_MAP[k];
+    });
+    return m;
+  }()) : {};
+
+  var _xyzPollTimer = null;
+
+  function _pollXyzPrices() {
+    if (!_eeReady && !_checkEE()) return;
+    Object.keys(XYZ_ASSETS).forEach(function (coin) {
+      fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'l2Book', coin: coin, nSigFigs: 5 })
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.levels || !data.levels[0] || !data.levels[0].length ||
+            !data.levels[1] || !data.levels[1].length) return;
+        var bid = parseFloat(data.levels[0][0].px);
+        var ask = parseFloat(data.levels[1][0].px);
+        if (!isFinite(bid) || !isFinite(ask) || bid <= 0) return;
+        var mid = (bid + ask) / 2;
+        var now = Date.now();
+        _lastRawPrices[coin] = String(mid);
+        XYZ_ASSETS[coin].forEach(function (eeName) {
+          _hlPrices[eeName] = { price: mid, ts: now, hlTicker: coin };
+          EE.injectPrice(eeName, mid);
+          _injected++;
+        });
+      })
+      .catch(function () {});
+    });
+  }
 
   /* ── EE availability check ──────────────────────────────────────────────── */
   function _checkEE() {
@@ -432,32 +692,43 @@
       { eeName:'XRP',   hlTicker:'XRP',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'' },
       { eeName:'BNB',   hlTicker:'BNB',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'' },
       { eeName:'ADA',   hlTicker:'ADA',   assetClass:'crypto',   region:'GLOBAL', sector:'crypto',   onHL:true, fullPrice:true,  notes:'' },
-      /* HL spot equity/ETF tokens (full USD price, Mar 2026) */
-      { eeName:'CRCL',  hlTicker:'@263',  assetClass:'equity',   region:'US',     sector:'fintech',  onHL:true, fullPrice:true,  notes:'Circle pre-IPO, ~$126' },
-      { eeName:'TSLA',  hlTicker:'@264',  assetClass:'equity',   region:'US',     sector:'ev',       onHL:true, fullPrice:true,  notes:'Tesla, ~$246' },
-      { eeName:'SLV',   hlTicker:'@265',  assetClass:'precious', region:'GLOBAL', sector:'precious', onHL:true, fullPrice:false, notes:'Silver token, ~$72 (not ETF price)' },
-      { eeName:'GOOGL', hlTicker:'@266',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:false, notes:'Alphabet, ~$310 (premium vs real)' },
-      { eeName:'AAPL',  hlTicker:'@268',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:false, notes:'Apple, ~$253 (small premium)' },
-      { eeName:'HOOD',  hlTicker:'@271',  assetClass:'equity',   region:'US',     sector:'fintech',  onHL:true, fullPrice:false, notes:'Robinhood, ~$77 (premium vs real)' },
-      { eeName:'GLD',   hlTicker:'@276',  assetClass:'precious', region:'GLOBAL', sector:'precious', onHL:true, fullPrice:false, notes:'Gold ETF token, ~$467' },
-      { eeName:'SPY',   hlTicker:'@279',  assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:false, notes:'S&P 500 ETF token, ~$665' },
-      { eeName:'AMZN',  hlTicker:'@280',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Amazon, ~$213' },
-      { eeName:'META',  hlTicker:'@287',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Meta, ~$620 (accurate)' },
-      { eeName:'QQQ',   hlTicker:'@288',  assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:false, notes:'Nasdaq 100 ETF token, ~$600' },
-      { eeName:'MSFT',  hlTicker:'@289',  assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Microsoft, ~$399 (accurate)' },
-      /* Commodity perps on HL */
-      { eeName:'GAS',    hlTicker:'GAS',     assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'Natural gas perp — allMids key GAS (~$1.66); maxLev 3 per HL API' },
-      { eeName:'WTI',    hlTicker:'WTI',     assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'WTI crude oil perp — user-confirmed on HL (speculative)' },
-      { eeName:'BRENT',  hlTicker:'BRENT',   assetClass:'commodity', region:'GLOBAL', sector:'energy', onHL:true,  fullPrice:true,  notes:'Brent crude perp — user-confirmed on HL (speculative)' },
-      { eeName:'LMT',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token — flag for Alpaca/TD' },
-      { eeName:'RTX',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },
-      { eeName:'NOC',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'defense',  onHL:false, fullPrice:false, notes:'No HL spot token' },
-      { eeName:'NVDA',  hlTicker:null,    assetClass:'equity',   region:'US',     sector:'semis',    onHL:false, fullPrice:false, notes:'Registered HL spot token @408 but no confirmed active trading pair — exclude until pair is live' },
-      { eeName:'TSM',   hlTicker:null,    assetClass:'equity',   region:'TAIWAN', sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
-      { eeName:'ASML',  hlTicker:null,    assetClass:'equity',   region:'EU',     sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
-      { eeName:'XLE',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'energy',   onHL:false, fullPrice:false, notes:'No HL spot token' },
-      { eeName:'SMH',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'semis',    onHL:false, fullPrice:false, notes:'No HL spot token' },
-      { eeName:'TLT',   hlTicker:null,    assetClass:'equity',   region:'US',     sector:'bonds',    onHL:false, fullPrice:false, notes:'No HL spot token' },
+      /* HL spot equity/ETF tokens — @N indices verified Apr 2026 via spotMeta */
+      { eeName:'CRCL',   hlTicker:'@409', assetClass:'equity',   region:'US',     sector:'fintech',  onHL:true, fullPrice:true,  notes:'Circle pre-IPO' },
+      { eeName:'TSLA',   hlTicker:'@407', assetClass:'equity',   region:'US',     sector:'ev',       onHL:true, fullPrice:true,  notes:'Tesla (Wagyu.xyz)' },
+      { eeName:'NVDA',   hlTicker:'@408', assetClass:'equity',   region:'US',     sector:'semis',    onHL:true, fullPrice:true,  notes:'Nvidia (Wagyu.xyz)' },
+      { eeName:'SLV',    hlTicker:'@411', assetClass:'precious', region:'GLOBAL', sector:'precious', onHL:true, fullPrice:true,  notes:'Silver spot token' },
+      { eeName:'GOOGL',  hlTicker:'@412', assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Alphabet' },
+      { eeName:'AAPL',   hlTicker:'@413', assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Apple' },
+      { eeName:'HOOD',   hlTicker:'@415', assetClass:'equity',   region:'US',     sector:'fintech',  onHL:true, fullPrice:true,  notes:'Robinhood' },
+      { eeName:'SPACEX', hlTicker:'@416', assetClass:'equity',   region:'US',     sector:'space',    onHL:true, fullPrice:true,  notes:'SpaceX (Wagyu.xyz)' },
+      { eeName:'MSTR',   hlTicker:'@417', assetClass:'equity',   region:'US',     sector:'crypto',   onHL:true, fullPrice:true,  notes:'MicroStrategy' },
+      { eeName:'OPENAI', hlTicker:'@418', assetClass:'equity',   region:'US',     sector:'ai',       onHL:true, fullPrice:true,  notes:'OpenAI (Wagyu.xyz)' },
+      { eeName:'SPY',    hlTicker:'@420', assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:true,  notes:'S&P 500 ETF token' },
+      { eeName:'AMZN',   hlTicker:'@421', assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Amazon' },
+      { eeName:'META',   hlTicker:'@422', assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Meta' },
+      { eeName:'QQQ',    hlTicker:'@426', assetClass:'equity',   region:'US',     sector:'index',    onHL:true, fullPrice:true,  notes:'Nasdaq 100 ETF token' },
+      { eeName:'MSFT',   hlTicker:'@429', assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Microsoft' },
+      { eeName:'ORCL',   hlTicker:'@430', assetClass:'equity',   region:'US',     sector:'tech',     onHL:true, fullPrice:true,  notes:'Oracle' },
+      { eeName:'AVGO',   hlTicker:'@431', assetClass:'equity',   region:'US',     sector:'semis',    onHL:true, fullPrice:true,  notes:'Broadcom' },
+      { eeName:'GLD',    hlTicker:'@432', assetClass:'precious', region:'GLOBAL', sector:'precious', onHL:true, fullPrice:true,  notes:'Gold ETF token' },
+      { eeName:'MU',     hlTicker:'@435', assetClass:'equity',   region:'US',     sector:'semis',    onHL:true, fullPrice:true,  notes:'Micron' },
+      /* Commodity / forex xyz perps — polled via REST */
+      { eeName:'GAS',      hlTicker:'GAS',          assetClass:'commodity', region:'GLOBAL', sector:'energy',    onHL:true, fullPrice:true, notes:'Natural gas perp' },
+      { eeName:'WTI',      hlTicker:'xyz:CL',       assetClass:'commodity', region:'GLOBAL', sector:'energy',    onHL:true, fullPrice:true, notes:'WTI crude — xyz perp, API ticker CL' },
+      { eeName:'BRENT',    hlTicker:'xyz:BRENTOIL', assetClass:'commodity', region:'GLOBAL', sector:'energy',    onHL:true, fullPrice:true, notes:'Brent crude — xyz perp' },
+      { eeName:'SILVER',   hlTicker:'xyz:SILVER',   assetClass:'precious',  region:'GLOBAL', sector:'precious',  onHL:true, fullPrice:true, notes:'Silver — xyz perp' },
+      { eeName:'GOLD',     hlTicker:'xyz:GOLD',     assetClass:'precious',  region:'GLOBAL', sector:'precious',  onHL:true, fullPrice:true, notes:'Gold — xyz perp' },
+      { eeName:'NATGAS',   hlTicker:'xyz:NATGAS',   assetClass:'commodity', region:'GLOBAL', sector:'energy',    onHL:true, fullPrice:true, notes:'Nat gas — xyz perp' },
+      { eeName:'COPPER',   hlTicker:'xyz:COPPER',   assetClass:'commodity', region:'GLOBAL', sector:'commodity', onHL:true, fullPrice:true, notes:'Copper — xyz perp' },
+      { eeName:'PLATINUM', hlTicker:'xyz:PLATINUM', assetClass:'precious',  region:'GLOBAL', sector:'precious',  onHL:true, fullPrice:true, notes:'Platinum — xyz perp' },
+      { eeName:'EUR',      hlTicker:'xyz:EUR',      assetClass:'forex',     region:'EU',     sector:'forex',     onHL:true, fullPrice:true, notes:'Euro — xyz perp' },
+      { eeName:'JPY',      hlTicker:'xyz:JPY',      assetClass:'forex',     region:'ASIA',   sector:'forex',     onHL:true, fullPrice:true, notes:'Yen — xyz perp' },
+      { eeName:'SP500',    hlTicker:'xyz:SP500',    assetClass:'equity',    region:'US',     sector:'index',     onHL:true, fullPrice:true, notes:'S&P 500 — xyz perp' },
+      { eeName:'XYZ100',   hlTicker:'xyz:XYZ100',   assetClass:'equity',    region:'GLOBAL', sector:'index',     onHL:true, fullPrice:true, notes:'XYZ100 index — xyz perp' },
+      { eeName:'LMT',   hlTicker:null, assetClass:'equity', region:'US', sector:'defense', onHL:false, fullPrice:false, notes:'No HL listing' },
+      { eeName:'RTX',   hlTicker:null, assetClass:'equity', region:'US', sector:'defense', onHL:false, fullPrice:false, notes:'No HL listing' },
+      { eeName:'TSM',   hlTicker:null, assetClass:'equity', region:'TAIWAN', sector:'semis', onHL:false, fullPrice:false, notes:'No HL listing' },
+      { eeName:'TLT',   hlTicker:null, assetClass:'equity', region:'US', sector:'bonds', onHL:false, fullPrice:false, notes:'No HL listing' },
     ];
     return {
       all:      function () { return ENTRIES.slice(); },
@@ -479,6 +750,9 @@
     setTimeout(function () {
       _checkEE();
       _connect();
+      /* Start xyz perp REST poll — immediate first fetch, then every 10s */
+      _pollXyzPrices();
+      _xyzPollTimer = setInterval(_pollXyzPrices, 10000);
     }, 6000);
   });
 
